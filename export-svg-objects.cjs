@@ -580,6 +580,22 @@ function buildListHtml(titleName, rootSvgMarkup, objects) {
     const viewBoxStr = `${x} ${y} ${w} ${h}`;
     const groupsStr = groups.join(',');
 
+    // Calculate container size to fit the largest dimension and preserve aspect ratio
+    // Max container size is 120px, scale proportionally
+    const maxSize = 120;
+    const aspectRatio = w / h;
+    let containerWidth, containerHeight;
+
+    if (aspectRatio > 1) {
+      // Wider than tall - constrain width
+      containerWidth = maxSize;
+      containerHeight = maxSize / aspectRatio;
+    } else {
+      // Taller than wide - constrain height
+      containerHeight = maxSize;
+      containerWidth = maxSize * aspectRatio;
+    }
+
     rows.push(`
       <tr
         data-row-index="${rowIndex}"
@@ -595,7 +611,7 @@ function buildListHtml(titleName, rootSvgMarkup, objects) {
         <td style="white-space:nowrap;"><code>${id}</code></td>
         <td><code>&lt;${tagName}&gt;</code></td>
         <td>
-          <svg width="120" height="120"
+          <svg width="${containerWidth}" height="${containerHeight}"
                viewBox="${viewBoxStr}"
                preserveAspectRatio="xMidYMid meet"
                style="border:1px solid #ccc; background:#fdfdfd;">

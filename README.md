@@ -1,0 +1,563 @@
+# SVG Visual BBox Toolkit 🧩
+
+> High-precision **visual bounding boxes** and **SVG object tooling** powered by headless Chrome & Puppeteer.
+
+<p align="center">
+  <img alt="Node.js" src="https://img.shields.io/badge/node-%3E%3D16-brightgreen?style=for-the-badge">
+  <img alt="Puppeteer" src="https://img.shields.io/badge/puppeteer-^22-blue?style=for-the-badge">
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-yellow?style=for-the-badge">
+</p>
+
+---
+
+## ✨ What is this?
+
+A small set of tools to measure and manipulate SVGs **as they actually render in a browser**:
+
+- Robust **visual bounding boxes** (including text, filters, `<use>`, masks, strokes, etc.).
+- Automatic **viewBox / width / height repair** for broken SVGs.
+- High-quality **PNG rendering via Chrome**.
+- **Object extraction & exporting** with per-object SVGs.
+- Visual **HTML catalog** of all objects in an SVG, with live **ID renaming** support.
+
+Unlike `getBBox()` and simple geometry math, this toolkit uses **raster sampling through headless Chrome**, so whatever the browser paints is what we measure.
+
+---
+
+## 📚 Table of Contents
+
+- [Features](#-features)
+- [Installation](#-installation)
+- [Quickstart](#-quickstart)
+- [How it works (diagram)](#-how-it-works-diagram)
+- [Tools](#-tools)
+  - [Library: `SvgVisualBBox.js`](#library-svgvisualbboxjs)
+  - [Renderer: `render_svg_chrome.js`](#renderer-render_svg_chromejs)
+  - [Fixer: `fix_svg_viewbox.js`](#fixer-fix_svg_viewboxjs)
+  - [Multi-tool: `extract_svg_objects.js`](#multi-tool-extract_svg_objectsjs)
+- [Renaming workflow with the HTML viewer](#-renaming-workflow-with-the-html-viewer)
+- [Troubleshooting](#-troubleshooting)
+- [Contributing](#-contributing)
+- [License](#-license)
+
+---
+
+## 💡 Features
+
+- **Font-aware text bounds**  
+  Works with complex scripts (Arabic, CJK, Tamil), ligatures, RTL/LTR, `textPath`, `tspan`, and more.
+
+- **Filter-safe bounds**  
+  Includes blur, shadows, masks, clipping, symbols, and bitmap images.
+
+- **Stroke-aware bounds**  
+  Takes into account stroke width, caps, joins, markers, and patterns.
+
+- **ViewBox repair**  
+  Fixes SVGs with missing or inconsistent `viewBox`, `width`, and `height`.
+
+- **Visual object catalog**  
+  Interactive HTML page that:
+  - Lists all objects (`<g>`, `<path>`, `<use>`, `<text>`, etc.).
+  - Shows each object clipped to its bounding box.
+  - Lets you interactively rename IDs with live validation.
+  - Exports a ready-to-use JSON mapping for batch renaming.
+
+- **Clean cut-outs & exports**  
+  Extract a single object or export all objects/groups as standalone SVGs, each sized exactly to its visual bounds.
+
+---
+
+## 📦 Installation
+
+> You need **Node.js ≥ 16** and **Chrome or Chromium** available on your system.
+
+1. **Clone the repo**
+
+```bash
+git clone https://github.com/your-user/svg-visual-bbox-toolkit.git
+cd svg-visual-bbox-toolkit
+```
+
+2. **Install dependencies**
+
+All scripts use [Puppeteer](https://github.com/puppeteer/puppeteer) under the hood:
+
+```bash
+npm install
+# or, if you prefer direct:
+npm install puppeteer
+```
+
+3. **Make scripts executable (optional, on macOS/Linux)**
+
+```bash
+chmod +x render_svg_chrome.js
+chmod +x fix_svg_viewbox.js
+chmod +x extract_svg_objects.js
+```
+
+---
+
+## 🚀 Quickstart
+
+### Render an SVG to PNG at the correct size
+
+```bash
+node render_svg_chrome.js input.svg output.png --mode full --scale 4
+```
+
+- Detects the **full drawing extents**.
+- Sets an appropriate `viewBox`.
+- Renders to PNG at 4 px per SVG unit.
+
+---
+
+### Fix an SVG that has no `viewBox` / `width` / `height`
+
+```bash
+node fix_svg_viewbox.js broken.svg fixed/broken.fixed.svg
+```
+
+- Computes the **full visual drawing box**.
+- Writes a new SVG with:
+  - `viewBox="x y width height"`
+  - Consistent `width` / `height`.
+
+---
+
+### List all objects visually & generate a rename JSON
+
+```bash
+node extract_svg_objects.js sprites.svg --list --assign-ids --out-fixed sprites.ids.svg
+```
+
+This produces:
+
+- `sprites.objects.html` — a visual catalog.
+- `sprites.ids.svg` — a version where all objects have IDs like `auto_id_path_3`.
+
+Open `sprites.objects.html` in a browser to see previews and define new ID names.
+
+---
+
+### Extract one object as its own SVG
+
+```bash
+node extract_svg_objects.js sprites.renamed.svg \
+  --extract icon_save icon_save.svg \
+  --margin 5
+```
+
+This creates `icon_save.svg` sized exactly to the **visual bounds** of `#icon_save` (with 5 units of padding).
+
+---
+
+### Export all objects as individual SVGs
+
+```bash
+node extract_svg_objects.js sprites.renamed.svg \
+  --export-all exported \
+  --export-groups \
+  --margin 2
+```
+
+Each object `/ group` becomes its own SVG, with:
+
+- Correct viewBox
+- Includes `<defs>` for filters, patterns, markers
+- Ancestor transforms preserved
+
+---
+
+## 🧬 How it works (diagram)
+
+At a high level:
+
+```mermaid
+flowchart LR
+  A[SVG file] --> B[Headless Chrome<br/>+ Puppeteer]
+  B --> C[Inject SvgVisualBBox.js]
+  C --> D[Raster sampling<br/>of SVG fragments]
+  D --> E[Visual bounding boxes<br/>(in SVG units)]
+  E --> F[Tools: render / fix / extract / export]
+```
+
+The **key idea** is to let the browser do all layout and rendering, then sample the output to deduce where pixels actually appear. This makes bounding boxes robust to:
+
+- Fonts
+- Filters
+- Transforms
+- `<use>` shadow DOM
+- Mixed units and crazy coordinate systems
+
+---
+
+## 🛠 Tools
+
+### Library: `SvgVisualBBox.js`
+
+This library runs in the **browser context** (injected by Puppeteer). It exposes helpers through `window.SvgVisualBBox`.
+
+#### `waitForDocumentFonts(document, timeoutMs)`
+
+Waits for fonts to be ready (or a timeout) before measuring text.
+
+```js
+await SvgVisualBBox.waitForDocumentFonts(document, 8000);
+```
+
+#### `getSvgElementVisualBBoxTwoPassAggressive(element, options)`
+
+Compute a **visual** bounding box for an element (including stroke, filters, etc.):
+
+```js
+const bbox = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(element, {
+  mode: 'unclipped',   // ignore viewBox clipping when measuring
+  coarseFactor: 3,     // coarse sampling
+  fineFactor: 24,      // fine sampling
+  useLayoutScale: true // scale based on layout size
+});
+
+// bbox: { x, y, width, height } in SVG user units
+```
+
+#### `getSvgElementVisibleAndFullBBoxes(svgElement, options)`
+
+Compute both:
+
+- **visible** – what’s inside the current viewBox.
+- **full** – the entire drawing, ignoring viewBox clipping.
+
+Used by the fixer and renderer to choose between “full drawing” and “visible area inside the viewBox”.
+
+---
+
+### Renderer: `render_svg_chrome.js`
+
+Render SVG → PNG using Chrome + `SvgVisualBBox`.
+
+#### Syntax
+
+```bash
+node render_svg_chrome.js input.svg output.png \
+  [--mode full|visible|element] \
+  [--element-id someId] \
+  [--scale N] \
+  [--width W --height H] \
+  [--background white|transparent|#rrggbb] \
+  [--margin N]
+```
+
+#### Modes
+
+- `--mode full`  
+  - Ignore the SVG’s viewBox when measuring.
+  - Render the **entire drawing** (full visual extent).
+
+- `--mode visible` (default)  
+  - Consider the viewBox as a clipping region.
+  - Crop to the **visible content inside the viewBox**.
+
+- `--mode element --element-id ID`  
+  - Hide everything except the element with that ID.
+  - Measure it visually and render a canvas just big enough for that element (+ margin).
+
+#### Example
+
+```bash
+# Transparent PNG of what’s actually visible in the viewBox
+node render_svg_chrome.js map.svg map.png \
+  --mode visible \
+  --margin 10 \
+  --background transparent
+```
+
+---
+
+### Fixer: `fix_svg_viewbox.js`
+
+Fix missing/inconsistent viewBox and sizes.
+
+#### Syntax
+
+```bash
+node fix_svg_viewbox.js input.svg [output.svg]
+```
+
+- If `output.svg` is omitted, writes `input.fixed.svg`.
+- Uses `getSvgElementVisibleAndFullBBoxes` to find the full drawing bbox.
+- Writes a new SVG that has:
+  - `viewBox="x y width height"`
+  - Reasonable `width`/`height` matching that aspect ratio.
+
+#### Example
+
+```bash
+node fix_svg_viewbox.js broken.svg fixed/broken.fixed.svg
+```
+
+---
+
+### Multi-tool: `extract_svg_objects.js`
+
+A versatile tool for **listing, renaming, extracting, and exporting** SVG objects.
+
+#### 1️⃣ List mode — `--list`
+
+```bash
+node extract_svg_objects.js input.svg --list \
+  [--assign-ids --out-fixed fixed.svg] \
+  [--out-html list.html] \
+  [--json]
+```
+
+**What it does:**
+
+- Scans the SVG for “objects”:
+  - `g`, `path`, `rect`, `circle`, `ellipse`,
+  - `polygon`, `polyline`, `text`, `image`, `use`, `symbol`.
+- Computes a **visual bbox** for each object.
+- Generates an **HTML page**:
+
+  - Column `#`: row number (used in warnings).
+  - Column `OBJECT ID`: current `id` (empty if none).
+  - Column `Tag`: element name.
+  - Column `Preview`: small `<svg>` using the object’s bbox and `<use href="#id">`.
+  - Column `New ID name`: text input + checkbox for renaming.
+
+- With `--assign-ids`:
+  - Objects without `id` receive auto IDs (`auto_id_path_1`, …).
+  - If `--out-fixed` is given, a fixed SVG is saved with those IDs.
+
+**HTML extras:**
+
+- **Filters:**
+  - Regex filter (ID, tag, or group IDs).
+  - Tag filter (only paths, only groups, etc.).
+  - Group filter (only descendants of `someGroupId`).
+  - Area filter (objects whose bbox intersects a given rectangle).
+
+- **Live rename validation:**
+  - Valid SVG ID syntax: `^[A-Za-z_][A-Za-z0-9_.:-]*$`
+  - No collision with existing IDs in the SVG.
+  - No collision with earlier rows’ new IDs.
+  - Invalid rows:
+    - Get a **subtle red background**.
+    - Show a red warning message under the input.
+  - “Save JSON with renaming” is disabled while any row is invalid.
+
+- **JSON export:**
+  - Clicking **“Save JSON with renaming”** downloads a mapping file like:
+
+    ```json
+    {
+      "sourceSvgFile": "input.svg",
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "mappings": [
+        { "from": "auto_id_path_3", "to": "icon_save" },
+        { "from": "auto_id_g_5", "to": "button_primary" }
+      ]
+    }
+    ```
+
+#### 2️⃣ Rename mode — `--rename`
+
+Apply renaming rules from a JSON mapping.
+
+```bash
+node extract_svg_objects.js input.svg --rename mapping.json output.svg [--json]
+```
+
+Accepted JSON forms:
+
+- Full payload with `mappings` (as exported by HTML).
+- Bare array: `[ { "from": "oldId", "to": "newId" } ]`.
+- Plain object: `{ "oldId": "newId", "oldId2": "newId2" }`.
+
+**What happens:**
+
+- For each mapping (in order):
+  - Validates syntax & collisions.
+  - If valid:
+    - `id="from"` → `id="to"`.
+    - Updates `href="#from"` / `xlink:href="#from"` → `#to`.
+    - Updates `url(#from)` → `url(#to)` in all attributes (fills, filters, masks, etc.).
+  - Invalid mappings are **skipped** and reported (reason included).
+
+#### 3️⃣ Extract mode — `--extract`
+
+Extract a **single object** into its own SVG.
+
+```bash
+node extract_svg_objects.js input.svg --extract someId output.svg \
+  [--margin N] \
+  [--include-context] \
+  [--json]
+```
+
+Two modes:
+
+- **Default (no `--include-context`)** → *pure cut-out*:
+  - Keeps only:
+    - Target element.
+    - Its ancestor groups.
+    - `<defs>` (for filters, markers, etc.).
+  - No siblings or overlays.
+
+- **With `--include-context`** → *cut-out with context*:
+  - Copies all children of the root `<svg>` (so overlays & backgrounds stay).
+  - Crops the root `viewBox` to the target object’s bbox (+ margin).
+  - Good when you want to see the object under the same filters/overlays but cropped to its own rectangle.
+
+#### 4️⃣ Export-all mode — `--export-all`
+
+Export every object (and optionally groups) as separate SVGs.
+
+```bash
+node extract_svg_objects.js input.svg --export-all out-dir \
+  [--margin N] \
+  [--export-groups] \
+  [--json]
+```
+
+- Objects considered:
+  - `path`, `rect`, `circle`, `ellipse`,
+  - `polygon`, `polyline`, `text`, `image`, `use`, `symbol`.
+- With `--export-groups`:
+  - `<g>` groups are also exported.
+  - Recursively exports children within groups.
+  - Even nested groups get their own SVG.
+
+Each exported SVG:
+
+- Has `viewBox = bbox (+ margin)`.
+- Has matching `width` / `height`.
+- Contains `<defs>` from the original.
+- Includes the ancestor chain from the root to the object, with the object’s full subtree.
+
+---
+
+## 🧭 Renaming workflow with the HTML viewer
+
+A typical end‑to‑end workflow:
+
+1. **Analyze the SVG & give everything an ID**
+
+   ```bash
+   node extract_svg_objects.js sprites.svg \
+     --list \
+     --assign-ids \
+     --out-fixed sprites.ids.svg
+   ```
+
+2. **Open the HTML catalog**
+
+   - Open `sprites.objects.html` in your browser.
+   - Use filters:
+     - Regex `^auto_id_` to show only auto-generated IDs.
+     - Tag filter to see only `<g>` groups or only `<path>` elements.
+     - Group filter to focus on one part of the drawing.
+     - Area filter to focus on a specific region.
+
+3. **Enter new IDs**
+
+   - In “New ID name”, type meaningful names (`icon_save`, `logo_main`, `button_primary`, …).
+   - Tick the checkbox for rows you want to rename.
+   - Fix any **red rows**:
+     - Syntax issues.
+     - ID already exists.
+     - Duplicate new ID (lower row loses).
+
+4. **Save JSON mapping**
+
+   - Click **“Save JSON with renaming”**.
+   - This downloads `sprites.rename.json`.
+
+5. **Apply renaming to an SVG**
+
+   ```bash
+   node extract_svg_objects.js sprites.ids.svg \
+     --rename sprites.rename.json \
+     sprites.renamed.svg
+   ```
+
+6. **Extract or export with stable IDs**
+
+   ```bash
+   # One object
+   node extract_svg_objects.js sprites.renamed.svg \
+     --extract icon_save icon_save.svg --margin 5
+
+   # All objects
+   node extract_svg_objects.js sprites.renamed.svg \
+     --export-all exported --export-groups --margin 2
+   ```
+
+---
+
+## 🛟 Troubleshooting
+
+### 💥 Puppeteer / browser fails to launch
+
+- Make sure **Chrome** or **Chromium** is installed.
+- If Puppeteer can’t find a browser:
+  - Try installing the default Chromium: `npx puppeteer browsers install chrome`.
+  - Or set `PUPPETEER_EXECUTABLE_PATH` to your Chrome/Chromium binary.
+
+### 🖋 Fonts look wrong / text bbox is off
+
+- The headless browser must be able to load the fonts:
+  - If you use web fonts (`@font-face`), check that the URLs are reachable.
+  - If you rely on system fonts, install them on the machine running the scripts.
+- For maximum accuracy, the tools call `SvgVisualBBox.waitForDocumentFonts` before sampling; still, flaky font hosting can cause issues.
+
+### 🖼 External images not showing
+
+- `<image>` `href`/`xlink:href` URLs must be reachable from the headless browser.
+- Local file URLs might need adjustments (`file://` vs relative paths).
+- Some environments may block remote HTTP requests (e.g., firewalls, CI restrictions).
+
+### 🐢 Very large or complex SVGs are slow
+
+- The sampling is intentionally **aggressive** for accuracy.
+- If you fork the toolkit and customize `SvgVisualBBox.js`, you can reduce:
+  - `coarseFactor` / `fineFactor`
+  - Or skip some extra safety margins
+- For bulk processing, consider:
+  - Running on a powerful machine.
+  - Splitting SVGs into smaller logical parts.
+
+### 📐 Bbox doesn’t match your expectations
+
+- Double-check whether you want:
+  - **Full drawing** (ignore viewBox) → use “full” mode.
+  - **Only visible area** (respect viewBox clipping).
+  - **Only one object** (via extract or element mode).
+- Remember that **filters** and **strokes** can extend far beyond the underlying path.
+
+---
+
+## 🤝 Contributing
+
+PRs, issues, and ideas are welcome!
+
+- Found an SVG that breaks the visual bbox heuristics?
+- Have a nasty filter / font combo that behaves oddly?
+- Want a new CLI mode or integration?
+
+Open an issue with a **minimal test SVG** and a short description of what you expected vs what you saw.
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License**.
+
+You’re free to:
+
+- Use it in commercial and non-commercial projects.
+- Modify and distribute it.
+- Fork it and build your own specialized tooling.
+
+See the \`LICENSE\` file for full details.

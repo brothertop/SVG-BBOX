@@ -131,13 +131,13 @@ ${svg}
  * @returns {Promise<any>}
  */
 export async function callLibraryFunction(page, functionName, ...args) {
-  return await page.evaluate(
+  return page.evaluate(
     async (fn, ...fnArgs) => {
       const lib = window.SvgVisualBBox;
       if (!lib || typeof lib[fn] !== 'function') {
         throw new Error(`Function ${fn} not found on SvgVisualBBox`);
       }
-      return await lib[fn](...fnArgs);
+      return lib[fn](...fnArgs);
     },
     functionName,
     ...args
@@ -152,7 +152,7 @@ export async function callLibraryFunction(page, functionName, ...args) {
  * @returns {Promise<object|null>}
  */
 export async function getBBoxById(page, elementId, options = {}) {
-  return await page.evaluate(
+  return page.evaluate(
     async (id, opts) => {
       const lib = window.SvgVisualBBox;
       if (!lib) {
@@ -162,7 +162,7 @@ export async function getBBoxById(page, elementId, options = {}) {
       if (!el) {
         throw new Error(`Element not found: ${id}`);
       }
-      return await lib.getSvgElementVisualBBoxTwoPassAggressive(el, opts);
+      return lib.getSvgElementVisualBBoxTwoPassAggressive(el, opts);
     },
     elementId,
     options
@@ -175,7 +175,7 @@ export async function getBBoxById(page, elementId, options = {}) {
  * @returns {Promise<{viewBox: object|null, width: string|null, height: string|null}>}
  */
 export async function getRootSvgInfo(page) {
-  return await page.evaluate(() => {
+  return page.evaluate(() => {
     const svg = document.querySelector('svg');
     if (!svg) {
       return null;
@@ -201,9 +201,7 @@ export async function getRootSvgInfo(page) {
  * @returns {Promise<boolean>}
  */
 export async function elementExists(page, elementId) {
-  return await page.evaluate((id) => {
-    return !!document.getElementById(id);
-  }, elementId);
+  return page.evaluate((id) => !!document.getElementById(id), elementId);
 }
 
 /**

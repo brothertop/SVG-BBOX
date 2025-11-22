@@ -37,6 +37,7 @@
     "puppeteer": "^22.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.9.0",
     "@playwright/test": "^1.47.0",
     "@types/node": "^20.14.0",
     "@vitest/coverage-v8": "^2.0.0",

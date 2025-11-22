@@ -279,7 +279,7 @@ Current thresholds in `vitest.config.js`:
 Files covered:
 - `SvgVisualBBox.js`
 - `*-svg-*.js` (all CLI tools)
-- `export-svg-objects.js`
+- `export-svg-objects.cjs`
 
 ---
 

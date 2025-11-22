@@ -77,13 +77,13 @@ node test-svg-bbox.js path/to/file.svg
 - `<basename>-bbox-results.json` - All measurement results
 - `<basename>-bbox-errors.log` - Console output and errors
 
-### export-svg-objects.js
+### export-svg-objects.cjs
 
 Advanced SVG object extraction/manipulation tool with four modes:
 
 **1. LIST Mode** - Generate HTML overview with renaming UI
 ```bash
-node export-svg-objects.js input.svg --list \
+node export-svg-objects.cjs input.svg --list \
   [--assign-ids] [--out-fixed fixed.svg] [--out-html list.html] [--json]
 ```
 - Creates interactive HTML table of all objects
@@ -93,7 +93,7 @@ node export-svg-objects.js input.svg --list \
 
 **2. RENAME Mode** - Apply ID renaming from JSON mapping
 ```bash
-node export-svg-objects.js input.svg --rename mapping.json output.svg [--json]
+node export-svg-objects.cjs input.svg --rename mapping.json output.svg [--json]
 ```
 - Updates element IDs and all references (href, xlink:href, url(#id))
 - Validates ID syntax, avoids collisions, handles mapping conflicts
@@ -101,7 +101,7 @@ node export-svg-objects.js input.svg --rename mapping.json output.svg [--json]
 
 **3. EXTRACT Mode** - Extract single object
 ```bash
-node export-svg-objects.js input.svg --extract id output.svg \
+node export-svg-objects.cjs input.svg --extract id output.svg \
   [--margin N] [--include-context] [--json]
 ```
 - Default (no --include-context): Pure cut-out, only target + ancestors
@@ -109,7 +109,7 @@ node export-svg-objects.js input.svg --extract id output.svg \
 
 **4. EXPORT-ALL Mode** - Export all objects as individual SVGs
 ```bash
-node export-svg-objects.js input.svg --export-all out-dir \
+node export-svg-objects.cjs input.svg --export-all out-dir \
   [--margin N] [--export-groups] [--json]
 ```
 - Exports path, rect, circle, ellipse, polygon, polyline, text, image, use, symbol
@@ -213,7 +213,7 @@ This is the most common workflow for organizing sprite sheets and icon libraries
 
 1. **Analyze SVG & assign IDs to all objects:**
    ```bash
-   node export-svg-objects.js sprites.svg --list --assign-ids --out-fixed sprites.ids.svg
+   node export-svg-objects.cjs sprites.svg --list --assign-ids --out-fixed sprites.ids.svg
    ```
    - Produces `sprites.objects.html` (visual catalog)
    - Produces `sprites.ids.svg` (all objects have IDs like `auto_id_path_3`)
@@ -248,7 +248,7 @@ This is the most common workflow for organizing sprite sheets and icon libraries
 
 5. **Apply renaming to SVG:**
    ```bash
-   node export-svg-objects.js sprites.ids.svg --rename sprites.rename.json sprites.renamed.svg
+   node export-svg-objects.cjs sprites.ids.svg --rename sprites.rename.json sprites.renamed.svg
    ```
    - Updates IDs and all references (href, xlink:href, url(#id))
    - Reports applied vs skipped mappings
@@ -256,10 +256,10 @@ This is the most common workflow for organizing sprite sheets and icon libraries
 6. **Extract or export with stable IDs:**
    ```bash
    # Single object
-   node export-svg-objects.js sprites.renamed.svg --extract icon_save icon_save.svg --margin 5
+   node export-svg-objects.cjs sprites.renamed.svg --extract icon_save icon_save.svg --margin 5
 
    # All objects
-   node export-svg-objects.js sprites.renamed.svg --export-all exported --export-groups --margin 2
+   node export-svg-objects.cjs sprites.renamed.svg --export-all exported --export-groups --margin 2
    ```
 
 ## Quick Testing & Validation

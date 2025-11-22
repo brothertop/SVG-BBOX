@@ -293,6 +293,18 @@ ${svgContent}
           }
           node = node.parentNode;
         }
+
+        // Add all descendants of the target element
+        // CRITICAL: Without this, child elements like <textPath> inside <text>
+        // would get display="none" and render as invisible/empty
+        (function addDescendants(n) {
+          allowed.add(n);
+          const children = n.children;
+          for (let i = 0; i < children.length; i++) {
+            addDescendants(children[i]);
+          }
+        })(el);
+
         const all = Array.from(svg.querySelectorAll('*'));
         for (const child of all) {
           const tag = child.tagName && child.tagName.toLowerCase();
@@ -404,7 +416,7 @@ ${svgContent}
     });
 
     // Small delay to allow re-layout after we tweaked the SVG
-    await page.waitForTimeout(100);
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     // Screenshot exactly the viewport area
     await page.screenshot({

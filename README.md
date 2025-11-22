@@ -32,7 +32,7 @@ Unlike `getBBox()` and simple geometry math, this toolkit uses **raster sampling
 - [How it works (diagram)](#-how-it-works-diagram)
 - [Tools](#-tools)
   - [Library: `SvgVisualBBox.js`](#library-svgvisualbboxjs)
-  - [Renderer: `render_svg_chrome.js`](#renderer-render_svg_chromejs)
+  - [Renderer: `render_svg_chrome.cjs`](#renderer-render_svg_chromecjs)
   - [Fixer: `fix_svg_viewbox.js`](#fixer-fix_svg_viewboxjs)
   - [Multi-tool: `extract_svg_objects.js`](#multi-tool-extract_svg_objectsjs)
 - [Renaming workflow with the HTML viewer](#-renaming-workflow-with-the-html-viewer)
@@ -92,7 +92,7 @@ npm install puppeteer
 3. **Make scripts executable (optional, on macOS/Linux)**
 
 ```bash
-chmod +x render_svg_chrome.js
+chmod +x render_svg_chrome.cjs
 chmod +x fix_svg_viewbox.js
 chmod +x extract_svg_objects.js
 ```
@@ -104,7 +104,7 @@ chmod +x extract_svg_objects.js
 ### Render an SVG to PNG at the correct size
 
 ```bash
-node render_svg_chrome.js input.svg output.png --mode full --scale 4
+node render_svg_chrome.cjs input.svg output.png --mode full --scale 4
 ```
 
 - Detects the **full drawing extents**.
@@ -233,14 +233,14 @@ Used by the fixer and renderer to choose between “full drawing” and “visib
 
 ---
 
-### Renderer: `render_svg_chrome.js`
+### Renderer: `render_svg_chrome.cjs`
 
 Render SVG → PNG using Chrome + `SvgVisualBBox`.
 
 #### Syntax
 
 ```bash
-node render_svg_chrome.js input.svg output.png \
+node render_svg_chrome.cjs input.svg output.png \
   [--mode full|visible|element] \
   [--element-id someId] \
   [--scale N] \
@@ -266,8 +266,8 @@ node render_svg_chrome.js input.svg output.png \
 #### Example
 
 ```bash
-# Transparent PNG of what’s actually visible in the viewBox
-node render_svg_chrome.js map.svg map.png \
+# Transparent PNG of what's actually visible in the viewBox
+node render_svg_chrome.cjs map.svg map.png \
   --mode visible \
   --margin 10 \
   --background transparent

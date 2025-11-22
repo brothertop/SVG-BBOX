@@ -91,6 +91,58 @@
   const DEBUG = false;
 
   /**
+   * INTERNAL: Get detailed information about an SVG element for error reporting
+   * @param {SVGElement} el
+   * @returns {string} Human-readable element description
+   */
+  function getElementDescription(el) {
+    if (!el) return 'null/undefined element';
+
+    const parts = [];
+
+    // Tag name
+    const tag = el.tagName || el.nodeName || 'unknown';
+    parts.push(`<${tag}>`);
+
+    // ID if present
+    if (el.id) {
+      parts.push(`id="${el.id}"`);
+    }
+
+    // Class if present
+    if (el.getAttribute && el.getAttribute('class')) {
+      parts.push(`class="${el.getAttribute('class')}"`);
+    }
+
+    // Position in DOM
+    const parent = el.parentNode;
+    if (parent && parent.tagName) {
+      parts.push(`(child of <${parent.tagName}>${parent.id ? ` id="${parent.id}"` : ''})`);
+    }
+
+    return parts.join(' ');
+  }
+
+  /**
+   * INTERNAL: Get detailed font information from an element
+   * @param {SVGElement} el
+   * @returns {string} Font family and detected fonts
+   */
+  function getFontDescription(el) {
+    if (!el || typeof window === 'undefined' || !window.getComputedStyle) {
+      return 'unknown';
+    }
+
+    try {
+      const style = window.getComputedStyle(el);
+      const fontFamily = style.fontFamily || style.getPropertyValue('font-family');
+      return fontFamily || 'default';
+    } catch (e) {
+      return 'error detecting font';
+    }
+  }
+
+  /**
    * Wait until the document's fonts are loaded (CSS Font Loading API),
    * with a timeout so we don't hang forever if the network is flaky.
    *
@@ -218,18 +270,26 @@
     }
 
     if (!cloneTarget) {
-      const elementInfo = el.id ? `element with id="${el.id}"` : `element ${el.tagName}`;
+      const elementInfo = getElementDescription(el);
+      const tempIdUsed = tmpId ? `Temporary ID used: "${tmpId}"` : `Element ID: ${el.id ? `"${el.id}"` : '(none)'}`;
       throw new Error(
-        `Cannot render SVG element: ${elementInfo} not found in cloned SVG.\n` +
+        `❌ Cannot render SVG element: Element not found in cloned SVG\n` +
+        `\n` +
+        `ELEMENT DETAILS:\n` +
+        `  ${elementInfo}\n` +
+        `  ${tempIdUsed}\n` +
+        `  SVG Root: ${svgRoot.id ? `id="${svgRoot.id}"` : '(no id)'}\n` +
         `\n` +
         `This typically happens when:\n` +
-        `  1. The element is the SVG root itself (not supported - query a child element instead)\n` +
+        `  1. The element IS the SVG root itself (not supported - query a child element instead)\n` +
         `  2. The element was removed or modified during cloning\n` +
+        `  3. The element's ID conflicts with another element\n` +
         `\n` +
         `How to fix:\n` +
         `  • If querying the root <svg>, query a child element instead\n` +
-        `  • Ensure the element has a valid 'id' attribute\n` +
-        `  • Check that the element exists in the DOM before calling this function`
+        `  • Ensure the element has a unique 'id' attribute\n` +
+        `  • Check that the element exists in the DOM before calling this function\n` +
+        `  • Verify the element hasn't been dynamically removed`
       );
     }
 
@@ -302,8 +362,16 @@
       };
       img.onerror = function (e) {
         const errorMsg = e && e.message ? e.message : 'unknown error';
+        const elementInfo = getElementDescription(el);
+        const fontInfo = getFontDescription(el);
+
         reject(new Error(
-          `Failed to render SVG as image: ${errorMsg}\n` +
+          `❌ Failed to render SVG as image: ${errorMsg}\n` +
+          `\n` +
+          `ELEMENT DETAILS:\n` +
+          `  ${elementInfo}\n` +
+          `  Font-family: ${fontInfo}\n` +
+          `  SVG Root: ${svgRoot.id ? `id="${svgRoot.id}"` : '(no id)'}\n` +
           `\n` +
           `This can happen when:\n` +
           `  1. The SVG contains invalid XML syntax\n` +
@@ -315,6 +383,7 @@
           `  • Validate your SVG with an XML validator\n` +
           `  • Check that all external resources (images, fonts) are accessible\n` +
           `  • Ensure referenced elements (gradients, patterns, etc.) exist in <defs>\n` +
+          `  • If fonts are missing, ensure they are installed or embedded in the SVG\n` +
           `  • Try simplifying the SVG to isolate the problematic element`
         ));
       };
@@ -338,8 +407,13 @@
       const isTainted = e && e.message && /tainted/i.test(e.message);
 
       if (isOutOfMemory) {
+        const elementInfo = getElementDescription(el);
         throw new Error(
-          `Cannot render SVG: Canvas out of memory\n` +
+          `❌ Cannot render SVG: Canvas out of memory\n` +
+          `\n` +
+          `ELEMENT DETAILS:\n` +
+          `  ${elementInfo}\n` +
+          `  SVG Root: ${svgRoot.id ? `id="${svgRoot.id}"` : '(no id)'}\n` +
           `\n` +
           `The SVG coordinates or dimensions are too large for canvas rasterization.\n` +
           `Current viewBox: ${vb.x} ${vb.y} ${vb.width} ${vb.height}\n` +
@@ -356,8 +430,15 @@
       }
 
       if (isTainted) {
+        const elementInfo = getElementDescription(el);
+        const fontInfo = getFontDescription(el);
         throw new Error(
-          `Cannot read SVG pixels: Canvas is tainted by cross-origin resources\n` +
+          `❌ Cannot read SVG pixels: Canvas is tainted by cross-origin resources\n` +
+          `\n` +
+          `ELEMENT DETAILS:\n` +
+          `  ${elementInfo}\n` +
+          `  Font-family: ${fontInfo}\n` +
+          `  SVG Root: ${svgRoot.id ? `id="${svgRoot.id}"` : '(no id)'}\n` +
           `\n` +
           `This happens when your SVG references external resources without CORS:\n` +
           `  • External images (PNG, JPG, etc.) from different domains\n` +
@@ -369,14 +450,22 @@
           `  • Configure CORS headers on external resources (Access-Control-Allow-Origin: *)\n` +
           `  • Use data URLs for images instead of external URLs\n` +
           `  • Embed fonts directly in the SVG using @font-face with data URLs\n` +
+          `  • If using web fonts (like "${fontInfo}"), ensure they have CORS headers or embed them\n` +
           `\n` +
           `Original error: ${e.message}`
         );
       }
 
       // Generic canvas error
+      const elementInfo = getElementDescription(el);
+      const fontInfo = getFontDescription(el);
       throw new Error(
-        `Cannot read SVG pixels from canvas\n` +
+        `❌ Cannot read SVG pixels from canvas\n` +
+        `\n` +
+        `ELEMENT DETAILS:\n` +
+        `  ${elementInfo}\n` +
+        `  Font-family: ${fontInfo}\n` +
+        `  SVG Root: ${svgRoot.id ? `id="${svgRoot.id}"` : '(no id)'}\n` +
         `\n` +
         `Error: ${e && e.message ? e.message : 'unknown canvas error'}\n` +
         `\n` +
@@ -496,7 +585,11 @@
     if (!el) {
       const targetDesc = typeof target === 'string' ? `id="${target}"` : 'provided reference';
       throw new Error(
-        `Cannot compute SVG bounding box: Element not found (${targetDesc})\n` +
+        `❌ Cannot compute SVG bounding box: Element not found\n` +
+        `\n` +
+        `REQUESTED ELEMENT:\n` +
+        `  ${targetDesc}\n` +
+        `  Type: ${typeof target}\n` +
         `\n` +
         `How to fix:\n` +
         `  • Check that the element exists in the DOM\n` +
@@ -511,9 +604,12 @@
 
     const svgRoot = el.ownerSVGElement || (el instanceof SVGSVGElement ? el : null);
     if (!svgRoot) {
-      const elementType = el.tagName || el.nodeName || 'unknown';
+      const elementInfo = getElementDescription(el);
       throw new Error(
-        `Cannot compute SVG bounding box: Element <${elementType}> is not inside an SVG tree\n` +
+        `❌ Cannot compute SVG bounding box: Element is not inside an SVG tree\n` +
+        `\n` +
+        `ELEMENT DETAILS:\n` +
+        `  ${elementInfo}\n` +
         `\n` +
         `This element is not connected to an <svg> root element.\n` +
         `\n` +

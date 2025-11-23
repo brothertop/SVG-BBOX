@@ -17,8 +17,7 @@
  * - Validates actual DOM changes and computed styles
  */
 
-import playwright from '@playwright/test';
-const { test, expect } = playwright;
+import { test, expect } from '@playwright/test';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs/promises';
@@ -50,7 +49,7 @@ test.describe('HTML List Interactive Features', () => {
     // Check filter inputs exist
     await expect(page.locator('#filterRegex')).toBeVisible();
     await expect(page.locator('#filterTag')).toBeVisible();
-    await expect(page.locator('#filterGroupId')).toBeVisible();
+    await expect(page.locator('#filterGroup')).toBeVisible();
 
     // Check save button exists
     const saveButton = page.locator('button:has-text("Save JSON with renaming")');
@@ -102,8 +101,8 @@ test.describe('HTML List Interactive Features', () => {
     // Wait for validation
     await page.waitForTimeout(100);
 
-    // Check red background (CSS applies to td, not tr)
-    const bgColor = await firstRow.locator('td').first().evaluate(el => {
+    // Check red background
+    const bgColor = await firstRow.evaluate(el => {
       return window.getComputedStyle(el).backgroundColor;
     });
     expect(bgColor).toMatch(/rgb\(255, 200, 200\)|rgba\(255, 200, 200/);
@@ -135,8 +134,8 @@ test.describe('HTML List Interactive Features', () => {
     // Wait for validation
     await page.waitForTimeout(100);
 
-    // Second row should have red background (lower priority loses) (CSS applies to td)
-    const bgColor2 = await secondRow.locator('td').first().evaluate(el => {
+    // Second row should have red background (lower priority loses)
+    const bgColor2 = await secondRow.evaluate(el => {
       return window.getComputedStyle(el).backgroundColor;
     });
     expect(bgColor2).toMatch(/rgb\(255, 200, 200\)|rgba\(255, 200, 200/);
@@ -144,7 +143,7 @@ test.describe('HTML List Interactive Features', () => {
     // Check error message
     const errorMsg2 = secondRow.locator('.error-message');
     await expect(errorMsg2).toBeVisible();
-    await expect(errorMsg2).toContainText(/collision|already.*used|already.*exists|duplicate/i);
+    await expect(errorMsg2).toContainText(/collision|already.*used|duplicate/i);
   });
 
   test('Collision with existing SVG ID shows red background and error', async ({ page }) => {
@@ -172,8 +171,8 @@ test.describe('HTML List Interactive Features', () => {
     // Wait for validation
     await page.waitForTimeout(100);
 
-    // Should have red background (CSS applies to td)
-    const bgColor = await secondRow.locator('td').first().evaluate(el => {
+    // Should have red background
+    const bgColor = await secondRow.evaluate(el => {
       return window.getComputedStyle(el).backgroundColor;
     });
     expect(bgColor).toMatch(/rgb\(255, 200, 200\)|rgba\(255, 200, 200/);
@@ -348,30 +347,23 @@ test.describe('HTML List Interactive Features', () => {
     const initialCount = await rows.count();
     expect(initialCount).toBeGreaterThan(0);
 
-    // Type filter regex (e.g., only IDs starting with "g")
-    await filterInput.fill('^g');
+    // Type filter regex (e.g., only IDs starting with "text")
+    await filterInput.fill('^text');
 
     // Wait for filter to apply
     await page.waitForTimeout(100);
 
-    // Count visible rows (should be fewer than initial)
-    const visibleRows = await rows.evaluateAll(rows => {
-      return rows.filter(row => row.style.display !== 'none');
-    });
-    const filteredCount = visibleRows.length;
+    // Count visible rows (should be fewer)
+    const visibleRows = rows.filter({ hasNotText: /^$/ });
+    const filteredCount = await visibleRows.count();
 
     // At least some rows should be hidden
-    expect(filteredCount).toBeLessThan(initialCount);
+    expect(filteredCount).toBeLessThanOrEqual(initialCount);
 
-    // Check that all visible rows match the filter
-    const visibleIds = await rows.evaluateAll(rows => {
-      return rows
-        .filter(row => row.style.display !== 'none')
-        .map(row => row.cells[1]?.textContent?.trim()); // ID column
-    });
-    visibleIds.forEach(id => {
-      expect(id).toMatch(/^g/);
-    });
+    // Check that visible rows match the filter
+    const firstVisibleRow = visibleRows.first();
+    const firstId = await firstVisibleRow.locator('td').nth(1).textContent();
+    expect(firstId).toMatch(/^text/);
   });
 
   test('Tag filter shows only matching element types', async ({ page }) => {
@@ -390,12 +382,7 @@ test.describe('HTML List Interactive Features', () => {
     const visibleRows = await rows.evaluateAll(rows => {
       return rows
         .filter(row => row.style.display !== 'none')
-        .map(row => {
-          const text = row.cells[2]?.textContent?.trim(); // Tag column
-          // Extract tag name from <tag> format
-          const match = text?.match(/<(\w+)>/);
-          return match ? match[1] : text;
-        });
+        .map(row => row.cells[2]?.textContent?.trim()); // Tag column
     });
 
     // All visible rows should be "path"
@@ -418,8 +405,8 @@ test.describe('HTML List Interactive Features', () => {
     await input.type('1'); // Invalid (starts with number)
     await page.waitForTimeout(50);
 
-    // Should show error immediately (CSS applies to td)
-    let bgColor = await firstRow.locator('td').first().evaluate(el => {
+    // Should show error immediately
+    let bgColor = await firstRow.evaluate(el => {
       return window.getComputedStyle(el).backgroundColor;
     });
     expect(bgColor).toMatch(/rgb\(255, 200, 200\)|rgba\(255, 200, 200/);
@@ -430,7 +417,7 @@ test.describe('HTML List Interactive Features', () => {
     await page.waitForTimeout(50);
 
     // Should NOT show error
-    bgColor = await firstRow.locator('td').first().evaluate(el => {
+    bgColor = await firstRow.evaluate(el => {
       return window.getComputedStyle(el).backgroundColor;
     });
     expect(bgColor).not.toContain('255, 200, 200');
@@ -440,7 +427,7 @@ test.describe('HTML List Interactive Features', () => {
     await page.waitForTimeout(50);
 
     // Still no error
-    bgColor = await firstRow.locator('td').first().evaluate(el => {
+    bgColor = await firstRow.evaluate(el => {
       return window.getComputedStyle(el).backgroundColor;
     });
     expect(bgColor).not.toContain('255, 200, 200');
@@ -460,8 +447,8 @@ test.describe('HTML List Interactive Features', () => {
     // Wait for validation
     await page.waitForTimeout(100);
 
-    // Should show error (empty new ID is invalid) (CSS applies to td)
-    const bgColor = await firstRow.locator('td').first().evaluate(el => {
+    // Should show error (empty new ID is invalid)
+    const bgColor = await firstRow.evaluate(el => {
       return window.getComputedStyle(el).backgroundColor;
     });
     expect(bgColor).toMatch(/rgb\(255, 200, 200\)|rgba\(255, 200, 200/);

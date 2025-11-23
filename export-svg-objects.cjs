@@ -981,7 +981,7 @@ function buildListHtml(titleName, rootSvgMarkup, objects, parentTransforms = {})
                      value="${id.replace(/"/g, '&quot;')}"
                      style="flex:1; font-size:0.8rem;">
             </span>
-            <span class="row-error" style="font-size:0.75rem; color:#b00020;"></span>
+            <span class="error-message" style="font-size:0.75rem; color:#b00020;"></span>
           </label>
         </td>
       </tr>`.trim());
@@ -1082,7 +1082,7 @@ function buildListHtml(titleName, rootSvgMarkup, objects, parentTransforms = {})
       white-space: pre-wrap;
     }
     tr.invalid-rename td {
-      background: #ffe5e5 !important; /* subtle red */
+      background: rgb(255, 200, 200) !important; /* red background for validation errors */
     }
     .row-index-cell {
       width: 32px;
@@ -1300,7 +1300,7 @@ function buildListHtml(titleName, rootSvgMarkup, objects, parentTransforms = {})
         // Clear old messages & classes
         rows.forEach(row => {
           row.classList.remove('invalid-rename');
-          const errSpan = row.querySelector('.row-error');
+          const errSpan = row.querySelector('.error-message');
           if (errSpan) errSpan.textContent = '';
         });
         errorArea.textContent = '';
@@ -1312,13 +1312,26 @@ function buildListHtml(titleName, rootSvgMarkup, objects, parentTransforms = {})
           const rowIndex = parseInt(row.getAttribute('data-row-index'), 10) || 0;
           const checkbox = row.querySelector('.rename-check');
           const input = row.querySelector('.rename-input');
-          const rowError = row.querySelector('.row-error');
+          const rowError = row.querySelector('.error-message');
           if (!checkbox || !input || !rowError) return;
 
           const newId = (input.value || '').trim();
 
-          // If checkbox not checked or no change, we don't propose a mapping here.
-          if (!checkbox.checked || !newId || newId === fromId) {
+          // If checkbox not checked, skip validation
+          if (!checkbox.checked) {
+            return;
+          }
+
+          // If checkbox IS checked but input is empty, that's an error
+          if (!newId) {
+            hasErrors = true;
+            row.classList.add('invalid-rename');
+            rowError.textContent = 'New ID cannot be empty.';
+            return;
+          }
+
+          // If no change (same as current ID), skip
+          if (newId === fromId) {
             return;
           }
 

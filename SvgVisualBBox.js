@@ -88,7 +88,7 @@
   'use strict';
 
   // Debug flag - set to true to enable console logging
-  const DEBUG = false;
+  const DEBUG = true;
 
   /**
    * INTERNAL: Check if an ID looks like an auto-generated ID
@@ -260,25 +260,124 @@
   }
 
   /**
-   * INTERNAL: Safely get getBBox() from an element, treating it as a hint only.
-   * Returns null if getBBox() fails, returns invalid values, or returns empty box.
+   * INTERNAL: Parse preserveAspectRatio attribute and calculate scaling parameters
+   * for converting between page pixel coordinates and SVG user coordinates.
+   *
+   * @param {SVGSVGElement} svgEl - The SVG root element
+   * @param {{x:number,y:number,width:number,height:number}} viewBox - The viewBox
+   * @param {DOMRect} renderedRect - The getBoundingClientRect() of the SVG element
+   * @returns {{scale?:number,scaleX?:number,scaleY?:number,offsetX:number,offsetY:number,uniform:boolean}}
+   */
+  function parsePreserveAspectRatio(svgEl, viewBox, renderedRect) {
+    const scaleX = viewBox.width / renderedRect.width;
+    const scaleY = viewBox.height / renderedRect.height;
+
+    // Get preserveAspectRatio attribute (default: "xMidYMid meet")
+    const aspectRatio = svgEl.getAttribute('preserveAspectRatio') || 'xMidYMid meet';
+
+    // Filter out "defer" keyword (only meaningful for <image> elements, not <svg>)
+    const parts = aspectRatio.trim().split(/\s+/).filter(p => p !== 'defer');
+
+    if (parts.length === 1 && parts[0] === 'none') {
+      // Non-uniform scaling - no offset needed
+      return { scaleX, scaleY, offsetX: 0, offsetY: 0, uniform: false };
+    }
+
+    const align = parts[0] || 'xMidYMid';
+    const meetOrSlice = parts[1] || 'meet';
+
+    // Determine uniform scale factor
+    let scale;
+    if (meetOrSlice === 'slice') {
+      // slice: covers viewport (SVG→page uses MAX) → page→user uses MIN
+      scale = Math.min(scaleX, scaleY);
+    } else {
+      // meet: fits inside viewport (SVG→page uses MIN) → page→user uses MAX
+      scale = Math.max(scaleX, scaleY);
+    }
+
+    // Calculate the offset due to alignment (letterboxing/pillarboxing)
+    // Scaled viewBox dimensions in page pixels
+    const scaledViewBoxWidth = viewBox.width / scale;
+    const scaledViewBoxHeight = viewBox.height / scale;
+
+    // Extra space in page pixels
+    const extraX = renderedRect.width - scaledViewBoxWidth;
+    const extraY = renderedRect.height - scaledViewBoxHeight;
+
+    let offsetX = 0;
+    let offsetY = 0;
+
+    // Horizontal alignment (xMin/xMid/xMax)
+    if (align.startsWith('xMid')) {
+      offsetX = extraX / 2;
+    } else if (align.startsWith('xMax')) {
+      offsetX = extraX;
+    }
+    // xMin: offsetX = 0 (already set)
+
+    // Vertical alignment (YMin/YMid/YMax)
+    if (align.includes('YMid')) {
+      offsetY = extraY / 2;
+    } else if (align.includes('YMax')) {
+      offsetY = extraY;
+    }
+    // YMin: offsetY = 0 (already set)
+
+    return { scale, offsetX, offsetY, uniform: true };
+  }
+
+  /**
+   * INTERNAL: Get a bounding box for an SVG element using ONLY getBoundingClientRect()
+   * and convert from page pixels to SVG user coordinates.
+   * Returns null if unable or if values are NaN/infinite.
+   *
+   * IMPORTANT: We do NOT use getBBox() because it:
+   * - Ignores strokes, filters, transforms, and dashed lines
+   * - Returns empty objects for some elements (paths, textPath)
+   * - Gives incorrect results for elements outside viewBox
    *
    * @param {SVGElement} el
    * @returns {{x:number,y:number,width:number,height:number}|null}
    */
   function safeGetBBox(el) {
     try {
-      const box = el.getBBox();
-      if (!box) return null;
-      // Extract values explicitly (SVGRect properties aren't enumerable)
-      const x = box.x;
-      const y = box.y;
-      const width = box.width;
-      const height = box.height;
+      const clientRect = el.getBoundingClientRect();
+      const svgRoot = el.ownerSVGElement || (el instanceof SVGSVGElement ? el : null);
+
+      if (!svgRoot || !clientRect) return null;
+      if (clientRect.width === 0 && clientRect.height === 0) return null;
+
+      // Convert screen coordinates to SVG user coordinates
+      const rootRect = svgRoot.getBoundingClientRect();
+      const vb = svgRoot.viewBox && svgRoot.viewBox.baseVal;
+
+      if (!vb || vb.width <= 0 || vb.height <= 0) return null;
+      if (rootRect.width <= 0 || rootRect.height <= 0) return null;
+
+      // Parse preserveAspectRatio attribute
+      const scaling = parsePreserveAspectRatio(svgRoot, vb, rootRect);
+
+      let x, y, width, height;
+
+      if (scaling.uniform) {
+        // Uniform scaling (meet or slice) - subtract offset before scaling
+        const scale = scaling.scale;
+        x = vb.x + (clientRect.left - rootRect.left - scaling.offsetX) * scale;
+        y = vb.y + (clientRect.top - rootRect.top - scaling.offsetY) * scale;
+        width = clientRect.width * scale;
+        height = clientRect.height * scale;
+      } else {
+        // Non-uniform scaling (preserveAspectRatio="none") - no offset
+        x = vb.x + (clientRect.left - rootRect.left) * scaling.scaleX;
+        y = vb.y + (clientRect.top - rootRect.top) * scaling.scaleY;
+        width = clientRect.width * scaling.scaleX;
+        height = clientRect.height * scaling.scaleY;
+      }
+
       if (!isFinite(x) || !isFinite(y)) return null;
       if (!isFinite(width) || !isFinite(height)) return null;
-      // If width & height are 0, treat as untrustworthy (especially for text-ish nodes)
-      if (width === 0 && height === 0) return null;
+
       return { x, y, width, height };
     } catch {
       return null;
@@ -331,11 +430,63 @@
     // Map ROI user space → viewport
     clonedSvg.setAttribute('viewBox', vb.x + ' ' + vb.y + ' ' + vb.width + ' ' + vb.height);
 
-    const pixelWidth  = Math.max(1, Math.round(vb.width  * pixelsPerUnit));
-    const pixelHeight = Math.max(1, Math.round(vb.height * pixelsPerUnit));
+    // Maximum canvas dimensions to avoid out-of-memory errors
+    // Modern browsers support up to 16384×16384
+    // Using higher limit ensures consistent actualPixelsPerUnit across elements (critical for alignment)
+    const MAX_CANVAS_DIMENSION = 16384;
+
+    // Calculate initial canvas dimensions
+    const requestedPixelWidth  = Math.max(1, Math.round(vb.width  * pixelsPerUnit));
+    const requestedPixelHeight = Math.max(1, Math.round(vb.height * pixelsPerUnit));
+
+    // Scale down uniformly if canvas would exceed maximum dimensions (preserves aspect ratio)
+    let actualPixelsPerUnit = pixelsPerUnit;
+    let pixelWidth = requestedPixelWidth;
+    let pixelHeight = requestedPixelHeight;
+
+    if (requestedPixelWidth > MAX_CANVAS_DIMENSION || requestedPixelHeight > MAX_CANVAS_DIMENSION) {
+      // Find which dimension exceeds the limit more
+      const scaleW = MAX_CANVAS_DIMENSION / requestedPixelWidth;
+      const scaleH = MAX_CANVAS_DIMENSION / requestedPixelHeight;
+      // Use the smaller scale factor to ensure both dimensions fit
+      const scale = Math.min(scaleW, scaleH);
+
+      // Apply uniform scaling to preserve aspect ratio
+      actualPixelsPerUnit = pixelsPerUnit * scale;
+      pixelWidth  = Math.max(1, Math.round(vb.width  * actualPixelsPerUnit));
+      pixelHeight = Math.max(1, Math.round(vb.height * actualPixelsPerUnit));
+
+      if (DEBUG && typeof console !== 'undefined' && console.warn) {
+        console.warn(
+          `[DEBUG rasterize] Canvas size exceeded maximum, scaling down uniformly:\n` +
+          `  Requested: ${requestedPixelWidth}×${requestedPixelHeight}\n` +
+          `  Scaled:    ${pixelWidth}×${pixelHeight}\n` +
+          `  Scale factor: ${scale.toFixed(3)} (${(scale * 100).toFixed(1)}%)\n` +
+          `  Aspect ratio preserved: ${(vb.width/vb.height).toFixed(3)} → ${(pixelWidth/pixelHeight).toFixed(3)}`
+        );
+      }
+    }
 
     clonedSvg.setAttribute('width',  String(pixelWidth));
     clonedSvg.setAttribute('height', String(pixelHeight));
+    // CRITICAL: Set preserveAspectRatio="none" to prevent unwanted scaling/letterboxing
+    // The viewBox and width/height are already calculated to match exactly
+    clonedSvg.setAttribute('preserveAspectRatio', 'none');
+
+    // CRITICAL: Remove x/y attributes from cloned SVG to prevent offset during canvas rendering
+    // The x/y attributes are for positioning when SVG is embedded as a child element,
+    // but they cause unwanted offsets when rendering to canvas via data URL
+    clonedSvg.removeAttribute('x');
+    clonedSvg.removeAttribute('y');
+
+    if (DEBUG && typeof console !== 'undefined' && console.log) {
+      console.log('[DEBUG rasterize] After removing x/y:', {
+        x: clonedSvg.getAttribute('x'),
+        y: clonedSvg.getAttribute('y'),
+        hasX: clonedSvg.hasAttribute('x'),
+        hasY: clonedSvg.hasAttribute('y')
+      });
+    }
 
     // Map target element to cloned SVG
     const hadId = !!el.id;
@@ -382,6 +533,7 @@
     //  - its ancestors
     //  - its descendants
     //  - all <defs> (filters, markers, gradients, patterns, etc.)
+    //  - sibling tspan/textPath elements (needed for proper text layout)
     const allowed = new Set();
     let node = cloneTarget;
     while (node) {
@@ -401,7 +553,81 @@
       }
     })(cloneTarget);
 
-    (function hideIrrelevant(rootNode) {
+    // Add all referenced elements (for textPath, use, gradients, filters, etc.)
+    // Scan target and descendants for xlink:href, href, and url(#...) references
+    (function addReferencedElements(n) {
+      // Check for xlink:href or href attributes (textPath, use, image, etc.)
+      const xlinkHref = n.getAttribute && n.getAttribute('xlink:href');
+      const href = n.getAttribute && n.getAttribute('href');
+
+      for (const refAttr of [xlinkHref, href]) {
+        if (refAttr && refAttr.startsWith('#')) {
+          const refId = refAttr.substring(1);
+          const refEl = clonedSvg.getElementById(refId);
+          if (refEl && !allowed.has(refEl)) {
+            allowed.add(refEl);
+            // Also add ancestors of referenced element (might be in <defs>)
+            let parent = refEl.parentNode;
+            while (parent && parent !== clonedSvg) {
+              allowed.add(parent);
+              parent = parent.parentNode;
+            }
+          }
+        }
+      }
+
+      // Check for url(#...) in style attributes (fill, stroke, filter, mask, etc.)
+      const style = n.getAttribute && n.getAttribute('style');
+      if (style) {
+        const urlRefs = style.match(/url\(#([^)]+)\)/g);
+        if (urlRefs) {
+          for (const urlRef of urlRefs) {
+            const refId = urlRef.match(/url\(#([^)]+)\)/)[1];
+            const refEl = clonedSvg.getElementById(refId);
+            if (refEl && !allowed.has(refEl)) {
+              allowed.add(refEl);
+              let parent = refEl.parentNode;
+              while (parent && parent !== clonedSvg) {
+                allowed.add(parent);
+                parent = parent.parentNode;
+              }
+            }
+          }
+        }
+      }
+
+      // Recurse to children
+      const children = n.children;
+      for (let i = 0; i < children.length; i++) {
+        addReferencedElements(children[i]);
+      }
+    })(cloneTarget);
+
+    // Special case: for tspan/textPath elements, keep all siblings
+    // because text layout depends on sibling positioning
+    const targetTag = cloneTarget.tagName && cloneTarget.tagName.toLowerCase();
+    if (targetTag === 'tspan' || targetTag === 'textpath') {
+      const parent = cloneTarget.parentNode;
+      if (parent) {
+        const siblings = Array.from(parent.children);
+        for (const sibling of siblings) {
+          const siblingTag = sibling.tagName && sibling.tagName.toLowerCase();
+          if (siblingTag === 'tspan' || siblingTag === 'textpath') {
+            allowed.add(sibling);
+            // Also add all descendants of sibling tspans
+            (function addDescendants(n) {
+              allowed.add(n);
+              const children = n.children;
+              for (let i = 0; i < children.length; i++) {
+                addDescendants(children[i]);
+              }
+            })(sibling);
+          }
+        }
+      }
+    }
+
+    (function removeIrrelevant(rootNode) {
       const children = Array.prototype.slice.call(rootNode.children);
       for (let i = 0; i < children.length; i++) {
         const child = children[i];
@@ -413,9 +639,10 @@
         }
 
         if (!allowed.has(child) && !child.contains(cloneTarget)) {
-          child.setAttribute('display', 'none');
+          // REMOVE the element entirely - display='none' doesn't work reliably in SVG-as-image
+          child.parentNode.removeChild(child);
         } else {
-          hideIrrelevant(child);
+          removeIrrelevant(child);
         }
       }
     })(clonedSvg);
@@ -622,10 +849,20 @@
       return null;
     }
 
-    const userX = vb.x + xMin / pixelsPerUnit;
-    const userY = vb.y + yMin / pixelsPerUnit;
-    const userW = (xMax - xMin + 1) / pixelsPerUnit;
-    const userH = (yMax - yMin + 1) / pixelsPerUnit;
+    // Coordinate conversion: canvas pixels → SVG user units
+    // xMin is measured in a canvas rendered at actualPixelsPerUnit scale
+    // To convert to user units: userOffset = xMin / actualPixelsPerUnit
+    const userX = vb.x + xMin / actualPixelsPerUnit;
+    const userY = vb.y + yMin / actualPixelsPerUnit;
+    const userW = (xMax - xMin + 1) / actualPixelsPerUnit;
+    const userH = (yMax - yMin + 1) / actualPixelsPerUnit;
+
+    if (DEBUG && typeof console !== 'undefined' && console.log) {
+      console.log('[DEBUG rasterize] Element:', el.id || el.tagName,
+                  'actualPPU:', actualPixelsPerUnit.toFixed(6),
+                  'pixelsPerUnit:', pixelsPerUnit.toFixed(6),
+                  'xMin:', xMin, 'userX:', userX.toFixed(6));
+    }
 
     return { x: userX, y: userY, width: userW, height: userH };
   }
@@ -734,25 +971,111 @@
       }
     }
 
-    // Try to get geometry bbox from the target element (or parent text for textPath/tspan)
-    const normalizedEl = normalizeTargetForText(el);
-    let geomBox = safeGetBBox(normalizedEl);
+    // Collect all referenced elements (textPath, use, gradients, filters, etc.)
+    // so we can include them in ROI calculation
+    const referencedElements = [];
+    (function collectReferences(n) {
+      // Check for xlink:href or href attributes
+      const xlinkHref = n.getAttribute && n.getAttribute('xlink:href');
+      const href = n.getAttribute && n.getAttribute('href');
+
+      for (const refAttr of [xlinkHref, href]) {
+        if (refAttr && refAttr.startsWith('#')) {
+          const refId = refAttr.substring(1);
+          const refEl = svgRoot.getElementById(refId);
+          if (refEl && !referencedElements.includes(refEl)) {
+            referencedElements.push(refEl);
+          }
+        }
+      }
+
+      // Check for url(#...) in style
+      const style = n.getAttribute && n.getAttribute('style');
+      if (style) {
+        const urlMatches = style.match(/url\(#([^)]+)\)/g);
+        if (urlMatches) {
+          for (const urlMatch of urlMatches) {
+            const refId = urlMatch.match(/url\(#([^)]+)\)/)[1];
+            const refEl = svgRoot.getElementById(refId);
+            if (refEl && !referencedElements.includes(refEl)) {
+              referencedElements.push(refEl);
+            }
+          }
+        }
+      }
+
+      // Recurse to children
+      const children = n.children;
+      for (let i = 0; i < children.length; i++) {
+        collectReferences(children[i]);
+      }
+    })(el);
 
     // Decide coarse region of interest (ROI) for PASS 1
+    // CRITICAL: getBBox() is UNRELIABLE (ignores strokes, filters, transforms, dashed lines, and returns empty for some elements)
+    // Solution: Convert element's getBoundingClientRect() from page pixels to SVG user coordinates
     let coarseROI;
     if (mode === 'unclipped') {
-      // Whole drawing, ignoring viewBox/viewport clipping
-      if (geomBox) {
-        coarseROI = {
-          x: geomBox.x,
-          y: geomBox.y,
-          width:  geomBox.width,
-          height: geomBox.height
-        };
-      } else {
-        // No geometry hint - use viewBox as fallback region
-        coarseROI = viewBox;
+      // Start with viewBox as default
+      let minX = viewBox.x;
+      let minY = viewBox.y;
+      let maxX = viewBox.x + viewBox.width;
+      let maxY = viewBox.y + viewBox.height;
+
+      // Parse preserveAspectRatio to get scaling and offset
+      const scaling = parsePreserveAspectRatio(svgRoot, viewBox, svgRoot.getBoundingClientRect());
+
+      // Helper to expand ROI for an element
+      const expandROIForElement = (elem) => {
+        try {
+          const elRect = elem.getBoundingClientRect();
+          const svgRect = svgRoot.getBoundingClientRect();
+
+          // Only expand if element has non-zero dimensions
+          if (elRect.width > 0 && elRect.height > 0) {
+            let elUserLeft, elUserTop, elUserRight, elUserBottom;
+
+            if (scaling.uniform) {
+              // Uniform scaling (meet or slice) - subtract offset before scaling
+              const scale = scaling.scale;
+              elUserLeft = viewBox.x + (elRect.left - svgRect.left - scaling.offsetX) * scale;
+              elUserTop = viewBox.y + (elRect.top - svgRect.top - scaling.offsetY) * scale;
+              elUserRight = viewBox.x + (elRect.right - svgRect.left - scaling.offsetX) * scale;
+              elUserBottom = viewBox.y + (elRect.bottom - svgRect.top - scaling.offsetY) * scale;
+            } else {
+              // Non-uniform scaling (preserveAspectRatio="none") - no offset
+              elUserLeft = viewBox.x + (elRect.left - svgRect.left) * scaling.scaleX;
+              elUserTop = viewBox.y + (elRect.top - svgRect.top) * scaling.scaleY;
+              elUserRight = viewBox.x + (elRect.right - svgRect.left) * scaling.scaleX;
+              elUserBottom = viewBox.y + (elRect.bottom - svgRect.top) * scaling.scaleY;
+            }
+
+            // Expand ROI to include element with generous padding for strokes/filters
+            const padding = 200; // SVG user units (increased for safety)
+            minX = Math.min(minX, elUserLeft - padding);
+            minY = Math.min(minY, elUserTop - padding);
+            maxX = Math.max(maxX, elUserRight + padding);
+            maxY = Math.max(maxY, elUserBottom + padding);
+          }
+        } catch {
+          // getBoundingClientRect failed for this element
+        }
+      };
+
+      // Expand ROI for target element
+      expandROIForElement(el);
+
+      // Also expand ROI for all referenced elements (textPath refs, gradients, etc.)
+      for (const refEl of referencedElements) {
+        expandROIForElement(refEl);
       }
+
+      coarseROI = {
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY
+      };
     } else {
       // "clipped": restrict to visible viewBox/viewport
       coarseROI = {

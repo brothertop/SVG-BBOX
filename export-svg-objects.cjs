@@ -498,12 +498,19 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
           mode: 'unclipped',
           coarseFactor: 3,
           fineFactor: 24,
-          useLayoutScale: true
+          useLayoutScale: true,
+          fontTimeoutMs: 15000  // Longer timeout for font loading
         });
         if (b) {
           bbox = { x: b.x, y: b.y, width: b.width, height: b.height };
         } else {
-          bboxError = 'No visible pixels detected';
+          // Check if it's a text element - likely font issue
+          const tagLower = el.tagName && el.tagName.toLowerCase();
+          if (tagLower === 'text') {
+            bboxError = 'No visible pixels (likely missing fonts)';
+          } else {
+            bboxError = 'No visible pixels detected';
+          }
         }
       } catch (err) {
         bboxError = err.message || 'BBox measurement failed';

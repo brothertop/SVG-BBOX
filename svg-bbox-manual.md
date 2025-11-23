@@ -176,7 +176,7 @@ window.SvgVisualBBox
 All bounding boxes are returned in the **user coordinate system of the root `<svg>`**:
 
 - If the `<svg>` has a `viewBox="minX minY width height"`, that defines the coordinate system.
-- If not, the library falls back to `svgRoot.getBBox()` to approximate a coordinate extent.
+- If not, the library uses an arbitrary large coordinate extent as a fallback.
 
 This means the returned `x`, `y`, `width`, `height` are directly comparable with:
 

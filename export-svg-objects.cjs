@@ -903,12 +903,60 @@ function buildListHtml(titleName, rootSvgMarkup, objects, parentTransforms = {})
               : `<use href="#${id}" />`)
           : '';
 
+        // ════════════════════════════════════════════════════════════════════════════════
+        // PREVIEW CELL WITH VISIBLE BBOX BORDER
+        // ════════════════════════════════════════════════════════════════════════════════
+        //
+        // CRITICAL REQUIREMENTS:
+        // 1. Border must be COMPLETELY EXTERNAL to SVG content (no overlap)
+        // 2. Border must be visible on both light and dark SVG content
+        // 3. Border must be exactly 1px wide (not thicker)
+        // 4. SVG must display at correct size with proper centering
+        //
+        // WHY THIS IS HARD:
+        // - CSS border/outline on SVG always overlaps the content (border draws half inside/half outside)
+        // - SVG with only viewBox (no width/height) collapses to 0x0 size
+        // - SVG coordinate system makes stroke-width scale incorrectly
+        // - display:none doesn't work in headless browsers (must use CSS class)
+        //
+        // WRONG APPROACHES (DON'T USE):
+        // ❌ outline on SVG - overlaps content on top/right, not bottom/left (asymmetric)
+        // ❌ border on SVG - always overlaps content by half the border width
+        // ❌ SVG <rect> with stroke - stroke-width in user units scales unpredictably
+        // ❌ SVG <rect> with vector-effect="non-scaling-stroke" - offset in user units is tiny
+        // ❌ box-shadow - creates solid line, can't achieve dashed pattern
+        // ❌ wrapper div with flex - collapses SVG to 0x0 size
+        // ❌ wrapper div with padding - padding blocks SVG rendering (blank output)
+        // ❌ rgba() alpha + opacity together - makes color too light (double transparency)
+        //
+        // CORRECT SOLUTION:
+        // 1. Wrapper <span> with display:inline-block + line-height:0
+        //    - inline-block shrink-wraps to SVG size
+        //    - line-height:0 removes extra spacing from inline element
+        // 2. Border on the wrapper span (NOT on SVG)
+        //    - border draws completely outside the wrapper
+        //    - wrapper tightly wraps the SVG, so border is just outside SVG
+        // 3. SVG with width="100%" height="100%"
+        //    - gives SVG actual dimensions (not 0x0)
+        //    - 100% fills the wrapper exactly
+        //    - max-width/max-height constraints keep it ≤ 120px
+        // 4. Border: 1px dashed rgba(0,0,0,0.4)
+        //    - dashed pattern for visibility
+        //    - 40% opacity is subtle but visible on any background
+        //    - pure black with alpha (NOT mixing alpha in rgba() with CSS opacity)
+        //
+        // ANTIALIASING NOTE:
+        // You may see slight "bleeding" of SVG colors over the border edge.
+        // This is normal browser antialiasing and NOT a bug - leave it alone!
+        //
         previewCell = `
           <div style="width:120px; height:120px; display:flex; align-items:center; justify-content:center; border:1px solid #ccc; background:#fdfdfd;">
-            <svg viewBox="${viewBoxStr}"
-                 style="max-width:120px; max-height:120px; display:block;">
-              ${useElement}
-            </svg>
+            <span style="display:inline-block; border:1px dashed rgba(0,0,0,0.4); line-height:0;">
+              <svg viewBox="${viewBoxStr}" width="100%" height="100%"
+                   style="max-width:120px; max-height:120px; display:block;">
+                ${useElement}
+              </svg>
+            </span>
           </div>`;
       }
 

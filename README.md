@@ -70,7 +70,11 @@ Unlike `getBBox()` and simple geometry math, this toolkit uses **raster sampling
 
 ## 📦 Installation
 
-> You need **Node.js ≥ 16** and **Chrome or Chromium** available on your system.
+> **CRITICAL**: You need **Node.js ≥ 16** and **Chrome or Chromium** installed.
+>
+> **⚠️ ONLY Chrome/Chromium are supported** — other browsers have poor SVG support.
+> This library uses headless Chrome via Puppeteer for measurements, and visual verification
+> must use the same browser engine to match results.
 
 1. **Clone the repo**
 
@@ -451,9 +455,10 @@ A typical end‑to‑end workflow:
      --out-fixed sprites.ids.svg
    ```
 
-2. **Open the HTML catalog**
+2. **Open the HTML catalog in Chrome/Chromium**
 
-   - Open `sprites.objects.html` in your browser.
+   - Open `sprites.objects.html` in **Chrome or Chromium ONLY**.
+   - ⚠️ DO NOT use Safari, Firefox, Edge, or any other browser!
    - Use filters:
      - Regex `^auto_id_` to show only auto-generated IDs.
      - Tag filter to see only `<g>` groups or only `<path>` elements.
@@ -501,9 +506,52 @@ A typical end‑to‑end workflow:
 ### 💥 Puppeteer / browser fails to launch
 
 - Make sure **Chrome** or **Chromium** is installed.
-- If Puppeteer can’t find a browser:
+- If Puppeteer can't find a browser:
   - Try installing the default Chromium: `npx puppeteer browsers install chrome`.
   - Or set `PUPPETEER_EXECUTABLE_PATH` to your Chrome/Chromium binary.
+
+**Installing Chrome/Chromium:**
+
+- **macOS**:
+  ```bash
+  brew install --cask google-chrome
+  # or
+  brew install --cask chromium
+  ```
+
+- **Windows**:
+  - Download from: https://www.google.com/chrome/
+  - Or via Chocolatey: `choco install googlechrome`
+
+- **Linux (Debian/Ubuntu)**:
+  ```bash
+  sudo apt install google-chrome-stable
+  # or
+  sudo apt install chromium-browser
+  ```
+
+- **Linux (Fedora/RHEL)**:
+  ```bash
+  sudo dnf install google-chrome-stable
+  # or
+  sudo dnf install chromium
+  ```
+
+- **Linux (Arch)**:
+  ```bash
+  sudo pacman -S google-chrome
+  # or
+  sudo pacman -S chromium
+  ```
+
+### ⚠️ Wrong browser opened
+
+**Tools will ONLY open Chrome/Chromium** via the `--auto-open` flag.
+
+If Chrome/Chromium is not found, you'll see an error message with installation instructions.
+
+**CRITICAL**: Other browsers have poor SVG support. This library uses headless Chrome for
+measurements, so visual verification must use the same browser engine.
 
 ### 🖋 Fonts look wrong / text bbox is off
 

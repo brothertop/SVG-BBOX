@@ -10,7 +10,7 @@
  *     [--width W --height H] \
  *     [--background white|transparent|#rrggbb|...] \
  *     [--margin N] \
- *     [--auto-open]
+ *     [--auto-open]  # Opens PNG in Chrome/Chromium ONLY (not Safari!)
  *
  * Modes:
  *   --mode full
@@ -42,6 +42,7 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
+const { openInChrome } = require('./browser-utils.cjs');
 
 // ---------- simple CLI parsing ----------
 
@@ -447,30 +448,21 @@ ${svgContent}
     console.log(`  background: ${opts.background}`);
     console.log(`  margin (user units): ${opts.margin}`);
 
-    // Auto-open PNG in browser/viewer if requested
+    // Auto-open PNG in Chrome/Chromium if requested
+    // CRITICAL: Must use Chrome/Chromium (other browsers have poor SVG support)
     if (opts.autoOpen) {
       const absolutePath = path.resolve(output);
 
-      // Use execFile for security (no shell injection)
-      let command, args;
-      if (process.platform === 'darwin') {
-        command = 'open';
-        args = ['-a', 'Google Chrome', absolutePath];
-      } else if (process.platform === 'win32') {
-        command = 'cmd';
-        args = ['/c', 'start', 'chrome', absolutePath];
-      } else {
-        command = 'xdg-open';
-        args = [absolutePath];
-      }
-
-      execFile(command, args, (error) => {
-        if (error) {
-          console.log(`\n⚠️  Could not auto-open: ${error.message}`);
-          console.log(`   Please open manually: ${absolutePath}`);
+      openInChrome(absolutePath).then(result => {
+        if (result.success) {
+          console.log(`\n✓ Opened in Chrome: ${absolutePath}`);
         } else {
-          console.log(`\n✓ Opened in viewer: ${absolutePath}`);
+          console.log(`\n⚠️  ${result.error}`);
+          console.log(`   Please open manually in Chrome/Chromium: ${absolutePath}`);
         }
+      }).catch(err => {
+        console.log(`\n⚠️  Failed to auto-open: ${err.message}`);
+        console.log(`   Please open manually in Chrome/Chromium: ${absolutePath}`);
       });
     }
   } finally {

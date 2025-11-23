@@ -12,7 +12,7 @@
  *   node extract_svg_objects.js input.svg --list
  *     [--assign-ids --out-fixed fixed.svg]
  *     [--out-html list.html]
- *     [--auto-open]
+ *     [--auto-open]  # Opens HTML in Chrome/Chromium ONLY (not Safari!)
  *     [--json]
  *
  *   • Produces an HTML page with a big table of objects:
@@ -153,6 +153,7 @@ const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
 const { execFile } = require('child_process');
+const { openInChrome } = require('./browser-utils.cjs');
 
 // -------- CLI parsing --------
 
@@ -817,30 +818,21 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
       console.log(`⚠️  ${zeroSizeObjects} object(s) have zero width/height - marked with ⚠️ in HTML`);
     }
 
-    // Auto-open HTML in browser if requested
+    // Auto-open HTML in Chrome/Chromium if requested
+    // CRITICAL: Must use Chrome/Chromium (other browsers have poor SVG support)
     if (autoOpen) {
       const absolutePath = path.resolve(outHtmlPath);
 
-      // Use execFile for security (no shell injection)
-      let command, args;
-      if (process.platform === 'darwin') {
-        command = 'open';
-        args = ['-a', 'Google Chrome', absolutePath];
-      } else if (process.platform === 'win32') {
-        command = 'cmd';
-        args = ['/c', 'start', 'chrome', absolutePath];
-      } else {
-        command = 'xdg-open';
-        args = [absolutePath];
-      }
-
-      execFile(command, args, (error) => {
-        if (error) {
-          console.log(`\n⚠️  Could not auto-open browser: ${error.message}`);
-          console.log(`   Please open manually: ${absolutePath}`);
+      openInChrome(absolutePath).then(result => {
+        if (result.success) {
+          console.log(`\n✓ Opened in Chrome: ${absolutePath}`);
         } else {
-          console.log(`\n✓ Opened in browser: ${absolutePath}`);
+          console.log(`\n⚠️  ${result.error}`);
+          console.log(`   Please open manually in Chrome/Chromium: ${absolutePath}`);
         }
+      }).catch(err => {
+        console.log(`\n⚠️  Failed to auto-open: ${err.message}`);
+        console.log(`   Please open manually in Chrome/Chromium: ${absolutePath}`);
       });
     }
   }

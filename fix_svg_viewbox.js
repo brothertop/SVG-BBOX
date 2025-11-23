@@ -9,7 +9,8 @@
  *   <input>.fixed.svg
  *
  * Options:
- *   --auto-open: Automatically open the fixed SVG in Google Chrome
+ *   --auto-open: Automatically open the fixed SVG in Chrome/Chromium ONLY
+ *                (other browsers have poor SVG support)
  *
  * What it does:
  *   - Loads the SVG into a headless browser.
@@ -24,6 +25,7 @@ const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
 const { execFile } = require('child_process');
+const { openInChrome } = require('./browser-utils.cjs');
 
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -179,30 +181,21 @@ ${svgContent}
     fs.writeFileSync(outputPath, fixedSvgString, 'utf8');
     console.log(`✓ Fixed SVG saved to: ${outputPath}`);
 
-    // Auto-open SVG in browser if requested
+    // Auto-open SVG in Chrome/Chromium if requested
+    // CRITICAL: Must use Chrome/Chromium (other browsers have poor SVG support)
     if (autoOpen) {
       const absolutePath = path.resolve(outputPath);
 
-      // Use execFile for security (no shell injection)
-      let command, args;
-      if (process.platform === 'darwin') {
-        command = 'open';
-        args = ['-a', 'Google Chrome', absolutePath];
-      } else if (process.platform === 'win32') {
-        command = 'cmd';
-        args = ['/c', 'start', 'chrome', absolutePath];
-      } else {
-        command = 'xdg-open';
-        args = [absolutePath];
-      }
-
-      execFile(command, args, (error) => {
-        if (error) {
-          console.log(`\n⚠️  Could not auto-open: ${error.message}`);
-          console.log(`   Please open manually: ${absolutePath}`);
+      openInChrome(absolutePath).then(result => {
+        if (result.success) {
+          console.log(`\n✓ Opened in Chrome: ${absolutePath}`);
         } else {
-          console.log(`\n✓ Opened in browser: ${absolutePath}`);
+          console.log(`\n⚠️  ${result.error}`);
+          console.log(`   Please open manually in Chrome/Chromium: ${absolutePath}`);
         }
+      }).catch(err => {
+        console.log(`\n⚠️  Failed to auto-open: ${err.message}`);
+        console.log(`   Please open manually in Chrome/Chromium: ${absolutePath}`);
       });
     }
   } finally {

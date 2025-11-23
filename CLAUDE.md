@@ -613,6 +613,16 @@ Transform chain inspection:
 3. ✓ Browser applies: translate → scale → render
 4. ✓ Matches original SVG rendering exactly
 
+**Comprehensive tests proving this fix:**
+- See `tests/unit/html-preview-rendering.test.js` - TEST 2
+- Tests single parent transform (translate shift measured precisely)
+- Tests multiple nested transforms (translate → scale → rotate chain)
+- Tests no parent transforms (text37 - direct child of root)
+- Tests identity transform (text2 - translate(0,0) no-op)
+- Tests large transform (rect1851 - shifted 1144px, appeared empty!)
+- REAL-WORLD REGRESSION TEST: exact production bug (text8, text9, rect1851)
+- User confirmation: "yes, it worked!" ✓
+
 ---
 
 ### Other HTML Preview Requirements
@@ -640,6 +650,13 @@ clonedForMarkup.removeAttribute('y');
 
 **According to SVG spec:** A `<use>` element inherits the coordinate system from its **context** (the preview SVG), NOT from the referenced element's original container. By removing the container's viewBox, we allow `<use>` to work purely with the preview SVG's viewBox.
 
+**Comprehensive tests proving this fix:**
+- See `tests/unit/html-preview-rendering.test.js` - TEST 1
+- Tests elements with negative coordinates (clipped vs not clipped)
+- Tests elements far outside container viewBox (text8 at x=-455.64)
+- Tests all coordinate quadrants (negative/positive X/Y combinations)
+- Proves faulty method clips elements, correct method shows them fully
+
 ---
 
 #### 2. Preview SVGs Use Only ViewBox (No Width/Height in User Units)
@@ -658,6 +675,12 @@ clonedForMarkup.removeAttribute('y');
 **Why:** Mixing `width`/`height` attributes (in user units) with `viewBox` can cause scaling conflicts. The browser must map viewBox coordinates to width/height, potentially introducing rounding errors or aspect ratio distortions.
 
 **Best practice:** Use `viewBox` for SVG coordinate system, use CSS for display sizing.
+
+**Comprehensive tests proving this approach:**
+- See `tests/unit/html-preview-rendering.test.js` - TEST 3
+- Tests viewBox with CSS sizing preserves coordinate precision
+- Tests width/height attributes can cause scaling issues
+- Tests CSS sizing allows proper aspect ratio preservation (wide vs tall elements)
 
 ---
 
@@ -685,6 +708,13 @@ const viewBoxStr = Math.round(bbox.x) + " " + Math.round(bbox.y) + " ...";
 - Text rendering is especially sensitive to subpixel positioning
 - Cumulative rounding errors across multiple transforms amplify the problem
 
+**Comprehensive tests proving precision is critical:**
+- See `tests/unit/html-preview-rendering.test.js` - TEST 4
+- Tests full precision viewBox matches bbox exactly (10+ decimals preserved)
+- Tests 2-decimal rounding causes measurable misalignment (~0.003px error)
+- Tests integer rounding causes severe precision loss (text shifted by 0.3px = 2.4% of font size)
+- Tests cumulative precision errors with multiple elements (~0.009px for third element)
+
 ---
 
 ### Summary: The Complete Fix Checklist
@@ -700,6 +730,14 @@ When generating HTML previews with `<use>` elements:
 - ✅ Test with elements that have complex transform chains
 - ✅ Test with elements that have negative coordinates
 - ✅ Verify no regressions for elements without parent transforms
+
+**Complete test suite verifying all fixes:**
+- See `tests/unit/html-preview-rendering.test.js`
+- 20+ tests covering all edge cases and faulty methods
+- Integration test combining all fixes with real test_text_to_path_advanced.svg
+- Proves faulty methods fail and correct methods work
+- Documents all debugging hypotheses (what we tried and why it failed)
+- Run tests: `npm test tests/unit/html-preview-rendering.test.js`
 
 ## Troubleshooting
 

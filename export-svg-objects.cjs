@@ -571,6 +571,17 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
     // its context (the preview SVG), NOT from the element's original container.
     // By removing the container's viewBox, we allow <use> to work purely with
     // the preview SVG's viewBox, which is correctly sized to the element's bbox.
+    //
+    // COMPREHENSIVE TESTS PROVING THIS FIX:
+    // See tests/unit/html-preview-rendering.test.js
+    // - "Elements with negative coordinates get clipped when container has viewBox"
+    //   → Proves faulty method (container with viewBox) clips elements
+    // - "Elements with negative coordinates render fully when container has NO viewBox"
+    //   → Proves correct method (no viewBox) works
+    // - "EDGE CASE: Element far outside container viewBox (negative coordinates)"
+    //   → Tests real bug from text8 at x=-455.64
+    // - "EDGE CASE: Element with coordinates in all quadrants"
+    //   → Tests negative X, negative Y, positive X, positive Y
     const clonedForMarkup = rootSvg.cloneNode(true);
     clonedForMarkup.removeAttribute('viewBox');
     clonedForMarkup.removeAttribute('width');
@@ -712,6 +723,22 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
     //
     // By collecting parent→child order and letting the browser parse it,
     // we get the exact same transform chain as the original SVG! ✓
+    //
+    // COMPREHENSIVE TESTS PROVING THIS FIX:
+    // See tests/unit/html-preview-rendering.test.js
+    // - "Element with parent translate transform renders incorrectly without wrapper"
+    //   → Proves faulty method (<use> alone) is shifted by parent transform amount
+    // - "Element with multiple nested parent transforms requires all transforms"
+    //   → Tests complex case: translate(100,200) scale(2,2) rotate(45) chain
+    // - "EDGE CASE: Element with no parent transforms (direct child of root)"
+    //   → Tests text37 from test_text_to_path_advanced.svg (works without wrapper)
+    // - "EDGE CASE: Element with identity parent transform (translate(0,0))"
+    //   → Tests text2 from test_text_to_path_advanced.svg (no-op transform)
+    // - "EDGE CASE: Large parent transform (rect1851 bug - shifted 1144px)"
+    //   → Tests rect1851 real bug: translate(-1144.8563,517.64642) made it empty!
+    // - "REAL-WORLD REGRESSION TEST: text8, text9, rect1851"
+    //   → Tests exact production bug with all three broken elements
+    //   → User confirmation: "yes, it worked!"
     const parentTransforms = {};
     info.forEach(obj => {
       const el = rootSvg.getElementById(obj.id);

@@ -216,11 +216,11 @@ test.describe('setViewBoxOnObjects() Tests', () => {
     console.log('✓ Stretch mode with margin (10px)');
   });
 
-  test('PreserveSize mode: centers without zooming', async ({ page }) => {
+  test('ChangePosition mode: centers without zooming', async ({ page }) => {
     await page.goto('file://' + testPagePath);
 
     const result = await page.evaluate(() => {
-      return window.testViewBox('svg1', 'rect1', { aspect: 'preserveSize' });
+      return window.testViewBox('svg1', 'rect1', { aspect: 'changePosition' });
     });
 
     expect(result.success).toBe(true);
@@ -232,7 +232,7 @@ test.describe('setViewBoxOnObjects() Tests', () => {
     // But position should change to center on element
     expect(result.actualViewBox.x).not.toBeCloseTo(result.oldViewBox.x, 1);
 
-    console.log('✓ PreserveSize mode - dimensions unchanged, position adjusted');
+    console.log('✓ ChangePosition mode - dimensions unchanged, position adjusted');
   });
 
   test('PreserveAspectRatio mode with meet', async ({ page }) => {
@@ -450,12 +450,12 @@ test.describe('setViewBoxOnObjects() Tests', () => {
     console.log('✓ Restore function - viewBox restored');
   });
 
-  test('Visibility: showOnly mode', async ({ page }) => {
+  test('Visibility: hideAllExcept mode', async ({ page }) => {
     await page.goto('file://' + testPagePath);
 
     const hiddenCount = await page.evaluate(async () => {
       await window.testViewBox('svg1', 'circle1', {
-        visibility: 'showOnly'
+        visibility: 'hideAllExcept'
       });
 
       // Count hidden elements
@@ -472,7 +472,7 @@ test.describe('setViewBoxOnObjects() Tests', () => {
     // Should hide rect1 and text1 (2 elements)
     expect(hiddenCount).toBeGreaterThanOrEqual(2);
 
-    console.log(`✓ Visibility showOnly - ${hiddenCount} elements hidden`);
+    console.log(`✓ Visibility hideAllExcept - ${hiddenCount} elements hidden`);
   });
 
   test('Visibility: hideTargets mode', async ({ page }) => {
@@ -507,7 +507,7 @@ test.describe('setViewBoxOnObjects() Tests', () => {
 
       // Change visibility
       await SvgVisualBBox.setViewBoxOnObjects('svg1', 'circle1', {
-        visibility: 'showOnly'
+        visibility: 'hideAllExcept'
       });
 
       const hiddenAfterChange = document.getElementById('rect1').style.display === 'none';
@@ -545,5 +545,129 @@ test.describe('setViewBoxOnObjects() Tests', () => {
     expect(result.error).toContain('not found');
 
     console.log('✓ Error handling - nonexistent element');
+  });
+
+  test('Symbol resolution: pass symbol ID, finds use element', async ({ page }) => {
+    await page.goto('file://' + testPagePath);
+
+    const result = await page.evaluate(async () => {
+      await SvgVisualBBox.waitForDocumentFonts();
+
+      try {
+        // Pass symbol ID directly - should find and use the <use> element
+        const res = await SvgVisualBBox.setViewBoxOnObjects('svg2', 'icon1', {
+          aspect: 'stretch',
+          margin: 10
+        });
+
+        return {
+          success: true,
+          hasBBox: res.bbox && res.bbox.width > 0 && res.bbox.height > 0
+        };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.hasBBox).toBe(true);
+
+    console.log('✓ Symbol resolution - symbol ID → use element');
+  });
+
+  test('Symbol resolution error: multiple use elements', async ({ page }) => {
+    await page.goto('file://' + testPagePath);
+
+    const result = await page.evaluate(async () => {
+      // Create SVG with symbol referenced by multiple <use> elements
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.id = 'multiUse';
+      svg.setAttribute('viewBox', '0 0 400 300');
+      svg.setAttribute('width', '800');
+      svg.setAttribute('height', '600');
+
+      const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+      const symbol = document.createElementNS('http://www.w3.org/2000/svg', 'symbol');
+      symbol.id = 'multiSymbol';
+      symbol.setAttribute('viewBox', '0 0 50 50');
+      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('cx', '25');
+      circle.setAttribute('cy', '25');
+      circle.setAttribute('r', '20');
+      circle.setAttribute('fill', '#ff0000');
+      symbol.appendChild(circle);
+      defs.appendChild(symbol);
+      svg.appendChild(defs);
+
+      // Add TWO use elements
+      const use1 = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+      use1.id = 'use_multi_1';
+      use1.setAttribute('href', '#multiSymbol');
+      use1.setAttribute('x', '50');
+      use1.setAttribute('y', '50');
+      svg.appendChild(use1);
+
+      const use2 = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+      use2.id = 'use_multi_2';
+      use2.setAttribute('href', '#multiSymbol');
+      use2.setAttribute('x', '200');
+      use2.setAttribute('y', '200');
+      svg.appendChild(use2);
+
+      document.body.appendChild(svg);
+
+      await SvgVisualBBox.waitForDocumentFonts();
+
+      try {
+        // Try to use symbol ID - should fail because multiple <use> elements
+        await SvgVisualBBox.setViewBoxOnObjects('multiUse', 'multiSymbol', {
+          aspect: 'stretch'
+        });
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('multiple');
+
+    console.log('✓ Symbol resolution error - multiple use elements detected');
+  });
+
+  test('Symbol resolution error: no use elements', async ({ page }) => {
+    await page.goto('file://' + testPagePath);
+
+    const result = await page.evaluate(async () => {
+      // Create SVG with symbol but NO <use> elements
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.id = 'noUse';
+      svg.setAttribute('viewBox', '0 0 400 300');
+
+      const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+      const symbol = document.createElementNS('http://www.w3.org/2000/svg', 'symbol');
+      symbol.id = 'orphanSymbol';
+      symbol.setAttribute('viewBox', '0 0 50 50');
+      defs.appendChild(symbol);
+      svg.appendChild(defs);
+
+      document.body.appendChild(svg);
+
+      await SvgVisualBBox.waitForDocumentFonts();
+
+      try {
+        await SvgVisualBBox.setViewBoxOnObjects('noUse', 'orphanSymbol', {
+          aspect: 'stretch'
+        });
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('no <use> elements');
+
+    console.log('✓ Symbol resolution error - no use elements found');
   });
 });

@@ -797,10 +797,10 @@ await SvgVisualBBox.setViewBoxOnObjects(target, objectIds, options)
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `aspect` | `string` | `'stretch'` | Aspect mode: `'stretch'`, `'preserveSize'`, or `'preserveAspectRatio'` |
+| `aspect` | `string` | `'stretch'` | Aspect mode: `'stretch'`, `'changePosition'`, or `'preserveAspectRatio'` |
 | `aspectRatioMode` | `string` | `'meet'` | For `preserveAspectRatio`: `'meet'` (fit all) or `'slice'` (fill viewBox) |
 | `align` | `string` | `'xMidYMid'` | SVG alignment like `'xMinYMin'`, `'xMidYMax'`, etc. (9 combinations) |
-| `visibility` | `string` | `'unchanged'` | Visibility mode: `'unchanged'`, `'showOnly'`, `'hideTargets'`, `'restoreList'` |
+| `visibility` | `string` | `'unchanged'` | Visibility mode: `'unchanged'`, `'hideAllExcept'`, `'hideTargets'`, `'restoreList'` |
 | `visibilityList` | `Object` | `null` | Visibility state to restore (only for `visibility: 'restoreList'`) |
 | `margin` | `number\|string` | `0` | Margin around bbox. Supports user units, `'10px'`, or `'5%'` (of bbox diagonal) |
 | `saveVisibilityList` | `boolean` | `false` | Return current visibility state of all elements |
@@ -833,12 +833,12 @@ await SvgVisualBBox.setViewBoxOnObjects('mySvg', 'circle1', {
 });
 ```
 
-#### `'preserveSize'`
+#### `'changePosition'`
 Keeps viewBox dimensions unchanged, only centers on objects.
 
 ```javascript
 await SvgVisualBBox.setViewBoxOnObjects('mySvg', ['icon1', 'icon2'], {
-  aspect: 'preserveSize'  // Pan to objects without zooming
+  aspect: 'changePosition'  // Pan to objects without zooming
 });
 ```
 
@@ -890,12 +890,12 @@ await SvgVisualBBox.setViewBoxOnObjects('mySvg', 'obj1', {
 });
 ```
 
-#### `'showOnly'`
+#### `'hideAllExcept'`
 Hide all elements except specified objects.
 
 ```javascript
 await SvgVisualBBox.setViewBoxOnObjects('mySvg', ['icon1', 'icon2'], {
-  visibility: 'showOnly'  // Hide everything else
+  visibility: 'hideAllExcept'  // Hide everything else
 });
 ```
 
@@ -963,7 +963,7 @@ The returned `restore()` function undoes all changes:
 
 ```javascript
 const result = await SvgVisualBBox.setViewBoxOnObjects('mySvg', 'icon1', {
-  visibility: 'showOnly',
+  visibility: 'hideAllExcept',
   margin: '10px'
 });
 
@@ -981,7 +981,7 @@ const result = await SvgVisualBBox.setViewBoxOnObjects(
   {
     aspect: 'stretch',
     margin: '5px',
-    visibility: 'showOnly'
+    visibility: 'hideAllExcept'
   }
 );
 
@@ -1008,7 +1008,7 @@ const initialState = await SvgVisualBBox.setViewBoxOnObjects('mySvg', 'obj1', {
 
 // Show only group 1
 await SvgVisualBBox.setViewBoxOnObjects('mySvg', ['g1_icon1', 'g1_icon2'], {
-  visibility: 'showOnly'
+  visibility: 'hideAllExcept'
 });
 
 // After animation, restore
@@ -1023,7 +1023,7 @@ await SvgVisualBBox.setViewBoxOnObjects('mySvg', 'obj1', {
 // Works with <use> elements referencing <symbol>
 await SvgVisualBBox.setViewBoxOnObjects('sprites', 'use_icon_star', {
   aspect: 'stretch',
-  visibility: 'showOnly',
+  visibility: 'hideAllExcept',
   margin: 5
 });
 ```

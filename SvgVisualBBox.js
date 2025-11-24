@@ -1594,10 +1594,10 @@
    * @param {string|Element} target - CSS selector, DOM element, or element ID for the SVG root
    * @param {string|string[]} objectIds - Element ID(s) to frame
    * @param {Object} options - Configuration options
-   * @param {string} options.aspect - 'preserveSize' | 'preserveAspectRatio' | 'stretch' (default: 'stretch')
+   * @param {string} options.aspect - 'changePosition' | 'preserveAspectRatio' | 'stretch' (default: 'stretch')
    * @param {string} options.aspectRatioMode - 'meet' | 'slice' (default: 'meet', only for aspect: 'preserveAspectRatio')
    * @param {string} options.align - SVG alignment like 'xMidYMid', 'xMinYMin', etc. (default: 'xMidYMid')
-   * @param {string} options.visibility - 'unchanged' | 'showOnly' | 'hideTargets' | 'restoreList' (default: 'unchanged')
+   * @param {string} options.visibility - 'unchanged' | 'hideAllExcept' | 'hideTargets' | 'restoreList' (default: 'unchanged')
    * @param {Object} options.visibilityList - Visibility state to restore (only for visibility: 'restoreList')
    * @param {number|string} options.margin - Margin around bbox in user units, px, or screen units (default: 0)
    * @param {boolean} options.saveVisibilityList - Return current visibility state (default: false)
@@ -1641,12 +1641,30 @@
       throw new Error('At least one object ID must be provided');
     }
 
-    // Get elements
+    // Get elements with smart symbol resolution
     const elements = ids.map(id => {
-      const el = document.getElementById(id);
+      let el = document.getElementById(id);
       if (!el) {
         throw new Error(`Element with ID "${id}" not found`);
       }
+
+      // If element is a <symbol>, find <use> elements referencing it
+      if (el.tagName.toLowerCase() === 'symbol') {
+        const useElements = Array.from(svgRoot.querySelectorAll('use')).filter(use => {
+          const href = use.getAttribute('href') || use.getAttributeNS('http://www.w3.org/1999/xlink', 'href');
+          return href === '#' + id;
+        });
+
+        if (useElements.length === 0) {
+          throw new Error(`Symbol "${id}" has no <use> elements referencing it`);
+        }
+        if (useElements.length > 1) {
+          throw new Error(`Symbol "${id}" is referenced by multiple <use> elements. Please specify the exact <use> element ID.`);
+        }
+
+        el = useElements[0];
+      }
+
       return el;
     });
 
@@ -1718,8 +1736,8 @@
         width: bbox.width + marginInUserUnits * 2,
         height: bbox.height + marginInUserUnits * 2
       };
-    } else if (opts.aspect === 'preserveSize') {
-      // Keep viewBox dimensions, only center on objects
+    } else if (opts.aspect === 'changePosition') {
+      // Keep viewBox dimensions, only center on objects (camera pan)
       const centerX = bbox.x + bbox.width / 2;
       const centerY = bbox.y + bbox.height / 2;
       newViewBox = {
@@ -1813,7 +1831,7 @@
     // Apply visibility changes
     const oldVisibilityStates = {};
     if (opts.visibility !== 'unchanged' && !opts.dryRun) {
-      if (opts.visibility === 'showOnly') {
+      if (opts.visibility === 'hideAllExcept') {
         // Hide all elements except targets
         const allElements = svgRoot.querySelectorAll('[id]');
         allElements.forEach(el => {

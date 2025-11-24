@@ -1,6 +1,6 @@
 {
   "name": "svg-bbox",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "High-precision visual bounding boxes and SVG object tooling powered by headless Chrome & Puppeteer",
   "type": "module",
   "main": "./SvgVisualBBox.js",

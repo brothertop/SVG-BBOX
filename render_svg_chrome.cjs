@@ -44,14 +44,141 @@ const path = require('path');
 const { execFile } = require('child_process');
 const { openInChrome } = require('./browser-utils.cjs');
 
-// ---------- simple CLI parsing ----------
+// ---------- CLI parsing ----------
+
+function printHelp() {
+  console.log(`
+╔════════════════════════════════════════════════════════════════════════════╗
+║ render_svg_chrome.cjs - Render SVG to PNG via Headless Chrome             ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+DESCRIPTION:
+  High-quality SVG to PNG rendering using Chrome's rendering engine with
+  precise control over what gets rendered and how.
+
+USAGE:
+  node render_svg_chrome.cjs input.svg output.png [options]
+
+ARGUMENTS:
+  input.svg           Input SVG file to render
+  output.png          Output PNG file path
+
+═══════════════════════════════════════════════════════════════════════════════
+
+RENDERING MODES (--mode):
+
+  --mode visible      (DEFAULT)
+    Render only content inside current viewBox
+    Respects viewBox clipping exactly as browser would display it
+    Best for: SVGs with correct viewBox already set
+
+  --mode full
+    Render whole drawing, ignoring current viewBox
+    Computes full visual bbox and adjusts viewBox automatically
+    Best for: SVGs with missing/incorrect viewBox, seeing all content
+
+  --mode element --element-id <ID>
+    Render single element only
+    Hides all other elements, crops viewBox to element bbox
+    Best for: Extracting individual objects/icons from larger SVG
+
+═══════════════════════════════════════════════════════════════════════════════
+
+OPTIONS:
+
+  --mode <mode>
+      Rendering mode: visible | full | element
+      Default: visible
+
+  --element-id <ID>
+      Element ID to render (required with --mode element)
+
+  --scale <number>
+      Resolution multiplier (default: 4)
+      Higher = better quality but larger file
+      Example: --scale 2 for lower res, --scale 8 for very high res
+
+  --width <pixels> --height <pixels>
+      Override output dimensions in pixels
+      If not specified, computed from viewBox and scale
+
+  --background <color>
+      Background color (default: white)
+      Options:
+        - transparent (for PNG transparency)
+        - white, black, red, blue, etc. (CSS color names)
+        - #RRGGBB (hex colors)
+        - rgba(r, g, b, a) (CSS rgba format)
+
+  --margin <number>
+      Extra padding in SVG user units (default: 0)
+      In visible mode, margin clamped to viewBox boundaries
+
+  --auto-open
+      Automatically open PNG in Chrome/Chromium after rendering
+
+  --help, -h
+      Show this help message
+
+═══════════════════════════════════════════════════════════════════════════════
+
+EXAMPLES:
+
+  # Render with default settings (visible mode, white background)
+  node render_svg_chrome.cjs drawing.svg output.png
+
+  # Render full drawing regardless of viewBox
+  node render_svg_chrome.cjs drawing.svg full.png --mode full
+
+  # Render with transparent background at high resolution
+  node render_svg_chrome.cjs icon.svg icon.png --background transparent --scale 8
+
+  # Render only a specific element
+  node render_svg_chrome.cjs sprites.svg logo.png \\
+    --mode element --element-id logo_main --margin 5
+
+  # Custom dimensions and background color
+  node render_svg_chrome.cjs chart.svg chart.png \\
+    --width 1920 --height 1080 --background "#f0f0f0"
+
+  # Render and immediately view
+  node render_svg_chrome.cjs drawing.svg preview.png --auto-open
+
+═══════════════════════════════════════════════════════════════════════════════
+
+MARGIN BEHAVIOR:
+
+  SVG user units (not pixels):
+    Margin is specified in the SVG's coordinate system
+    Example: viewBox="0 0 100 100" with --margin 10
+    → Adds 10 units on each side
+
+  Mode-specific behavior:
+    • visible mode: Margin clamped to original viewBox boundaries
+    • full mode: Margin added around full drawing bbox
+    • element mode: Margin added around element bbox
+
+USE CASES:
+  • Generate preview images for SVG libraries
+  • Create thumbnails for SVG galleries
+  • Export individual sprites/icons from sprite sheets
+  • Render charts/diagrams for documentation
+  • Convert SVGs for platforms that don't support SVG
+
+`);
+}
 
 function parseArgs(argv) {
   const args = argv.slice(2);
+
+  // Check for --help
+  if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
+    printHelp();
+    process.exit(0);
+  }
+
   if (args.length < 2) {
-    console.error(
-      'Usage: node render_svg_chrome.js input.svg output.png [--mode full|visible|element] [--element-id ID] [--scale N] [--width W --height H] [--background white|transparent|#rrggbb|...] [--margin N] [--auto-open]'
-    );
+    printHelp();
     process.exit(1);
   }
 

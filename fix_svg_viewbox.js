@@ -27,10 +27,83 @@ const puppeteer = require('puppeteer');
 const { execFile } = require('child_process');
 const { openInChrome } = require('./browser-utils.cjs');
 
+function printHelp() {
+  console.log(`
+╔════════════════════════════════════════════════════════════════════════════╗
+║ fix_svg_viewbox.js - Repair Missing SVG ViewBox & Dimensions              ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+DESCRIPTION:
+  Automatically fixes SVG files missing viewBox, width, or height attributes
+  by computing the full visual bbox of all content.
+
+USAGE:
+  node fix_svg_viewbox.js input.svg [output.svg] [--auto-open] [--help]
+
+ARGUMENTS:
+  input.svg           Input SVG file to fix
+  output.svg          Output file path (default: input.fixed.svg)
+
+OPTIONS:
+  --auto-open         Automatically open fixed SVG in Chrome/Chromium
+  --help, -h          Show this help message
+
+WHAT IT DOES:
+  1. Loads SVG in headless Chrome
+  2. Computes full visual bbox of root <svg> (unclipped mode)
+  3. If viewBox is missing:
+     → Sets viewBox to computed bbox
+  4. If width/height are missing:
+     → Synthesizes them from viewBox aspect ratio
+  5. Saves repaired SVG to output file
+
+AUTO-REPAIR RULES:
+  • viewBox missing:
+      Set to full visual bbox of content
+
+  • width & height both missing:
+      Use viewBox width/height as px values
+
+  • Only width missing:
+      Derive width from height × (viewBox aspect ratio)
+
+  • Only height missing:
+      Derive height from width ÷ (viewBox aspect ratio)
+
+  • preserveAspectRatio:
+      Not modified (browser defaults apply)
+
+EXAMPLES:
+  # Fix SVG with default output name
+  node fix_svg_viewbox.js broken.svg
+  → Creates: broken.fixed.svg
+
+  # Fix with custom output path
+  node fix_svg_viewbox.js broken.svg repaired.svg
+
+  # Fix and automatically open in browser
+  node fix_svg_viewbox.js broken.svg --auto-open
+
+USE CASES:
+  • SVG exports from design tools missing viewBox
+  • Dynamically generated SVGs without proper dimensions
+  • SVGs that appear blank due to missing/incorrect viewBox
+  • Preparing SVGs for responsive web use
+
+`);
+}
+
 function parseArgs(argv) {
   const args = argv.slice(2);
+
+  // Check for --help
+  if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
+    printHelp();
+    process.exit(0);
+  }
+
   if (args.length < 1) {
-    console.error('Usage: node fix_svg_viewbox.js input.svg [output.svg] [--auto-open]');
+    printHelp();
     process.exit(1);
   }
 
@@ -40,6 +113,9 @@ function parseArgs(argv) {
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--auto-open') {
       autoOpen = true;
+    } else if (args[i] === '--help' || args[i] === '-h') {
+      printHelp();
+      process.exit(0);
     } else {
       positional.push(args[i]);
     }

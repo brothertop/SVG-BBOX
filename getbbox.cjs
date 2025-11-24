@@ -183,6 +183,20 @@ AUTO-REPAIR:
   • width/height - set to match viewBox dimensions
   • preserveAspectRatio - defaults to "xMidYMid meet"
 
+SPRITE DETECTION (--sprite):
+  Automatically detects SVGs used as icon/sprite stacks based on:
+  • Size uniformity (coefficient of variation < 0.3)
+  • Grid arrangement (rows × columns)
+  • Common naming patterns (icon_, sprite_, symbol_, glyph_)
+  • Minimum 3 child elements
+
+  When detected, displays sprite info and processes all sprites:
+    🎨 Sprite sheet detected!
+       Sprites: 6
+       Grid: 2 rows × 3 cols
+       Avg size: 40.0 × 40.0
+       Uniformity: width CV=0.000, height CV=0.000
+
 EXAMPLES:
   # Compute whole SVG bbox
   node getbbox.cjs drawing.svg

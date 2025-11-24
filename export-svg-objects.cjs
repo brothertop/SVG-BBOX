@@ -157,40 +157,176 @@ const { openInChrome } = require('./browser-utils.cjs');
 
 // -------- CLI parsing --------
 
+function printHelp() {
+  console.log(`
+╔════════════════════════════════════════════════════════════════════════════╗
+║ export-svg-objects.cjs - SVG Object Extraction & Manipulation Toolkit     ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+DESCRIPTION:
+  Versatile tool for listing, renaming, extracting, and exporting SVG objects
+  with visual bbox calculation and interactive HTML catalog.
+
+USAGE:
+  node export-svg-objects.cjs input.svg <mode> [options]
+
+═══════════════════════════════════════════════════════════════════════════════
+
+MODE 1: LIST OBJECTS (--list)
+  Generate interactive HTML catalog with visual previews
+
+  node export-svg-objects.cjs input.svg --list \\
+    [--assign-ids] [--out-fixed fixed.svg] \\
+    [--out-html list.html] [--auto-open] [--json]
+
+  What it does:
+  • Scans for all objects (g, path, rect, circle, ellipse, polygon, etc.)
+  • Automatically detects sprite sheets (icon/sprite stacks)
+  • Computes visual bbox for each object
+  • Generates interactive HTML page with:
+    - Visual previews using computed bboxes
+    - Filterable table (regex, tag type, bbox area, groups)
+    - Rename UI with live validation
+    - JSON export for renaming workflow
+
+  Options:
+    --assign-ids        Auto-assign IDs to elements without IDs
+    --out-fixed <file>  Save SVG with auto-assigned IDs
+    --out-html <file>   Specify HTML output path (default: input.objects.html)
+    --auto-open         Open HTML in Chrome/Chromium automatically
+    --json              Output JSON instead of human-readable format
+
+  Example:
+    node export-svg-objects.cjs sprites.svg --list --assign-ids
+
+═══════════════════════════════════════════════════════════════════════════════
+
+MODE 2: RENAME IDS (--rename)
+  Apply ID renaming from JSON mapping file
+
+  node export-svg-objects.cjs input.svg --rename mapping.json output.svg [--json]
+
+  What it does:
+  • Validates ID syntax (^[A-Za-z_][A-Za-z0-9_.:-]*$)
+  • Checks for collisions with existing IDs
+  • Updates element IDs
+  • Updates all references (href, xlink:href, url(#id))
+  • Reports applied/skipped mappings
+
+  JSON format (from HTML "Save JSON with renaming"):
+    {
+      "sourceSvgFile": "input.svg",
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "mappings": [
+        { "from": "auto_id_path_3", "to": "icon_save" }
+      ]
+    }
+
+  Also accepts:
+    • Array: [ { "from": "oldId", "to": "newId" } ]
+    • Object: { "oldId": "newId" }
+
+  Example:
+    node export-svg-objects.cjs sprites.svg --rename map.json renamed.svg
+
+═══════════════════════════════════════════════════════════════════════════════
+
+MODE 3: EXTRACT OBJECT (--extract)
+  Extract single object to standalone SVG
+
+  node export-svg-objects.cjs input.svg --extract objectId output.svg \\
+    [--margin N] [--include-context] [--json]
+
+  Two behaviors:
+    Default (pure cut-out):
+      • Only target object and ancestors
+      • Clean asset for reuse elsewhere
+      • No siblings, no overlays
+
+    With --include-context:
+      • All objects remain (preserves filters, overlays, context)
+      • ViewBox cropped to target bbox + margin
+      • Shows object in its environment
+
+  Options:
+    --margin <number>     Add margin in SVG user units (default: 0)
+    --include-context     Keep all objects, crop viewBox to target
+    --json                Output JSON metadata
+
+  Example:
+    node export-svg-objects.cjs drawing.svg --extract logo logo.svg --margin 10
+
+═══════════════════════════════════════════════════════════════════════════════
+
+MODE 4: EXPORT ALL OBJECTS (--export-all)
+  Export each object as separate SVG file
+
+  node export-svg-objects.cjs input.svg --export-all out-dir \\
+    [--margin N] [--export-groups] [--json]
+
+  What it does:
+  • Exports: path, rect, circle, ellipse, polygon, polyline, text,
+            image, use, symbol
+  • Each object gets own SVG with:
+    - ViewBox = visual bbox + margin
+    - Ancestor chain (preserves transforms/groups)
+    - All <defs> (filters, patterns, gradients)
+
+  Options:
+    --margin <number>     Add margin in SVG user units (default: 0)
+    --export-groups       Also export each <g> as separate SVG
+    --json                Output JSON list of exported files
+
+  Example:
+    node export-svg-objects.cjs sprites.svg --export-all ./sprites --margin 2
+
+  Perfect for sprite sheets! Extracts each sprite/icon automatically.
+
+═══════════════════════════════════════════════════════════════════════════════
+
+SPRITE SHEET DETECTION:
+  Automatically detects SVGs used as icon/sprite stacks in --list mode:
+  • Size uniformity (coefficient of variation < 0.3)
+  • Grid arrangement (rows × columns)
+  • Common naming patterns (icon_, sprite_, symbol_, glyph_)
+  • Minimum 3 child elements
+
+  When detected, displays helpful tip:
+    🎨 Sprite sheet detected!
+       Sprites: 6
+       Grid: 2 rows × 3 cols
+       💡 Tip: Use --export-all to extract each sprite
+
+═══════════════════════════════════════════════════════════════════════════════
+
+COMPLETE WORKFLOW:
+  1. List & browse objects:
+     node export-svg-objects.cjs sprites.svg --list --assign-ids
+
+  2. Open HTML, use filters, rename objects interactively
+
+  3. Save JSON mapping from HTML page
+
+  4. Apply renaming:
+     node export-svg-objects.cjs sprites.ids.svg --rename map.json renamed.svg
+
+  5. Extract individual objects or export all:
+     node export-svg-objects.cjs renamed.svg --export-all ./icons --margin 5
+
+`);
+}
+
 function parseArgs(argv) {
   const args = argv.slice(2);
+
+  // Check for --help
+  if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
+    printHelp();
+    process.exit(0);
+  }
+
   if (args.length < 2 && !(args.length === 2 && args[1] === '--list')) {
-    console.error(
-      'Usage:\n' +
-      '  # LIST OBJECTS (HTML + optional fixed SVG with IDs)\n' +
-      '  node extract_svg_objects.js input.svg --list\n' +
-      '    [--assign-ids --out-fixed fixed.svg]\n' +
-      '    [--out-html list.html]\n' +
-      '    [--auto-open]\n' +
-      '    [--json]\n\n' +
-      '  # RENAME IDs USING A JSON MAPPING\n' +
-      '  node extract_svg_objects.js input.svg --rename mapping.json output.svg [--json]\n\n' +
-      '  # EXTRACT ONE OBJECT BY ID\n' +
-      '  node extract_svg_objects.js input.svg --extract id output.svg\n' +
-      '    [--margin N] [--include-context] [--json]\n\n' +
-      '  # EXPORT ALL OBJECTS\n' +
-      '  node extract_svg_objects.js input.svg --export-all out-dir\n' +
-      '    [--margin N] [--export-groups] [--json]\n\n' +
-      'Concepts:\n' +
-      '  • Cut-out WITHOUT context (extract, no --include-context):\n' +
-      '      Only the chosen object and its ancestor groups are included.\n' +
-      '      Great for clean icons and assets.\n' +
-      '  • Cut-out WITH context (extract + --include-context):\n' +
-      '      All objects remain (filters, overlays, other shapes), but the\n' +
-      '      viewBox is cropped to the bbox of the target object (+ margin).\n' +
-      '      This preserves the “look” of the object in its environment.\n' +
-      '  • Renaming workflow:\n' +
-      '      1) Run --list to generate an HTML overview page.\n' +
-      '      2) Open the HTML in a browser, use the last column to specify\n' +
-      '         new IDs, tick the checkboxes, and click “Save JSON with\n' +
-      '         renaming” to download a JSON mapping file.\n' +
-      '      3) Run --rename with that JSON file and an output SVG.\n'
-    );
+    printHelp();
     process.exit(1);
   }
 

@@ -1,8 +1,15 @@
 /**
  * showTrueBBoxBorder() E2E Tests
  *
- * Tests the showTrueBBoxBorder() function with randomly generated SVG elements.
- * Verifies that the border overlay accurately matches the computed bounding box.
+ * Tests the showTrueBBoxBorder() function with edge case variations.
+ * Applies 5 edge cases to ALL test scenarios for comprehensive coverage.
+ *
+ * Edge Cases:
+ * 1. Normal (baseline with viewBox)
+ * 2. No viewBox (only width/height)
+ * 3. No resolution (only viewBox)
+ * 4. Negative viewBox coordinates
+ * 5. Sprite sheet with <use> element
  */
 
 import playwright from '@playwright/test';
@@ -12,8 +19,194 @@ import path from 'path';
 
 const testPagePath = '/tmp/showTrueBBoxBorder_test.html';
 
+// Edge case generators - each function wraps content in appropriate SVG structure
+const edgeCases = {
+  normal: {
+    name: 'Normal (with viewBox)',
+    generateSVG: (content, id) => {
+      const vbWidth = 400;
+      const vbHeight = 300;
+      return `<svg id="svg_${id}" viewBox="0 0 ${vbWidth} ${vbHeight}" width="${vbWidth * 2}" height="${vbHeight * 2}">${content}</svg>`;
+    }
+  },
+  noViewBox: {
+    name: 'No viewBox (only width/height)',
+    generateSVG: (content, id) => {
+      return `<svg id="svg_${id}" width="400" height="300">${content}</svg>`;
+    }
+  },
+  noResolution: {
+    name: 'No resolution (only viewBox)',
+    generateSVG: (content, id) => {
+      return `<svg id="svg_${id}" viewBox="0 0 400 300">${content}</svg>`;
+    }
+  },
+  negativeViewBox: {
+    name: 'Negative viewBox coordinates',
+    generateSVG: (content, id) => {
+      // Transform content coordinates by -200,-150 to center in -200,-150,400,300 viewBox
+      let transformedContent = content;
+
+      // Transform x and cx attributes
+      transformedContent = transformedContent.replace(/(<\w+[^>]*?\s+)(x|cx)="([^"]+)"/g, (match, prefix, attr, value) => {
+        const newVal = parseFloat(value) - 200;
+        return `${prefix}${attr}="${newVal}"`;
+      });
+
+      // Transform y and cy attributes
+      transformedContent = transformedContent.replace(/(<\w+[^>]*?\s+)(y|cy)="([^"]+)"/g, (match, prefix, attr, value) => {
+        const newVal = parseFloat(value) - 150;
+        return `${prefix}${attr}="${newVal}"`;
+      });
+
+      // Transform rotate() transform coordinates: rotate(angle x y) -> rotate(angle x-200 y-150)
+      transformedContent = transformedContent.replace(/rotate\(([^\s]+)\s+([^\s]+)\s+([^\)]+)\)/g, (match, angle, x, y) => {
+        const newX = parseFloat(x) - 200;
+        const newY = parseFloat(y) - 150;
+        return `rotate(${angle} ${newX} ${newY})`;
+      });
+
+      return `<svg id="svg_${id}" viewBox="-200 -150 400 300" width="800" height="600">${transformedContent}</svg>`;
+    }
+  },
+  spriteSheet: {
+    name: 'Sprite sheet with <use>',
+    generateSVG: (content, id) => {
+      // Wrap content in a symbol and reference it with <use>
+      const symbolId = `symbol_${id}_${Date.now()}`;
+      const useId = `use_${id}`;
+      return `<svg id="svg_${id}" viewBox="0 0 400 300" width="800" height="600">
+        <defs>
+          <symbol id="${symbolId}" viewBox="0 0 400 300">${content}</symbol>
+        </defs>
+        <use id="${useId}" href="#${symbolId}" x="0" y="0" width="400" height="300"/>
+      </svg>`;
+    },
+    // For sprite sheets, we test the <use> element, not the original content
+    // baseId will be like "elem_spriteSheet_0", we want "use_spriteSheet_0"
+    getTargetId: (baseId) => baseId.replace('elem_', 'use_')
+  }
+};
+
+// Base test scenarios - each defines content and validation
+const baseScenarios = [
+  {
+    name: 'Random text element',
+    generateContent: (id) => {
+      const fontSize = 20 + Math.random() * 40;
+      const randomStr = Math.random().toString(36).substring(7);
+      return `<text id="${id}" x="200" y="150" font-size="${fontSize}" text-anchor="middle" fill="#3498db">Random ${randomStr}</text>`;
+    },
+    validate: (result) => {
+      expect(result.success).toBe(true);
+      expect(result.accurate).toBe(true);
+      expect(result.diffs.x).toBeLessThanOrEqual(1);
+      expect(result.diffs.y).toBeLessThanOrEqual(1);
+      expect(result.bbox.width).toBeGreaterThan(0);
+      expect(result.bbox.height).toBeGreaterThan(0);
+    }
+  },
+  {
+    name: 'Circle',
+    generateContent: (id) => {
+      const cx = 150 + Math.random() * 100;
+      const cy = 120 + Math.random() * 60;
+      const r = 30 + Math.random() * 40;
+      return `<circle id="${id}" cx="${cx}" cy="${cy}" r="${r}" fill="#e74c3c"/>`;
+    },
+    validate: (result) => {
+      expect(result.success).toBe(true);
+      expect(result.accurate).toBe(true);
+    }
+  },
+  {
+    name: 'Rectangle with stroke',
+    generateContent: (id) => {
+      const strokeWidth = 5 + Math.random() * 10;
+      return `<rect id="${id}" x="150" y="100" width="100" height="80" fill="none" stroke="#9b59b6" stroke-width="${strokeWidth}"/>`;
+    },
+    validate: (result) => {
+      expect(result.success).toBe(true);
+      expect(result.accurate).toBe(true);
+      expect(result.bbox.width).toBeGreaterThan(0);
+    }
+  },
+  {
+    name: 'Rotated text',
+    generateContent: (id) => {
+      const angle = -30 + Math.random() * 60;
+      return `<text id="${id}" x="200" y="150" font-size="36" text-anchor="middle" transform="rotate(${angle} 200 150)" fill="#34495e">Rotated</text>`;
+    },
+    validate: (result) => {
+      expect(result.success).toBe(true);
+      expect(result.accurate).toBe(true);
+    }
+  },
+  {
+    name: 'Auto theme detection',
+    generateContent: (id) => {
+      return `<text id="${id}" x="200" y="150" font-size="32" text-anchor="middle" fill="#2c3e50">Theme</text>`;
+    },
+    options: { theme: 'auto' },
+    validate: (result) => {
+      expect(result.success).toBe(true);
+      expect(result.borderStyle).toContain('dashed');
+      const isDark = result.borderStyle.includes('rgba(0, 0, 0') || result.borderStyle.includes('rgb(0, 0, 0');
+      const isLight = result.borderStyle.includes('rgba(255, 255, 255') || result.borderStyle.includes('rgb(255, 255, 255');
+      expect(isDark || isLight).toBe(true);
+    }
+  },
+  {
+    name: 'Forced dark theme',
+    generateContent: (id) => {
+      return `<circle id="${id}" cx="200" cy="150" r="50" fill="#16a085"/>`;
+    },
+    options: { theme: 'dark' },
+    validate: (result) => {
+      expect(result.success).toBe(true);
+      const isLight = result.borderStyle.includes('rgba(255, 255, 255') || result.borderStyle.includes('rgb(255, 255, 255');
+      expect(isLight).toBe(true);
+    }
+  },
+  {
+    name: 'Forced light theme',
+    generateContent: (id) => {
+      return `<circle id="${id}" cx="200" cy="150" r="50" fill="#c0392b"/>`;
+    },
+    options: { theme: 'light' },
+    validate: (result) => {
+      expect(result.success).toBe(true);
+      const isDark = result.borderStyle.includes('rgba(0, 0, 0') || result.borderStyle.includes('rgb(0, 0, 0');
+      expect(isDark).toBe(true);
+    }
+  },
+  {
+    name: 'Custom border color',
+    generateContent: (id) => {
+      return `<rect id="${id}" x="150" y="100" width="100" height="80" fill="#27ae60"/>`;
+    },
+    options: { borderColor: 'rgb(255, 0, 0)' },
+    validate: (result) => {
+      expect(result.success).toBe(true);
+      expect(result.borderStyle).toContain('rgb(255, 0, 0)');
+    }
+  },
+  {
+    name: 'Custom padding',
+    generateContent: (id) => {
+      const fontSize = 24 + Math.random() * 16;
+      return `<text id="${id}" x="200" y="150" font-size="${fontSize}" text-anchor="middle" fill="#8e44ad">Padding</text>`;
+    },
+    options: { padding: 10 },
+    validate: (result) => {
+      expect(result.success).toBe(true);
+      expect(result.accurate).toBe(true);
+    }
+  }
+];
+
 test.beforeAll(async ({ }, testInfo) => {
-  // Skip if file already exists (avoid race condition with parallel workers)
+  // Skip if file already exists (avoid race condition)
   try {
     await fs.access(testPagePath);
     console.log('Test page already exists');
@@ -22,73 +215,46 @@ test.beforeAll(async ({ }, testInfo) => {
     // File doesn't exist, create it
   }
 
-  // Generate test HTML page with random SVG elements
+  // Generate all SVG combinations dynamically
+  let sections = [];
+  let testIndex = 0;
+
+  for (const edgeKey of Object.keys(edgeCases)) {
+    const edge = edgeCases[edgeKey];
+
+    for (let scenarioIdx = 0; scenarioIdx < baseScenarios.length; scenarioIdx++) {
+      const scenario = baseScenarios[scenarioIdx];
+      const elementId = `elem_${edgeKey}_${scenarioIdx}`;
+      const content = scenario.generateContent(elementId);
+      const svgMarkup = edge.generateSVG(content, `${edgeKey}_${scenarioIdx}`);
+
+      sections.push(`
+  <!-- ${edge.name} - ${scenario.name} -->
+  <div class="section">
+    <h3>${edge.name}: ${scenario.name}</h3>
+    ${svgMarkup}
+  </div>`);
+      testIndex++;
+    }
+  }
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>showTrueBBoxBorder Test</title>
+  <title>showTrueBBoxBorder Test - Edge Cases</title>
   <script src="file://${path.resolve('SvgVisualBBox.js')}"></script>
   <style>
     body { margin: 20px; font-family: Arial, sans-serif; }
-    .section { margin: 30px 0; padding: 20px; border: 1px solid #ddd; }
-    svg { border: 1px solid #ccc; margin: 10px 0; }
+    .section { margin: 30px 0; padding: 20px; border: 1px solid #ddd; background: #f9f9f9; }
+    svg { border: 1px solid #ccc; margin: 10px 0; background: white; }
+    h3 { margin: 0 0 10px 0; color: #333; font-size: 14px; }
   </style>
 </head>
 <body>
-  <h1>showTrueBBoxBorder() Test Page</h1>
-
-  <!-- Test 1: Random Text -->
-  <div class="section">
-    <h2>Test 1: Random Text</h2>
-    <svg id="svg1" viewBox="0 0 400 200" width="800" height="400">
-      <text id="text1" x="200" y="100" font-size="${20 + Math.random() * 40}" text-anchor="middle" fill="#3498db">
-        Random ${Math.random().toString(36).substring(7)}
-      </text>
-    </svg>
-  </div>
-
-  <!-- Test 2: Random Circle -->
-  <div class="section">
-    <h2>Test 2: Circle</h2>
-    <svg id="svg2" viewBox="0 0 300 300" width="600" height="600">
-      <circle id="circle1" cx="${100 + Math.random() * 100}" cy="${100 + Math.random() * 100}" r="${30 + Math.random() * 40}" fill="#e74c3c"/>
-    </svg>
-  </div>
-
-  <!-- Test 3: Rectangle with Stroke -->
-  <div class="section">
-    <h2>Test 3: Rectangle with Stroke</h2>
-    <svg id="svg3" viewBox="0 0 400 300" width="800" height="600">
-      <rect id="rect1" x="100" y="80" width="100" height="80" fill="none" stroke="#9b59b6" stroke-width="${5 + Math.random() * 10}"/>
-    </svg>
-  </div>
-
-  <!-- Test 4: Rotated Text -->
-  <div class="section">
-    <h2>Test 4: Rotated Text</h2>
-    <svg id="svg4" viewBox="0 0 400 300" width="800" height="600">
-      <text id="text2" x="200" y="150" font-size="36" text-anchor="middle" transform="rotate(${-30 + Math.random() * 60} 200 150)" fill="#34495e">
-        Rotated
-      </text>
-    </svg>
-  </div>
-
-  <!-- Edge Case: No viewBox -->
-  <div class="section">
-    <h2>Edge Case: No viewBox</h2>
-    <svg id="svg5" width="400" height="300">
-      <circle id="circle2" cx="200" cy="150" r="50" fill="#2ecc71"/>
-    </svg>
-  </div>
-
-  <!-- Edge Case: Negative viewBox -->
-  <div class="section">
-    <h2>Edge Case: Negative viewBox</h2>
-    <svg id="svg6" viewBox="-200 -150 400 300" width="600" height="450">
-      <circle id="circle3" cx="0" cy="0" r="40" fill="#f39c12"/>
-    </svg>
-  </div>
+  <h1>showTrueBBoxBorder() Test Page - Edge Cases</h1>
+  <p>Testing ${baseScenarios.length} scenarios × ${Object.keys(edgeCases).length} edge cases = ${baseScenarios.length * Object.keys(edgeCases).length} tests</p>
+  ${sections.join('\n')}
 
   <script>
     window.testBorder = async function(elementId, options = {}) {
@@ -163,161 +329,69 @@ test.beforeAll(async ({ }, testInfo) => {
 </html>`;
 
   await fs.writeFile(testPagePath, html, 'utf8');
-  console.log('Test page generated: ' + testPagePath);
+  console.log(`Test page generated: ${testPagePath}`);
+  console.log(`Total tests: ${baseScenarios.length * Object.keys(edgeCases).length}`);
 });
 
 test.afterAll(async () => {
   // Don't delete - let OS clean up /tmp
-  // Deleting causes race conditions with parallel test workers
 });
 
-test.describe('showTrueBBoxBorder() Tests', () => {
-  // Run tests serially to avoid file access issues
+test.describe('showTrueBBoxBorder() - Comprehensive Edge Case Tests', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test('Border matches bbox for random text', async ({ page }) => {
-    await page.goto('file://' + testPagePath);
-    const result = await page.evaluate(() => window.testBorder('text1'));
+  // Generate tests for each edge case × scenario combination
+  for (const edgeKey of Object.keys(edgeCases)) {
+    const edge = edgeCases[edgeKey];
 
-    expect(result.success).toBe(true);
-    expect(result.accurate).toBe(true);
-    expect(result.diffs.x).toBeLessThanOrEqual(1);
-    expect(result.diffs.y).toBeLessThanOrEqual(1);
-    expect(result.bbox.width).toBeGreaterThan(0);
-    expect(result.bbox.height).toBeGreaterThan(0);
+    test.describe(`Edge Case: ${edge.name}`, () => {
+      for (let scenarioIdx = 0; scenarioIdx < baseScenarios.length; scenarioIdx++) {
+        const scenario = baseScenarios[scenarioIdx];
 
-    console.log('✓ Text: accurate (x=' + result.diffs.x.toFixed(2) + ', y=' + result.diffs.y.toFixed(2) + ')');
-  });
+        test(`${scenario.name}`, async ({ page }) => {
+          await page.goto('file://' + testPagePath);
 
-  test('Border matches bbox for circle', async ({ page }) => {
-    await page.goto('file://' + testPagePath);
-    const result = await page.evaluate(() => window.testBorder('circle1'));
+          // Determine target element ID (sprite sheets use <use> element)
+          let targetId = `elem_${edgeKey}_${scenarioIdx}`;
+          if (edge.getTargetId) {
+            targetId = edge.getTargetId(targetId);
+          }
 
-    expect(result.success).toBe(true);
-    expect(result.accurate).toBe(true);
+          const options = scenario.options || {};
+          const result = await page.evaluate(({ elemId, opts }) => {
+            return window.testBorder(elemId, opts);
+          }, { elemId: targetId, opts: options });
 
-    console.log('✓ Circle: accurate');
-  });
+          // Run scenario-specific validation
+          scenario.validate(result);
 
-  test('Border includes stroke width for rectangle', async ({ page }) => {
-    await page.goto('file://' + testPagePath);
-    const result = await page.evaluate(() => window.testBorder('rect1'));
+          // Log success
+          const edgeLabel = edgeKey.padEnd(15);
+          const scenarioLabel = scenario.name.padEnd(30);
+          console.log(`✓ [${edgeLabel}] ${scenarioLabel} - accurate (x=${result.diffs.x.toFixed(2)}, y=${result.diffs.y.toFixed(2)})`);
+        });
+      }
+    });
+  }
 
-    expect(result.success).toBe(true);
-    expect(result.accurate).toBe(true);
-    expect(result.bbox.width).toBeGreaterThan(0);
-
-    console.log('✓ Rectangle with stroke: accurate');
-  });
-
-  test('Border wraps rotated text correctly', async ({ page }) => {
-    await page.goto('file://' + testPagePath);
-    const result = await page.evaluate(() => window.testBorder('text2'));
-
-    expect(result.success).toBe(true);
-    expect(result.accurate).toBe(true);
-
-    console.log('✓ Rotated text: accurate');
-  });
-
-  test('Auto theme detection works', async ({ page }) => {
-    await page.goto('file://' + testPagePath);
-    const result = await page.evaluate(() => window.testBorder('text1', { theme: 'auto' }));
-
-    expect(result.success).toBe(true);
-    expect(result.borderStyle).toContain('dashed');
-
-    const isDark = result.borderStyle.includes('rgba(0, 0, 0') || result.borderStyle.includes('rgb(0, 0, 0');
-    const isLight = result.borderStyle.includes('rgba(255, 255, 255') || result.borderStyle.includes('rgb(255, 255, 255');
-    expect(isDark || isLight).toBe(true);
-
-    console.log('✓ Auto theme: ' + (isDark ? 'dark' : 'light') + ' border');
-  });
-
-  test('Forced dark theme uses light border', async ({ page }) => {
-    await page.goto('file://' + testPagePath);
-    const result = await page.evaluate(() => window.testBorder('circle1', { theme: 'dark' }));
-
-    expect(result.success).toBe(true);
-    const isLight = result.borderStyle.includes('rgba(255, 255, 255') || result.borderStyle.includes('rgb(255, 255, 255');
-    expect(isLight).toBe(true);
-
-    console.log('✓ Dark theme: light border');
-  });
-
-  test('Forced light theme uses dark border', async ({ page }) => {
-    await page.goto('file://' + testPagePath);
-    const result = await page.evaluate(() => window.testBorder('circle1', { theme: 'light' }));
-
-    expect(result.success).toBe(true);
-    const isDark = result.borderStyle.includes('rgba(0, 0, 0') || result.borderStyle.includes('rgb(0, 0, 0');
-    expect(isDark).toBe(true);
-
-    console.log('✓ Light theme: dark border');
-  });
-
-  test('Custom border color works', async ({ page }) => {
-    await page.goto('file://' + testPagePath);
-    const result = await page.evaluate(() => window.testBorder('rect1', {
-      borderColor: 'rgb(255, 0, 0)'
-    }));
-
-    expect(result.success).toBe(true);
-    expect(result.borderStyle).toContain('rgb(255, 0, 0)');
-
-    console.log('✓ Custom color: red border');
-  });
-
-  test('Custom padding adjusts offset', async ({ page }) => {
-    await page.goto('file://' + testPagePath);
-    const result = await page.evaluate(() => window.testBorder('text1', { padding: 10 }));
-
-    expect(result.success).toBe(true);
-    expect(result.accurate).toBe(true);
-
-    console.log('✓ Custom padding: 10px offset');
-  });
-
-  test('EDGE: SVG with no viewBox', async ({ page }) => {
-    await page.goto('file://' + testPagePath);
-    const result = await page.evaluate(() => window.testBorder('circle2'));
-
-    expect(result.success).toBe(true);
-    expect(result.accurate).toBe(true);
-    expect(result.bbox.width).toBeGreaterThan(0);
-
-    console.log('✓ EDGE: No viewBox - accurate');
-  });
-
-  test('EDGE: ViewBox with negative coordinates', async ({ page }) => {
-    await page.goto('file://' + testPagePath);
-    const result = await page.evaluate(() => window.testBorder('circle3'));
-
-    expect(result.success).toBe(true);
-    expect(result.accurate).toBe(true);
-
-    console.log('✓ EDGE: Negative viewBox coords - accurate');
-  });
-
+  // Additional test: Remove function cleanup
   test('Remove function cleans up overlay', async ({ page }) => {
     await page.goto('file://' + testPagePath);
 
-    await page.evaluate(() => window.testBorder('circle1'));
+    // Use first element
+    const firstId = 'elem_normal_0';
+    await page.evaluate((id) => window.testBorder(id), firstId);
 
     let count = await page.evaluate(() => document.querySelectorAll('[data-svg-bbox-overlay]').length);
     expect(count).toBe(1);
 
     await page.evaluate(() => {
-      const overlay = document.querySelector('[data-svg-bbox-overlay]');
-      const targetId = overlay.getAttribute('data-target-id');
-      window.testResults = window.testResults || {};
-      // Get result and remove
       document.querySelectorAll('[data-svg-bbox-overlay]').forEach(o => o.remove());
     });
 
     count = await page.evaluate(() => document.querySelectorAll('[data-svg-bbox-overlay]').length);
     expect(count).toBe(0);
 
-    console.log('✓ Remove: overlay cleaned up');
+    console.log('✓ Remove function: overlay cleaned up');
   });
 });

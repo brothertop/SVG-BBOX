@@ -38,11 +38,12 @@ tsconfig.json
 .gitignore
 .gitattributes
 
-# Development scripts
+# Development scripts (exclude from npm package)
 scan_getbbox.sh
 fix_svg_viewbox.sh
 scourge_getbbox_report.md
 svg-bbox-manual.md
+scripts/
 
 # Backup files
 *.bak

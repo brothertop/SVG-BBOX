@@ -25,7 +25,8 @@
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
-const chromeLauncher = require('chrome-launcher'); // used for fallback to user Chrome
+const chromeLauncher = require('chrome-launcher');
+const { getVersion, printVersion, hasVersionFlag } = require('./version.cjs'); // used for fallback to user Chrome
 
 /**
  * Launch Puppeteer with the best available browser:

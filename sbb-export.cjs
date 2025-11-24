@@ -154,6 +154,7 @@ const path = require('path');
 const puppeteer = require('puppeteer');
 const { execFile } = require('child_process');
 const { openInChrome } = require('./browser-utils.cjs');
+const { getVersion, printVersion, hasVersionFlag } = require('./version.cjs');
 
 // -------- CLI parsing --------
 
@@ -2198,6 +2199,17 @@ async function renameIds(inputPath, renameJsonPath, renameOutPath, jsonMode) {
 
 (async () => {
   const opts = parseArgs(process.argv);
+
+  // Handle --version flag
+  if (opts.version) {
+    printVersion('sbb-export');
+    process.exit(0);
+  }
+
+  // Display version on execution (but not for help)
+  if (!opts.help && opts.mode) {
+    console.log(`sbb-export v${getVersion()} | svg-bbox toolkit\n`);
+  }
 
   try {
     if (opts.mode === 'list') {

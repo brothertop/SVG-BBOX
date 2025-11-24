@@ -15,6 +15,7 @@
     "SvgVisualBBox.js",
     "sbb-*.cjs",
     "browser-utils.cjs",
+    "version.cjs",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"
@@ -59,7 +60,12 @@
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
     "ci": "pnpm run lint && pnpm run typecheck && pnpm run test:coverage && pnpm run test:e2e",
-    "install-browsers": "playwright install --with-deps chromium && npx puppeteer browsers install chrome"
+    "install-browsers": "playwright install --with-deps chromium && npx puppeteer browsers install chrome",
+    "version": "node version.cjs",
+    "version:bump:patch": "node scripts/bump-version.cjs patch",
+    "version:bump:minor": "node scripts/bump-version.cjs minor",
+    "version:bump:major": "node scripts/bump-version.cjs major",
+    "version:bump": "node scripts/bump-version.cjs"
   },
   "dependencies": {
     "chrome-launcher": "^1.1.2"

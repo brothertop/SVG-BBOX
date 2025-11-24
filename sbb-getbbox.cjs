@@ -25,6 +25,7 @@
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
+const { getVersion, printVersion, hasVersionFlag } = require('./version.cjs');
 
 // ============================================================================
 // ARGUMENT PARSING
@@ -50,6 +51,11 @@ function parseArgs(argv) {
 
     if (arg === '--help' || arg === '-h') {
       options.help = true;
+      return options;
+    }
+
+    if (arg === '--version' || arg === '-v') {
+      options.version = true;
       return options;
     }
     else if (arg === '--ignore-vbox' || arg === '--ignore-viewbox') {
@@ -727,10 +733,19 @@ function saveJSON(allResults, outputPath) {
 async function main() {
   const options = parseArgs(process.argv);
 
+  // Handle --version flag
+  if (options.version) {
+    printVersion('sbb-getbbox');
+    process.exit(0);
+  }
+
   if (options.help) {
     printHelp();
     process.exit(0);
   }
+
+  // Display version on normal execution (not on help or version flags)
+  console.log(`sbb-getbbox v${getVersion()} | svg-bbox toolkit\n`);
 
   if (!options.mode) {
     console.error('ERROR: No input specified. Use --help for usage information.');

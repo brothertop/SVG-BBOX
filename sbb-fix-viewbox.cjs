@@ -26,6 +26,7 @@ const path = require('path');
 const puppeteer = require('puppeteer');
 const { execFile } = require('child_process');
 const { openInChrome } = require('./browser-utils.cjs');
+const { getVersion, printVersion, hasVersionFlag } = require('./version.cjs');
 
 function printHelp() {
   console.log(`
@@ -116,6 +117,11 @@ function parseArgs(argv) {
     } else if (args[i] === '--help' || args[i] === '-h') {
       printHelp();
       process.exit(0);
+    }
+
+    if (arg === '--version' || arg === '-v') {
+      options.version = true;
+      return options;
     } else {
       positional.push(args[i]);
     }

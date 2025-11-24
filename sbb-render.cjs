@@ -43,6 +43,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
 const { openInChrome } = require('./browser-utils.cjs');
+const { getVersion, printVersion, hasVersionFlag } = require('./version.cjs');
 
 // ---------- CLI parsing ----------
 

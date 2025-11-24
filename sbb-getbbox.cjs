@@ -1,241 +1,127 @@
 #!/usr/bin/env node
 
 /**
- * sbb-getbbox.cjs
+ * sbb-getbbox.cjs - SECURE VERSION
  *
  * CLI utility to compute visual bounding boxes for SVG files and elements
  * using canvas-based rasterization technique (not getBBox()).
  *
- * Usage:
- *   node sbb-getbbox.cjs <svg-file> [object-ids...]
- *   node sbb-getbbox.cjs <svg-file> --ignore-vbox
- *   node sbb-getbbox.cjs --dir <directory> [--filter <regex>]
- *   node sbb-getbbox.cjs --list <txt-file>
- *   node sbb-getbbox.cjs <svg-file> [object-ids...] --json <output.json>
- *
- * Features:
- * - Compute bbox for whole SVG or specific elements by ID
- * - Ignore viewBox to get full drawing content bbox (--ignore-vbox)
- * - Batch process directories with optional regex filter
- * - Process list files with per-file object IDs
- * - Export results as JSON
- * - Auto-repair missing SVG attributes (viewBox, width, height, preserveAspectRatio)
+ * SECURITY FIXES:
+ * - Path traversal prevention
+ * - Command injection protection
+ * - Input validation and sanitization
+ * - File size limits
+ * - Proper error handling
+ * - Timeout handling
+ * - Resource cleanup
  */
 
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
-const { getVersion, printVersion, hasVersionFlag } = require('./version.cjs');
+const { getVersion, printVersion } = require('./version.cjs');
+
+// Import security utilities
+const {
+  validateFilePath,
+  validateOutputPath,
+  readSVGFileSafe,
+  readJSONFileSafe,
+  sanitizeSVGContent,
+  ensureDirectoryExists,
+  writeFileSafe,
+  ValidationError,
+  FileSystemError
+} = require('./lib/security-utils.cjs');
+
+const {
+  runCLI,
+  createArgParser,
+  printSuccess,
+  printError,
+  printInfo,
+  createProgress
+} = require('./lib/cli-utils.cjs');
 
 // ============================================================================
-// ARGUMENT PARSING
+// CONSTANTS
 // ============================================================================
 
-function parseArgs(argv) {
-  const args = argv.slice(2);
-  const options = {
-    mode: null,           // 'file', 'dir', 'list'
-    svgPath: null,        // single SVG file path
-    objectIds: [],        // object IDs to compute bbox for
-    ignoreViewBox: false, // compute full drawing bbox
-    dir: null,            // directory path for batch processing
-    filter: null,         // regex filter for directory files
-    listFile: null,       // txt file with list of SVGs
-    jsonOutput: null,     // JSON output file path
-    spriteMode: false,    // auto-detect and process as sprite sheet
-    help: false
-  };
+/** Maximum time to wait for browser operations (30 seconds) */
+const BROWSER_TIMEOUT_MS = 30000;
 
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
+/** Maximum time to wait for fonts to load (8 seconds) */
+const FONT_TIMEOUT_MS = 8000;
 
-    if (arg === '--help' || arg === '-h') {
-      options.help = true;
-      return options;
-    }
+/** Puppeteer launch options */
+const PUPPETEER_OPTIONS = {
+  headless: true,
+  args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  timeout: BROWSER_TIMEOUT_MS
+};
 
-    if (arg === '--version' || arg === '-v') {
-      options.version = true;
-      return options;
-    }
-    else if (arg === '--ignore-vbox' || arg === '--ignore-viewbox') {
-      options.ignoreViewBox = true;
-    }
-    else if (arg === '--sprite' || arg === '-s') {
-      options.spriteMode = true;
-    }
-    else if (arg === '--dir' || arg === '-d') {
-      options.mode = 'dir';
-      options.dir = args[++i];
-    }
-    else if (arg === '--filter' || arg === '-f') {
-      options.filter = args[++i];
-    }
-    else if (arg === '--list' || arg === '-l') {
-      options.mode = 'list';
-      options.listFile = args[++i];
-    }
-    else if (arg === '--json' || arg === '-j') {
-      options.jsonOutput = args[++i];
-    }
-    else if (!arg.startsWith('-')) {
-      // First non-option arg is SVG file (if not in dir/list mode)
-      if (!options.mode) {
-        options.mode = 'file';
-        options.svgPath = arg;
-      }
-      // Subsequent non-option args are object IDs
-      else if (options.mode === 'file') {
-        options.objectIds.push(arg);
-      }
-    }
-  }
+// ============================================================================
+// ARGUMENT PARSING (using new CLI utilities)
+// ============================================================================
 
-  return options;
-}
-
-function printHelp() {
-  console.log(`
-╔════════════════════════════════════════════════════════════════════════════╗
-║ sbb-getbbox.cjs - Visual BBox Calculator for SVG                              ║
-╚════════════════════════════════════════════════════════════════════════════╝
-
-USAGE:
-  node sbb-getbbox.cjs <svg-file> [object-ids...] [options]
-  node sbb-getbbox.cjs --dir <directory> [options]
-  node sbb-getbbox.cjs --list <txt-file> [options]
-
-MODES:
-  Single File:
-    node sbb-getbbox.cjs drawing.svg
-      → Compute bbox for entire SVG content (respecting viewBox)
-
-    node sbb-getbbox.cjs drawing.svg --ignore-vbox
-      → Compute bbox for full drawing (ignoring viewBox clipping)
-
-    node sbb-getbbox.cjs drawing.svg icon1 icon2 icon3
-      → Compute bbox for specific elements by ID
-
-  Directory Batch:
-    node sbb-getbbox.cjs --dir ./svgs
-      → Process all SVG files in directory
-
-    node sbb-getbbox.cjs --dir ./svgs --filter "^icon_"
-      → Process only SVG files matching regex pattern
-
-  List File:
-    node sbb-getbbox.cjs --list files.txt
-      → Process SVGs from list file (see format below)
-
-OPTIONS:
-  --ignore-vbox, --ignore-viewbox
-      Compute full drawing bbox, ignoring viewBox clipping
-
-  --sprite, -s
-      Auto-detect sprite sheets and compute bbox for each sprite/icon
-      Automatically processes all sprites when no object IDs specified
-
-  --json <file>, -j <file>
-      Save results as JSON to specified file
-
-  --dir <path>, -d <path>
-      Batch process all SVG files in directory
-
-  --filter <regex>, -f <regex>
-      Filter directory files by regex pattern (filename only)
-
-  --list <file>, -l <file>
-      Process SVGs from list file
-
-  --help, -h
-      Show this help message
-
-LIST FILE FORMAT:
-  Each line: <svg-path> [object-ids...] [--ignore-vbox]
-  Lines starting with # are comments
-
-  Example:
-    # Process whole SVG content
-    path/to/icons.svg
-
-    # Process specific objects
-    path/to/sprites.svg icon1 icon2 icon3
-
-    # Get full drawing bbox (ignore viewBox)
-    path/to/drawing.svg --ignore-vbox
-
-    # Comments are allowed
-    # path/to/disabled.svg
-
-OUTPUT FORMAT:
-  Console (default):
-    SVG: path/to/file.svg
-    ├─ WHOLE CONTENT: {x: 0, y: 0, width: 100, height: 100}
-    ├─ icon1: {x: 10, y: 10, width: 20, height: 20}
-    └─ icon2: {x: 50, y: 50, width: 30, height: 30}
-
-  JSON (with --json):
+const argParser = createArgParser({
+  name: 'sbb-getbbox',
+  description: 'Compute visual bounding boxes for SVG files and elements',
+  usage: 'sbb-getbbox <svg-file> [object-ids...] [options]\n' +
+         '       sbb-getbbox --dir <directory> [options]\n' +
+         '       sbb-getbbox --list <txt-file> [options]',
+  flags: [
     {
-      "path/to/file.svg": {
-        "WHOLE CONTENT": {x: 0, y: 0, width: 100, height: 100},
-        "icon1": {x: 10, y: 10, width: 20, height: 20},
-        "icon2": {x: 50, y: 50, width: 30, height: 30}
-      }
+      name: 'ignore-vbox',
+      description: 'Compute full drawing bbox, ignoring viewBox clipping',
+      type: 'boolean'
+    },
+    {
+      name: 'sprite',
+      alias: 's',
+      description: 'Auto-detect sprite sheets and process all sprites',
+      type: 'boolean'
+    },
+    {
+      name: 'dir',
+      alias: 'd',
+      description: 'Batch process all SVG files in directory',
+      type: 'string'
+    },
+    {
+      name: 'filter',
+      alias: 'f',
+      description: 'Filter directory files by regex pattern',
+      type: 'string'
+    },
+    {
+      name: 'list',
+      alias: 'l',
+      description: 'Process SVGs from list file',
+      type: 'string'
+    },
+    {
+      name: 'json',
+      alias: 'j',
+      description: 'Save results as JSON to specified file',
+      type: 'string'
     }
-
-AUTO-REPAIR:
-  Missing SVG attributes are automatically computed:
-  • viewBox - derived from visual bbox of content
-  • width/height - set to match viewBox dimensions
-  • preserveAspectRatio - defaults to "xMidYMid meet"
-
-SPRITE DETECTION (--sprite):
-  Automatically detects SVGs used as icon/sprite stacks based on:
-  • Size uniformity (coefficient of variation < 0.3)
-  • Grid arrangement (rows × columns)
-  • Common naming patterns (icon_, sprite_, symbol_, glyph_)
-  • Minimum 3 child elements
-
-  When detected, displays sprite info and processes all sprites:
-    🎨 Sprite sheet detected!
-       Sprites: 6
-       Grid: 2 rows × 3 cols
-       Avg size: 40.0 × 40.0
-       Uniformity: width CV=0.000, height CV=0.000
-
-EXAMPLES:
-  # Compute whole SVG bbox
-  node sbb-getbbox.cjs drawing.svg
-
-  # Compute specific elements
-  node sbb-getbbox.cjs sprites.svg icon_save icon_load icon_close
-
-  # Get full drawing (ignore viewBox)
-  node sbb-getbbox.cjs drawing.svg --ignore-vbox
-
-  # Auto-detect sprite sheet and process all sprites
-  node sbb-getbbox.cjs icon-sprite-sheet.svg --sprite
-
-  # Batch process directory
-  node sbb-getbbox.cjs --dir ./svgs --json results.json
-
-  # Process filtered files
-  node sbb-getbbox.cjs --dir ./icons --filter "^btn_" --json buttons.json
-
-  # Process from list
-  node sbb-getbbox.cjs --list process-list.txt --json output.json
-`);
-}
+  ],
+  minPositional: 0,
+  maxPositional: Infinity
+});
 
 // ============================================================================
 // SVG ATTRIBUTE REPAIR
 // ============================================================================
 
 /**
- * Repair missing SVG attributes using visual bbox
+ * Repair missing SVG attributes using visual bbox.
+ * Uses safer string manipulation with proper escaping.
+ *
  * @param {string} svgMarkup - SVG markup string
  * @param {Object} bbox - Visual bbox {x, y, width, height}
- * @returns {string} - Repaired SVG markup
+ * @returns {string} Repaired SVG markup
  */
 function repairSvgAttributes(svgMarkup, bbox) {
   // Parse SVG to extract root element
@@ -243,28 +129,35 @@ function repairSvgAttributes(svgMarkup, bbox) {
   if (!svgMatch) return svgMarkup;
 
   const attrs = svgMatch[1];
-  let hasViewBox = /viewBox\s*=/.test(attrs);
-  let hasWidth = /\swidth\s*=/.test(attrs);
-  let hasHeight = /\sheight\s*=/.test(attrs);
-  let hasPreserveAspectRatio = /preserveAspectRatio\s*=/.test(attrs);
+  const hasViewBox = /viewBox\s*=/.test(attrs);
+  const hasWidth = /\swidth\s*=/.test(attrs);
+  const hasHeight = /\sheight\s*=/.test(attrs);
+  const hasPreserveAspectRatio = /preserveAspectRatio\s*=/.test(attrs);
 
   if (hasViewBox && hasWidth && hasHeight && hasPreserveAspectRatio) {
     return svgMarkup; // All attributes present
   }
 
-  // Build repaired attributes
+  // Build repaired attributes (properly escaped)
   let newAttrs = attrs;
 
   if (!hasViewBox && bbox) {
-    newAttrs += ` viewBox="${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}"`;
+    // Ensure numeric values (prevent injection)
+    const x = Number(bbox.x) || 0;
+    const y = Number(bbox.y) || 0;
+    const w = Number(bbox.width) || 0;
+    const h = Number(bbox.height) || 0;
+    newAttrs += ` viewBox="${x} ${y} ${w} ${h}"`;
   }
 
   if (!hasWidth && bbox) {
-    newAttrs += ` width="${bbox.width}"`;
+    const w = Number(bbox.width) || 0;
+    newAttrs += ` width="${w}"`;
   }
 
   if (!hasHeight && bbox) {
-    newAttrs += ` height="${bbox.height}"`;
+    const h = Number(bbox.height) || 0;
+    newAttrs += ` height="${h}"`;
   }
 
   if (!hasPreserveAspectRatio) {
@@ -279,9 +172,10 @@ function repairSvgAttributes(svgMarkup, bbox) {
 // ============================================================================
 
 /**
- * Detect if SVG is likely a sprite sheet and extract sprite information
+ * Detect if SVG is likely a sprite sheet and extract sprite information.
+ *
  * @param {Object} page - Puppeteer page with loaded SVG
- * @returns {Promise<Object>} - {isSprite: boolean, sprites: Array, grid: Object}
+ * @returns {Promise<Object>} {isSprite: boolean, sprites: Array, grid: Object}
  */
 async function detectSpriteSheet(page) {
   return await page.evaluate(() => {
@@ -403,29 +297,45 @@ async function detectSpriteSheet(page) {
 }
 
 // ============================================================================
-// BBOX COMPUTATION (using Puppeteer + SvgVisualBBox)
+// BBOX COMPUTATION (with security enhancements)
 // ============================================================================
 
 /**
- * Compute bbox for SVG file and optional object IDs
+ * Compute bbox for SVG file and optional object IDs.
+ * SECURE: Uses file validation, size limits, timeouts, and sanitization.
+ *
  * @param {string} svgPath - Path to SVG file
  * @param {string[]} objectIds - Array of object IDs (empty = whole content)
  * @param {boolean} ignoreViewBox - Compute full drawing bbox
  * @param {boolean} spriteMode - Auto-detect and process as sprite sheet
- * @returns {Promise<Object>} - {filename: string, results: {id: bbox}, spriteInfo: Object}
+ * @returns {Promise<Object>} {filename: string, results: {id: bbox}, spriteInfo: Object}
  */
 async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, spriteMode = false) {
-  const svgContent = fs.readFileSync(svgPath, 'utf8');
-
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  // SECURITY: Validate file path (prevents path traversal)
+  const safePath = validateFilePath(svgPath, {
+    requiredExtensions: ['.svg'],
+    mustExist: true
   });
 
+  // SECURITY: Read SVG with size limit and validation
+  const svgContent = readSVGFileSafe(safePath);
+
+  // SECURITY: Sanitize SVG content (remove scripts, event handlers)
+  const sanitizedSvg = sanitizeSVGContent(svgContent);
+
+  let browser = null;
   try {
+    browser = await puppeteer.launch(PUPPETEER_OPTIONS);
     const page = await browser.newPage();
 
-    // Create HTML with SVG
+    // SECURITY: Set page timeout
+    page.setDefaultTimeout(BROWSER_TIMEOUT_MS);
+    page.setDefaultNavigationTimeout(BROWSER_TIMEOUT_MS);
+
+    // Create HTML with sanitized SVG
+    // NOTE: CSP removed - it was blocking SvgVisualBBox.js functionality
+    // For security in production, consider using a more permissive CSP or
+    // injecting the library code inline instead of via addScriptTag()
     const html = `
 <!DOCTYPE html>
 <html>
@@ -437,28 +347,31 @@ async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, sprit
   </style>
 </head>
 <body>
-  ${svgContent}
+  ${sanitizedSvg}
 </body>
 </html>
     `;
 
-    await page.setContent(html, { waitUntil: 'load' });
+    await page.setContent(html, {
+      waitUntil: 'load',
+      timeout: BROWSER_TIMEOUT_MS
+    });
 
-    // Load SvgVisualBBox library via addScriptTag
+    // Load SvgVisualBBox library
     const libPath = path.join(__dirname, 'SvgVisualBBox.js');
     if (!fs.existsSync(libPath)) {
-      throw new Error('SvgVisualBBox.js not found at: ' + libPath);
+      throw new FileSystemError('SvgVisualBBox.js not found', { path: libPath });
     }
     await page.addScriptTag({ path: libPath });
 
-    // Wait for fonts to load
-    await page.evaluate(async () => {
+    // Wait for fonts to load (with timeout)
+    await page.evaluate(async (timeout) => {
       if (window.SvgVisualBBox && window.SvgVisualBBox.waitForDocumentFonts) {
-        await window.SvgVisualBBox.waitForDocumentFonts(document, 8000);
+        await window.SvgVisualBBox.waitForDocumentFonts(document, timeout);
       }
-    });
+    }, FONT_TIMEOUT_MS);
 
-    // Detect sprite sheet if in sprite mode or auto-detect
+    // Detect sprite sheet if in sprite mode
     let spriteInfo = null;
     if (spriteMode && objectIds.length === 0) {
       spriteInfo = await detectSpriteSheet(page);
@@ -472,14 +385,13 @@ async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, sprit
           objectIds = spriteInfo.sprites.map(s => s.id);
         }
 
-        console.log(`\n🎨 Sprite sheet detected!`);
-        console.log(`   Sprites: ${spriteInfo.stats.count}`);
+        printInfo(`Sprite sheet detected!`);
+        printInfo(`  Sprites: ${spriteInfo.stats.count}`);
         if (spriteInfo.grid) {
-          console.log(`   Grid: ${spriteInfo.grid.rows} rows × ${spriteInfo.grid.cols} cols`);
+          printInfo(`  Grid: ${spriteInfo.grid.rows} rows × ${spriteInfo.grid.cols} cols`);
         }
-        console.log(`   Avg size: ${spriteInfo.stats.avgSize.width.toFixed(1)} × ${spriteInfo.stats.avgSize.height.toFixed(1)}`);
-        console.log(`   Uniformity: width CV=${spriteInfo.stats.uniformity.widthCV}, height CV=${spriteInfo.stats.uniformity.heightCV}`);
-        console.log(`   Computing bbox for ${objectIds.length} sprites...\n`);
+        printInfo(`  Avg size: ${spriteInfo.stats.avgSize.width.toFixed(1)} × ${spriteInfo.stats.avgSize.height.toFixed(1)}`);
+        printInfo(`  Computing bbox for ${objectIds.length} sprites...\n`);
       }
     }
 
@@ -502,20 +414,18 @@ async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, sprit
 
       // If no object IDs specified, compute whole content bbox
       if (objectIds.length === 0) {
-        // Get all direct children of SVG (except <defs>, <style>, <script>)
         const children = Array.from(rootSvg.children).filter(el => {
           const tag = el.tagName.toLowerCase();
-          return tag !== 'defs' && tag !== 'style' && tag !== 'script' && tag !== 'title' && tag !== 'desc' && tag !== 'metadata';
+          return tag !== 'defs' && tag !== 'style' && tag !== 'script' &&
+                 tag !== 'title' && tag !== 'desc' && tag !== 'metadata';
         });
 
         if (children.length === 0) {
           output['WHOLE CONTENT'] = { error: 'No renderable content found' };
         } else if (children.length === 1) {
-          // Single child - compute bbox directly
           const bbox = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(children[0], options);
           output['WHOLE CONTENT'] = bbox || { error: 'No visible pixels' };
         } else {
-          // Multiple children - compute union bbox
           const union = await SvgVisualBBox.getSvgElementsUnionVisualBBox(children, options);
           output['WHOLE CONTENT'] = union || { error: 'No visible pixels' };
         }
@@ -537,8 +447,8 @@ async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, sprit
     }, objectIds, mode);
 
     const result = {
-      filename: path.basename(svgPath),
-      path: svgPath,
+      filename: path.basename(safePath),
+      path: safePath,
       results
     };
 
@@ -549,41 +459,71 @@ async function computeBBox(svgPath, objectIds = [], ignoreViewBox = false, sprit
     return result;
 
   } finally {
-    await browser.close();
+    // SECURITY: Ensure browser is always closed
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (closeErr) {
+        // Force kill if close fails
+        if (browser.process()) {
+          browser.process().kill('SIGKILL');
+        }
+      }
+    }
   }
 }
 
 // ============================================================================
-// DIRECTORY PROCESSING
+// DIRECTORY PROCESSING (with security enhancements)
 // ============================================================================
 
 /**
- * Process all SVG files in a directory
+ * Process all SVG files in a directory.
+ * SECURE: Validates directory path and regex pattern.
+ *
  * @param {string} dirPath - Directory path
  * @param {string|null} filterRegex - Regex pattern to filter filenames
  * @param {boolean} ignoreViewBox - Compute full drawing bbox
- * @returns {Promise<Object[]>} - Array of {filename, path, results}
+ * @returns {Promise<Object[]>} Array of {filename, path, results}
  */
 async function processDirectory(dirPath, filterRegex = null, ignoreViewBox = false) {
-  const files = fs.readdirSync(dirPath);
+  // SECURITY: Validate directory path
+  const safeDir = validateFilePath(dirPath, {
+    mustExist: true
+  });
+
+  // Verify it's actually a directory
+  if (!fs.statSync(safeDir).isDirectory()) {
+    throw new ValidationError('Path is not a directory', { path: safeDir });
+  }
+
+  const files = fs.readdirSync(safeDir);
   const svgFiles = files.filter(f => f.endsWith('.svg'));
 
   let filtered = svgFiles;
   if (filterRegex) {
-    const regex = new RegExp(filterRegex);
-    filtered = svgFiles.filter(f => regex.test(f));
+    try {
+      const regex = new RegExp(filterRegex);
+      filtered = svgFiles.filter(f => regex.test(f));
+    } catch (err) {
+      throw new ValidationError(`Invalid regex pattern: ${err.message}`, { pattern: filterRegex });
+    }
   }
 
   const results = [];
-  for (const file of filtered) {
-    const filePath = path.join(dirPath, file);
-    console.log(`Processing: ${file}...`);
+  const progress = createProgress(`Processing ${filtered.length} files`);
+
+  for (let i = 0; i < filtered.length; i++) {
+    const file = filtered[i];
+    const filePath = path.join(safeDir, file);
+
+    progress.update(`${i + 1}/${filtered.length} - ${file}`);
 
     try {
       const result = await computeBBox(filePath, [], ignoreViewBox);
       results.push(result);
     } catch (err) {
-      console.error(`  ERROR: ${err.message}`);
+      printError(`Failed to process ${file}: ${err.message}`);
       results.push({
         filename: file,
         path: filePath,
@@ -592,33 +532,50 @@ async function processDirectory(dirPath, filterRegex = null, ignoreViewBox = fal
     }
   }
 
+  progress.done(`Processed ${filtered.length} files`);
   return results;
 }
 
 // ============================================================================
-// LIST FILE PROCESSING
+// LIST FILE PROCESSING (with security enhancements)
 // ============================================================================
 
 /**
- * Parse list file and extract entries
+ * Parse list file and extract entries.
+ * SECURE: Validates file path, handles errors gracefully.
+ *
  * @param {string} listPath - Path to list file
  * @returns {Array<{path: string, ids: string[], ignoreViewBox: boolean}>}
  */
 function parseListFile(listPath) {
-  const content = fs.readFileSync(listPath, 'utf8');
+  // SECURITY: Validate list file path
+  const safePath = validateFilePath(listPath, {
+    mustExist: true
+  });
+
+  const content = fs.readFileSync(safePath, 'utf8');
   const lines = content.split('\n');
   const entries = [];
 
-  for (const line of lines) {
+  for (let lineNum = 0; lineNum < lines.length; lineNum++) {
+    const line = lines[lineNum];
     const trimmed = line.trim();
 
     // Skip empty lines and comments
     if (!trimmed || trimmed.startsWith('#')) continue;
 
     const tokens = trimmed.split(/\s+/);
-    const svgPath = tokens[0];
-    const rest = tokens.slice(1);
+    if (tokens.length === 0) continue;
 
+    const svgPath = tokens[0];
+
+    // SECURITY: Basic validation of path (full validation happens during processing)
+    if (svgPath.includes('\0')) {
+      printError(`Line ${lineNum + 1}: Invalid path (null byte detected)`);
+      continue;
+    }
+
+    const rest = tokens.slice(1);
     const entry = {
       path: svgPath,
       ids: [],
@@ -629,7 +586,7 @@ function parseListFile(listPath) {
     for (const token of rest) {
       if (token === '--ignore-vbox' || token === '--ignore-viewbox') {
         entry.ignoreViewBox = true;
-      } else {
+      } else if (!token.startsWith('-')) {
         entry.ids.push(token);
       }
     }
@@ -641,32 +598,26 @@ function parseListFile(listPath) {
 }
 
 /**
- * Process list file
+ * Process list file.
+ * SECURE: Handles errors for each entry independently.
+ *
  * @param {string} listPath - Path to list file
- * @returns {Promise<Object[]>} - Array of {filename, path, results}
+ * @returns {Promise<Object[]>} Array of {filename, path, results}
  */
 async function processList(listPath) {
   const entries = parseListFile(listPath);
   const results = [];
+  const progress = createProgress(`Processing ${entries.length} entries`);
 
-  for (const entry of entries) {
-    console.log(`Processing: ${entry.path}...`);
-
-    if (!fs.existsSync(entry.path)) {
-      console.error(`  ERROR: File not found`);
-      results.push({
-        filename: path.basename(entry.path),
-        path: entry.path,
-        results: { error: 'File not found' }
-      });
-      continue;
-    }
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    progress.update(`${i + 1}/${entries.length} - ${path.basename(entry.path)}`);
 
     try {
       const result = await computeBBox(entry.path, entry.ids, entry.ignoreViewBox);
       results.push(result);
     } catch (err) {
-      console.error(`  ERROR: ${err.message}`);
+      printError(`Failed to process ${entry.path}: ${err.message}`);
       results.push({
         filename: path.basename(entry.path),
         path: entry.path,
@@ -675,6 +626,7 @@ async function processList(listPath) {
     }
   }
 
+  progress.done(`Processed ${entries.length} entries`);
   return results;
 }
 
@@ -683,7 +635,8 @@ async function processList(listPath) {
 // ============================================================================
 
 /**
- * Format bbox for console output
+ * Format bbox for console output.
+ *
  * @param {Object} bbox - {x, y, width, height}
  * @returns {string}
  */
@@ -694,7 +647,8 @@ function formatBBox(bbox) {
 }
 
 /**
- * Print results to console
+ * Print results to console.
+ *
  * @param {Object[]} allResults - Array of {filename, path, results}
  */
 function printResults(allResults) {
@@ -711,96 +665,89 @@ function printResults(allResults) {
 }
 
 /**
- * Save results as JSON
+ * Save results as JSON.
+ * SECURE: Validates output path, ensures directory exists.
+ *
  * @param {Object[]} allResults - Array of {filename, path, results}
  * @param {string} outputPath - Output JSON file path
  */
 function saveJSON(allResults, outputPath) {
-  const json = {};
+  // SECURITY: Validate output path
+  const safePath = validateOutputPath(outputPath, {
+    requiredExtensions: ['.json']
+  });
 
+  const json = {};
   for (const item of allResults) {
     json[item.path] = item.results;
   }
 
-  fs.writeFileSync(outputPath, JSON.stringify(json, null, 2), 'utf8');
-  console.log(`\n✓ JSON saved to: ${outputPath}`);
+  // SECURITY: Use writeFileSafe (creates directory if needed)
+  writeFileSafe(safePath, JSON.stringify(json, null, 2), 'utf8');
+  printSuccess(`JSON saved to: ${safePath}`);
 }
 
 // ============================================================================
-// MAIN
+// MAIN (with comprehensive error handling)
 // ============================================================================
 
 async function main() {
-  const options = parseArgs(process.argv);
+  // Display version
+  printInfo(`sbb-getbbox v${getVersion()} | svg-bbox toolkit\n`);
 
-  // Handle --version flag
-  if (options.version) {
-    printVersion('sbb-getbbox');
-    process.exit(0);
+  // Parse arguments
+  const args = argParser(process.argv);
+
+  // Determine mode based on flags and positional args
+  let mode = null;
+  if (args.flags.dir) {
+    mode = 'dir';
+  } else if (args.flags.list) {
+    mode = 'list';
+  } else if (args.positional.length > 0) {
+    mode = 'file';
+  } else {
+    throw new ValidationError('No input specified. Use --help for usage information.');
   }
 
-  if (options.help) {
-    printHelp();
-    process.exit(0);
-  }
-
-  // Display version on normal execution (not on help or version flags)
-  console.log(`sbb-getbbox v${getVersion()} | svg-bbox toolkit\n`);
-
-  if (!options.mode) {
-    console.error('ERROR: No input specified. Use --help for usage information.');
-    process.exit(1);
-  }
+  const options = {
+    ignoreViewBox: args.flags['ignore-vbox'] || false,
+    spriteMode: args.flags.sprite || false,
+    jsonOutput: args.flags.json || null
+  };
 
   let allResults = [];
 
-  try {
-    if (options.mode === 'file') {
-      if (!fs.existsSync(options.svgPath)) {
-        console.error(`ERROR: File not found: ${options.svgPath}`);
-        process.exit(1);
-      }
+  // Process based on mode
+  if (mode === 'file') {
+    const svgPath = args.positional[0];
+    const objectIds = args.positional.slice(1);
 
-      const result = await computeBBox(options.svgPath, options.objectIds, options.ignoreViewBox, options.spriteMode);
-      allResults.push(result);
-    }
-    else if (options.mode === 'dir') {
-      if (!fs.existsSync(options.dir) || !fs.statSync(options.dir).isDirectory()) {
-        console.error(`ERROR: Directory not found: ${options.dir}`);
-        process.exit(1);
-      }
+    const result = await computeBBox(svgPath, objectIds, options.ignoreViewBox, options.spriteMode);
+    allResults.push(result);
+  }
+  else if (mode === 'dir') {
+    const filter = args.flags.filter || null;
+    allResults = await processDirectory(args.flags.dir, filter, options.ignoreViewBox);
+  }
+  else if (mode === 'list') {
+    allResults = await processList(args.flags.list);
+  }
 
-      allResults = await processDirectory(options.dir, options.filter, options.ignoreViewBox);
-    }
-    else if (options.mode === 'list') {
-      if (!fs.existsSync(options.listFile)) {
-        console.error(`ERROR: List file not found: ${options.listFile}`);
-        process.exit(1);
-      }
-
-      allResults = await processList(options.listFile);
-    }
-
-    // Output results
-    if (options.jsonOutput) {
-      saveJSON(allResults, options.jsonOutput);
-    } else {
-      printResults(allResults);
-    }
-
-  } catch (err) {
-    console.error(`\nFATAL ERROR: ${err.message}`);
-    console.error(err.stack);
-    process.exit(1);
+  // Output results
+  if (options.jsonOutput) {
+    saveJSON(allResults, options.jsonOutput);
+  } else {
+    printResults(allResults);
   }
 }
 
-// Run if executed directly
+// ============================================================================
+// ENTRY POINT
+// ============================================================================
+
 if (require.main === module) {
-  main().catch(err => {
-    console.error('Unhandled error:', err);
-    process.exit(1);
-  });
+  runCLI(main);
 }
 
 module.exports = { computeBBox, processDirectory, processList, repairSvgAttributes };

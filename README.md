@@ -34,6 +34,7 @@ Unlike `getBBox()` and simple geometry math, this toolkit uses **raster sampling
   - [Library: `SvgVisualBBox.js`](#library-svgvisualbboxjs)
   - [Renderer: `render_svg_chrome.cjs`](#renderer-render_svg_chromecjs)
   - [Fixer: `fix_svg_viewbox.js`](#fixer-fix_svg_viewboxjs)
+  - [BBox Calculator: `getbbox.cjs`](#bbox-calculator-getbboxcjs)
   - [Multi-tool: `extract_svg_objects.js`](#multi-tool-extract_svg_objectsjs)
 - [Renaming workflow with the HTML viewer](#-renaming-workflow-with-the-html-viewer)
 - [Troubleshooting](#-troubleshooting)
@@ -299,6 +300,94 @@ node fix_svg_viewbox.js input.svg [output.svg]
 
 ```bash
 node fix_svg_viewbox.js broken.svg fixed/broken.fixed.svg
+```
+
+---
+
+### BBox Calculator: `getbbox.cjs`
+
+CLI utility for computing visual bounding boxes using canvas-based measurement.
+
+#### Syntax
+
+**Single file:**
+```bash
+node getbbox.cjs <svg-file> [object-ids...] [--ignore-vbox] [--json <file>]
+```
+
+**Directory batch:**
+```bash
+node getbbox.cjs --dir <directory> [--filter <regex>] [--json <file>]
+```
+
+**List file:**
+```bash
+node getbbox.cjs --list <txt-file> [--json <file>]
+```
+
+#### Features
+
+- **Whole SVG bbox**: Compute bbox for entire SVG content (respecting viewBox)
+- **Multiple objects**: Get bboxes for specific elements by ID
+- **Full drawing mode**: Use `--ignore-vbox` to measure complete drawing (ignoring viewBox clipping)
+- **Batch processing**: Process entire directories with optional regex filter
+- **List files**: Process multiple SVGs with per-file object IDs from a text file
+- **JSON export**: Save results as JSON for programmatic use
+- **Auto-repair**: Missing SVG attributes (viewBox, width, height, preserveAspectRatio) are computed
+
+#### Examples
+
+```bash
+# Compute whole SVG bbox
+node getbbox.cjs drawing.svg
+
+# Compute specific elements
+node getbbox.cjs sprites.svg icon_save icon_load icon_close
+
+# Get full drawing (ignore viewBox)
+node getbbox.cjs drawing.svg --ignore-vbox
+
+# Batch process directory with filter
+node getbbox.cjs --dir ./icons --filter "^btn_" --json buttons.json
+
+# Process from list file
+node getbbox.cjs --list process-list.txt --json output.json
+```
+
+#### List File Format
+
+Each line: `<svg-path> [object-ids...] [--ignore-vbox]`
+
+```
+# Process whole SVG content
+path/to/icons.svg
+
+# Process specific objects
+path/to/sprites.svg icon1 icon2 icon3
+
+# Get full drawing bbox (ignore viewBox)
+path/to/drawing.svg --ignore-vbox
+```
+
+#### Output Format
+
+**Console:**
+```
+SVG: path/to/file.svg
+├─ WHOLE CONTENT: {x: 0, y: 0, width: 100, height: 100}
+├─ icon1: {x: 10, y: 10, width: 20, height: 20}
+└─ icon2: {x: 50, y: 50, width: 30, height: 30}
+```
+
+**JSON** (with `--json`):
+```json
+{
+  "path/to/file.svg": {
+    "WHOLE CONTENT": {"x": 0, "y": 0, "width": 100, "height": 100},
+    "icon1": {"x": 10, "y": 10, "width": 20, "height": 20},
+    "icon2": {"x": 50, "y": 50, "width": 30, "height": 30}
+  }
+}
 ```
 
 ---

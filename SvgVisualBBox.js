@@ -1588,6 +1588,300 @@
     };
   }
 
+  /**
+   * Reframe SVG viewBox to fit specific object(s) with aspect ratio and visibility control
+   *
+   * @param {string|Element} target - CSS selector, DOM element, or element ID for the SVG root
+   * @param {string|string[]} objectIds - Element ID(s) to frame
+   * @param {Object} options - Configuration options
+   * @param {string} options.aspect - 'preserveSize' | 'preserveAspectRatio' | 'stretch' (default: 'stretch')
+   * @param {string} options.aspectRatioMode - 'meet' | 'slice' (default: 'meet', only for aspect: 'preserveAspectRatio')
+   * @param {string} options.align - SVG alignment like 'xMidYMid', 'xMinYMin', etc. (default: 'xMidYMid')
+   * @param {string} options.visibility - 'unchanged' | 'showOnly' | 'hideTargets' | 'restoreList' (default: 'unchanged')
+   * @param {Object} options.visibilityList - Visibility state to restore (only for visibility: 'restoreList')
+   * @param {number|string} options.margin - Margin around bbox in user units, px, or screen units (default: 0)
+   * @param {boolean} options.saveVisibilityList - Return current visibility state (default: false)
+   * @param {boolean} options.dryRun - Compute only, don't modify SVG (default: false)
+   * @param {Object} options.bboxOptions - Options passed to bbox computation functions
+   * @returns {Promise<Object>} Result with newViewBox, oldViewBox, bbox, visibilityList, restore function
+   */
+  async function setViewBoxOnObjects(target, objectIds, options = {}) {
+    // Normalize options
+    const opts = {
+      aspect: options.aspect || 'stretch',
+      aspectRatioMode: options.aspectRatioMode || 'meet',
+      align: options.align || 'xMidYMid',
+      visibility: options.visibility || 'unchanged',
+      visibilityList: options.visibilityList || null,
+      margin: options.margin || 0,
+      saveVisibilityList: options.saveVisibilityList || false,
+      dryRun: options.dryRun || false,
+      bboxOptions: options.bboxOptions || {}
+    };
+
+    // Resolve SVG root element
+    let svgRoot;
+    if (typeof target === 'string') {
+      const sel = target.startsWith('#') ? target : '#' + target;
+      svgRoot = document.querySelector(sel);
+      if (!svgRoot) {
+        svgRoot = document.getElementById(target);
+      }
+    } else {
+      svgRoot = target;
+    }
+
+    if (!svgRoot || svgRoot.tagName.toLowerCase() !== 'svg') {
+      throw new Error('Target must be an SVG element');
+    }
+
+    // Normalize objectIds to array
+    const ids = Array.isArray(objectIds) ? objectIds : [objectIds];
+    if (ids.length === 0) {
+      throw new Error('At least one object ID must be provided');
+    }
+
+    // Get elements
+    const elements = ids.map(id => {
+      const el = document.getElementById(id);
+      if (!el) {
+        throw new Error(`Element with ID "${id}" not found`);
+      }
+      return el;
+    });
+
+    // Wait for fonts
+    await waitForDocumentFonts(document, opts.bboxOptions.fontTimeoutMs || 8000);
+
+    // Compute union bbox
+    let bbox;
+    if (elements.length === 1) {
+      bbox = await getSvgElementVisualBBoxTwoPassAggressive(elements[0], opts.bboxOptions);
+    } else {
+      bbox = await getSvgElementsUnionVisualBBox(elements, opts.bboxOptions);
+    }
+
+    if (!bbox || bbox.width <= 0 || bbox.height <= 0) {
+      throw new Error('Could not compute valid bounding box for specified objects');
+    }
+
+    // Get current viewBox
+    const vb = svgRoot.viewBox.baseVal;
+    const oldViewBox = {
+      x: vb.x || 0,
+      y: vb.y || 0,
+      width: vb.width || parseFloat(svgRoot.getAttribute('width')) || 0,
+      height: vb.height || parseFloat(svgRoot.getAttribute('height')) || 0
+    };
+
+    if (oldViewBox.width === 0 || oldViewBox.height === 0) {
+      // Synthesize from bounding client rect if no viewBox/dimensions
+      const rect = svgRoot.getBoundingClientRect();
+      oldViewBox.width = rect.width;
+      oldViewBox.height = rect.height;
+    }
+
+    // Parse margin (support user units, px, or screen units)
+    let marginInUserUnits = 0;
+    if (typeof opts.margin === 'string') {
+      const marginMatch = opts.margin.match(/^([\d.]+)(px|%)?$/);
+      if (marginMatch) {
+        const value = parseFloat(marginMatch[1]);
+        const unit = marginMatch[2];
+
+        if (unit === 'px') {
+          // Convert px to user units using current scale
+          const rect = svgRoot.getBoundingClientRect();
+          const scaleX = rect.width / oldViewBox.width;
+          marginInUserUnits = value / scaleX;
+        } else if (unit === '%') {
+          // Percentage of bbox diagonal
+          const diagonal = Math.sqrt(bbox.width * bbox.width + bbox.height * bbox.height);
+          marginInUserUnits = (value / 100) * diagonal;
+        } else {
+          // User units
+          marginInUserUnits = value;
+        }
+      }
+    } else {
+      marginInUserUnits = opts.margin;
+    }
+
+    // Calculate new viewBox based on aspect mode
+    let newViewBox;
+
+    if (opts.aspect === 'stretch') {
+      // Use exact bbox as viewBox (with margin)
+      newViewBox = {
+        x: bbox.x - marginInUserUnits,
+        y: bbox.y - marginInUserUnits,
+        width: bbox.width + marginInUserUnits * 2,
+        height: bbox.height + marginInUserUnits * 2
+      };
+    } else if (opts.aspect === 'preserveSize') {
+      // Keep viewBox dimensions, only center on objects
+      const centerX = bbox.x + bbox.width / 2;
+      const centerY = bbox.y + bbox.height / 2;
+      newViewBox = {
+        x: centerX - oldViewBox.width / 2,
+        y: centerY - oldViewBox.height / 2,
+        width: oldViewBox.width,
+        height: oldViewBox.height
+      };
+    } else if (opts.aspect === 'preserveAspectRatio') {
+      // Scale viewBox uniformly to meet/slice the bbox
+      const oldAspect = oldViewBox.width / oldViewBox.height;
+      const bboxAspect = (bbox.width + marginInUserUnits * 2) / (bbox.height + marginInUserUnits * 2);
+
+      let newWidth, newHeight;
+
+      if (opts.aspectRatioMode === 'meet') {
+        // Ensure ALL content fits inside viewBox
+        // Use the dimension that requires LESS scaling
+        if (oldAspect > bboxAspect) {
+          // ViewBox is wider: fit height, add horizontal space
+          newHeight = bbox.height + marginInUserUnits * 2;
+          newWidth = newHeight * oldAspect;
+        } else {
+          // ViewBox is taller: fit width, add vertical space
+          newWidth = bbox.width + marginInUserUnits * 2;
+          newHeight = newWidth / oldAspect;
+        }
+      } else { // slice
+        // Ensure viewBox is COMPLETELY FILLED by content
+        // Use the dimension that requires MORE scaling
+        if (oldAspect > bboxAspect) {
+          // ViewBox is wider: fit width, clip height
+          newWidth = bbox.width + marginInUserUnits * 2;
+          newHeight = newWidth / oldAspect;
+        } else {
+          // ViewBox is taller: fit height, clip width
+          newHeight = bbox.height + marginInUserUnits * 2;
+          newWidth = newHeight * oldAspect;
+        }
+      }
+
+      // Apply alignment
+      const bboxCenterX = bbox.x + bbox.width / 2;
+      const bboxCenterY = bbox.y + bbox.height / 2;
+
+      // Parse alignment (xMin/xMid/xMax + YMin/YMid/YMax)
+      const alignMatch = opts.align.match(/^x(Min|Mid|Max)Y(Min|Mid|Max)$/);
+      const xAlign = alignMatch ? alignMatch[1] : 'Mid';
+      const yAlign = alignMatch ? alignMatch[2] : 'Mid';
+
+      let newX, newY;
+
+      // Horizontal alignment
+      if (xAlign === 'Min') {
+        newX = bbox.x - marginInUserUnits;
+      } else if (xAlign === 'Max') {
+        newX = bbox.x + bbox.width + marginInUserUnits - newWidth;
+      } else { // Mid
+        newX = bboxCenterX - newWidth / 2;
+      }
+
+      // Vertical alignment
+      if (yAlign === 'Min') {
+        newY = bbox.y - marginInUserUnits;
+      } else if (yAlign === 'Max') {
+        newY = bbox.y + bbox.height + marginInUserUnits - newHeight;
+      } else { // Mid
+        newY = bboxCenterY - newHeight / 2;
+      }
+
+      newViewBox = { x: newX, y: newY, width: newWidth, height: newHeight };
+    } else {
+      throw new Error(`Unknown aspect mode: ${opts.aspect}`);
+    }
+
+    // Save current visibility state if requested
+    let savedVisibilityList = null;
+    if (opts.saveVisibilityList) {
+      savedVisibilityList = {};
+      const allElements = svgRoot.querySelectorAll('[id]');
+      allElements.forEach(el => {
+        const computedStyle = window.getComputedStyle(el);
+        savedVisibilityList[el.id] = {
+          display: el.style.display || computedStyle.display,
+          visibility: el.style.visibility || computedStyle.visibility,
+          opacity: el.style.opacity || computedStyle.opacity
+        };
+      });
+    }
+
+    // Apply visibility changes
+    const oldVisibilityStates = {};
+    if (opts.visibility !== 'unchanged' && !opts.dryRun) {
+      if (opts.visibility === 'showOnly') {
+        // Hide all elements except targets
+        const allElements = svgRoot.querySelectorAll('[id]');
+        allElements.forEach(el => {
+          oldVisibilityStates[el.id] = el.style.display;
+          if (!ids.includes(el.id)) {
+            el.style.display = 'none';
+          }
+        });
+      } else if (opts.visibility === 'hideTargets') {
+        // Hide only target elements
+        elements.forEach(el => {
+          oldVisibilityStates[el.id] = el.style.display;
+          el.style.display = 'none';
+        });
+      } else if (opts.visibility === 'restoreList' && opts.visibilityList) {
+        // Restore from provided visibility list
+        Object.keys(opts.visibilityList).forEach(id => {
+          const el = document.getElementById(id);
+          if (el) {
+            const state = opts.visibilityList[id];
+            oldVisibilityStates[id] = {
+              display: el.style.display,
+              visibility: el.style.visibility,
+              opacity: el.style.opacity
+            };
+            if (state.display !== undefined) el.style.display = state.display;
+            if (state.visibility !== undefined) el.style.visibility = state.visibility;
+            if (state.opacity !== undefined) el.style.opacity = state.opacity;
+          }
+        });
+      }
+    }
+
+    // Apply viewBox change (unless dry-run)
+    const oldViewBoxString = `${oldViewBox.x} ${oldViewBox.y} ${oldViewBox.width} ${oldViewBox.height}`;
+    if (!opts.dryRun) {
+      svgRoot.setAttribute('viewBox', `${newViewBox.x} ${newViewBox.y} ${newViewBox.width} ${newViewBox.height}`);
+    }
+
+    // Create restore function
+    const restore = () => {
+      svgRoot.setAttribute('viewBox', oldViewBoxString);
+
+      // Restore visibility states
+      Object.keys(oldVisibilityStates).forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          const state = oldVisibilityStates[id];
+          if (typeof state === 'string') {
+            el.style.display = state;
+          } else {
+            if (state.display !== undefined) el.style.display = state.display;
+            if (state.visibility !== undefined) el.style.visibility = state.visibility;
+            if (state.opacity !== undefined) el.style.opacity = state.opacity;
+          }
+        }
+      });
+    };
+
+    return {
+      newViewBox: newViewBox,
+      oldViewBox: oldViewBox,
+      bbox: bbox,
+      visibilityList: savedVisibilityList,
+      restore: restore
+    };
+  }
+
   // Export public API
   return {
     waitForDocumentFonts: waitForDocumentFonts,
@@ -1595,6 +1889,7 @@
     getSvgElementsUnionVisualBBox: getSvgElementsUnionVisualBBox,
     getSvgElementVisibleAndFullBBoxes: getSvgElementVisibleAndFullBBoxes,
     getSvgRootViewBoxExpansionForFullDrawing: getSvgRootViewBoxExpansionForFullDrawing,
-    showTrueBBoxBorder: showTrueBBoxBorder
+    showTrueBBoxBorder: showTrueBBoxBorder,
+    setViewBoxOnObjects: setViewBoxOnObjects
   };
 }));

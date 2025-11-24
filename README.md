@@ -422,7 +422,13 @@ You can use `SvgVisualBBox.js` directly in webpages for accurate bounding box co
       // Show visual border for debugging
       const result = await SvgVisualBBox.showTrueBBoxBorder('#greeting');
 
-      // Remove after 3 seconds
+      // Reframe viewBox to focus on element
+      await SvgVisualBBox.setViewBoxOnObjects('svg', 'greeting', {
+        aspect: 'stretch',
+        margin: '10px'
+      });
+
+      // Remove border after 3 seconds
       setTimeout(() => result.remove(), 3000);
     })();
   </script>
@@ -437,6 +443,7 @@ See [API.md](./API.md) for comprehensive browser API documentation with examples
 - Working with complex text and transforms
 - Handling multiple elements
 - Visual debugging with borders
+- Reframing viewBox to focus on objects
 - Theme customization
 - Error handling
 - Performance tips

@@ -775,6 +775,286 @@ Content-Security-Policy:
 
 ---
 
+## `setViewBoxOnObjects`
+
+Reframe SVG viewBox to fit specific object(s) with aspect ratio and visibility control.
+
+### Syntax
+
+```javascript
+await SvgVisualBBox.setViewBoxOnObjects(target, objectIds, options)
+```
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `target` | `string\|Element` | Yes | CSS selector, DOM element, or element ID for the SVG root |
+| `objectIds` | `string\|string[]` | Yes | Element ID(s) to frame in the viewBox |
+| `options` | `Object` | No | Configuration options (see below) |
+
+### Options Object
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `aspect` | `string` | `'stretch'` | Aspect mode: `'stretch'`, `'preserveSize'`, or `'preserveAspectRatio'` |
+| `aspectRatioMode` | `string` | `'meet'` | For `preserveAspectRatio`: `'meet'` (fit all) or `'slice'` (fill viewBox) |
+| `align` | `string` | `'xMidYMid'` | SVG alignment like `'xMinYMin'`, `'xMidYMax'`, etc. (9 combinations) |
+| `visibility` | `string` | `'unchanged'` | Visibility mode: `'unchanged'`, `'showOnly'`, `'hideTargets'`, `'restoreList'` |
+| `visibilityList` | `Object` | `null` | Visibility state to restore (only for `visibility: 'restoreList'`) |
+| `margin` | `number\|string` | `0` | Margin around bbox. Supports user units, `'10px'`, or `'5%'` (of bbox diagonal) |
+| `saveVisibilityList` | `boolean` | `false` | Return current visibility state of all elements |
+| `dryRun` | `boolean` | `false` | Compute new viewBox without modifying the SVG |
+| `bboxOptions` | `Object` | `{}` | Options passed to bbox computation functions |
+
+### Return Value
+
+Returns a `Promise` that resolves to an object with:
+
+```javascript
+{
+  newViewBox: { x, y, width, height },  // Computed viewBox in user units
+  oldViewBox: { x, y, width, height },  // Original viewBox
+  bbox: { x, y, width, height },        // Computed bbox of target objects
+  visibilityList: Object | null,        // If saveVisibilityList: true
+  restore: Function                     // Undo function to restore original state
+}
+```
+
+### Aspect Modes
+
+#### `'stretch'` (default)
+Uses exact bbox as viewBox. Content may distort if viewport aspect ratio differs.
+
+```javascript
+await SvgVisualBBox.setViewBoxOnObjects('mySvg', 'circle1', {
+  aspect: 'stretch',
+  margin: 10  // 10 user units around bbox
+});
+```
+
+#### `'preserveSize'`
+Keeps viewBox dimensions unchanged, only centers on objects.
+
+```javascript
+await SvgVisualBBox.setViewBoxOnObjects('mySvg', ['icon1', 'icon2'], {
+  aspect: 'preserveSize'  // Pan to objects without zooming
+});
+```
+
+#### `'preserveAspectRatio'`
+Scales viewBox uniformly (maintaining current aspect ratio) to fit objects.
+
+**With `meet` (default):** Ensures ALL objects fit inside viewBox
+```javascript
+await SvgVisualBBox.setViewBoxOnObjects('mySvg', 'text1', {
+  aspect: 'preserveAspectRatio',
+  aspectRatioMode: 'meet',  // Fit all content, may add letterboxing
+  align: 'xMinYMin'         // Align to top-left corner
+});
+```
+
+**With `slice`:** Ensures viewBox is COMPLETELY FILLED, may clip objects
+```javascript
+await SvgVisualBBox.setViewBoxOnObjects('mySvg', 'logo', {
+  aspect: 'preserveAspectRatio',
+  aspectRatioMode: 'slice',  // Fill viewBox, may clip edges
+  align: 'xMidYMid'          // Center the object (default)
+});
+```
+
+### Alignment Values
+
+For `aspect: 'preserveAspectRatio'`, use SVG alignment syntax:
+
+| Alignment | Horizontal | Vertical |
+|-----------|-----------|----------|
+| `xMinYMin` | Left | Top |
+| `xMinYMid` | Left | Middle |
+| `xMinYMax` | Left | Bottom |
+| `xMidYMin` | Center | Top |
+| `xMidYMid` | Center | Middle (default) |
+| `xMidYMax` | Center | Bottom |
+| `xMaxYMin` | Right | Top |
+| `xMaxYMid` | Right | Middle |
+| `xMaxYMax` | Right | Bottom |
+
+### Visibility Modes
+
+#### `'unchanged'` (default)
+No visibility changes.
+
+```javascript
+await SvgVisualBBox.setViewBoxOnObjects('mySvg', 'obj1', {
+  visibility: 'unchanged'
+});
+```
+
+#### `'showOnly'`
+Hide all elements except specified objects.
+
+```javascript
+await SvgVisualBBox.setViewBoxOnObjects('mySvg', ['icon1', 'icon2'], {
+  visibility: 'showOnly'  // Hide everything else
+});
+```
+
+#### `'hideTargets'`
+Hide specified objects, leave others visible.
+
+```javascript
+await SvgVisualBBox.setViewBoxOnObjects('mySvg', 'watermark', {
+  visibility: 'hideTargets'  // Hide the watermark
+});
+```
+
+#### `'restoreList'`
+Restore visibility from saved state.
+
+```javascript
+// First, save visibility state
+const result1 = await SvgVisualBBox.setViewBoxOnObjects('mySvg', 'obj1', {
+  saveVisibilityList: true
+});
+
+// Later, restore it
+await SvgVisualBBox.setViewBoxOnObjects('mySvg', 'obj2', {
+  visibility: 'restoreList',
+  visibilityList: result1.visibilityList
+});
+```
+
+### Margin Units
+
+#### User Units (default)
+```javascript
+margin: 10  // 10 units in SVG coordinate system
+```
+
+#### Pixels
+```javascript
+margin: '20px'  // Converted to user units based on current scale
+```
+
+#### Percentage
+```javascript
+margin: '5%'  // 5% of bbox diagonal
+```
+
+### Dry-Run Mode
+
+Compute new viewBox without modifying the SVG (useful for animations):
+
+```javascript
+const result = await SvgVisualBBox.setViewBoxOnObjects('mySvg', 'circle1', {
+  dryRun: true
+});
+
+console.log('Would change viewBox to:', result.newViewBox);
+// SVG is unchanged
+
+// Animate the transition
+animateViewBox(result.oldViewBox, result.newViewBox, 1000);
+```
+
+### Restore Function
+
+The returned `restore()` function undoes all changes:
+
+```javascript
+const result = await SvgVisualBBox.setViewBoxOnObjects('mySvg', 'icon1', {
+  visibility: 'showOnly',
+  margin: '10px'
+});
+
+// Later, restore original state
+result.restore();  // Restores viewBox and visibility
+```
+
+### Complete Examples
+
+#### Frame Multiple Objects with Margin
+```javascript
+const result = await SvgVisualBBox.setViewBoxOnObjects(
+  'spriteSheet',
+  ['icon_save', 'icon_load', 'icon_delete'],
+  {
+    aspect: 'stretch',
+    margin: '5px',
+    visibility: 'showOnly'
+  }
+);
+
+console.log(`Framed ${result.bbox.width} × ${result.bbox.height} bbox`);
+```
+
+#### Zoom to Object Preserving Aspect Ratio
+```javascript
+await SvgVisualBBox.setViewBoxOnObjects('diagram', 'callout1', {
+  aspect: 'preserveAspectRatio',
+  aspectRatioMode: 'meet',
+  align: 'xMaxYMin',  // Align to top-right
+  margin: 20
+});
+```
+
+#### Save/Restore Visibility for Animation
+```javascript
+// Save initial state
+const initialState = await SvgVisualBBox.setViewBoxOnObjects('mySvg', 'obj1', {
+  saveVisibilityList: true,
+  dryRun: true  // Don't change anything yet
+});
+
+// Show only group 1
+await SvgVisualBBox.setViewBoxOnObjects('mySvg', ['g1_icon1', 'g1_icon2'], {
+  visibility: 'showOnly'
+});
+
+// After animation, restore
+await SvgVisualBBox.setViewBoxOnObjects('mySvg', 'obj1', {
+  visibility: 'restoreList',
+  visibilityList: initialState.visibilityList
+});
+```
+
+#### Handle Sprite Sheets with `<use>`
+```javascript
+// Works with <use> elements referencing <symbol>
+await SvgVisualBBox.setViewBoxOnObjects('sprites', 'use_icon_star', {
+  aspect: 'stretch',
+  visibility: 'showOnly',
+  margin: 5
+});
+```
+
+### Error Handling
+
+```javascript
+try {
+  await SvgVisualBBox.setViewBoxOnObjects('mySvg', 'nonexistent', {
+    aspect: 'stretch'
+  });
+} catch (error) {
+  if (error.message.includes('not found')) {
+    console.error('Element ID does not exist');
+  } else if (error.message.includes('valid bounding box')) {
+    console.error('Could not compute bbox (element might be hidden)');
+  }
+}
+```
+
+### Use Cases
+
+1. **Interactive SVG Viewers**: Click an object to zoom/frame it
+2. **Animation Planning**: Use `dryRun` to compute viewBox transitions
+3. **Sprite Sheet Navigation**: Show one sprite at a time
+4. **Document Highlighting**: Frame callouts or annotations
+5. **Responsive SVGs**: Adjust viewBox based on viewport aspect ratio
+6. **SVG Editing Tools**: Pan/zoom to selected objects
+
+---
+
 ## Support
 
 - **GitHub Issues**: https://github.com/Emasoft/SVG-BBOX/issues

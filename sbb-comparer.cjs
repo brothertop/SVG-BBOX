@@ -571,6 +571,22 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
   const svg1Relative = path.relative(process.cwd(), svg1Path);
   const svg2Relative = path.relative(process.cwd(), svg2Path);
 
+  // Get file modification dates
+  const svg1Stats = fs.statSync(svg1Path);
+  const svg2Stats = fs.statSync(svg2Path);
+  const formatDate = (date) => {
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  };
+  const svg1Modified = formatDate(svg1Stats.mtime);
+  const svg2Modified = formatDate(svg2Stats.mtime);
+
   // Format viewBox info
   const formatViewBox = (vb) => {
     if (!vb) return 'none';
@@ -585,11 +601,11 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
   };
 
   const html = `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SVG Comparison Report</title>
+  <title>SVG Comparison Report - SVG-BBOX</title>
   <style>
     * {
       margin: 0;
@@ -597,41 +613,80 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
       box-sizing: border-box;
     }
 
+    /* Light theme (default) */
+    :root, [data-theme="light"] {
+      --bg-primary: #f5f5f5;
+      --bg-secondary: white;
+      --bg-tertiary: #fafafa;
+      --bg-settings: #ecf0f1;
+      --bg-result: #e8f5e9;
+      --text-primary: #333;
+      --text-secondary: #555;
+      --text-tertiary: #2c3e50;
+      --border-primary: #ddd;
+      --border-secondary: #e0e0e0;
+      --border-tertiary: #f0f0f0;
+      --accent-primary: #3498db;
+      --accent-secondary: #4caf50;
+      --accent-result: #2e7d32;
+      --shadow: rgba(0,0,0,0.1);
+    }
+
+    /* Dark theme */
+    [data-theme="dark"] {
+      --bg-primary: #1a1a1a;
+      --bg-secondary: #2d2d2d;
+      --bg-tertiary: #252525;
+      --bg-settings: #3a3a3a;
+      --bg-result: #1e3a1e;
+      --text-primary: #e0e0e0;
+      --text-secondary: #b0b0b0;
+      --text-tertiary: #f0f0f0;
+      --border-primary: #404040;
+      --border-secondary: #505050;
+      --border-tertiary: #353535;
+      --accent-primary: #5dade2;
+      --accent-secondary: #66bb6a;
+      --accent-result: #81c784;
+      --shadow: rgba(0,0,0,0.5);
+    }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      background: #f5f5f5;
+      background: var(--bg-primary);
       padding: 20px;
-      color: #333;
+      color: var(--text-primary);
+      transition: background-color 0.3s, color 0.3s;
     }
 
     .container {
       max-width: 1800px;
       margin: 0 auto;
-      background: white;
+      background: var(--bg-secondary);
       border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 8px var(--shadow);
       padding: 30px;
     }
 
     h1 {
-      color: #2c3e50;
+      color: var(--text-tertiary);
       margin-bottom: 20px;
       font-size: 28px;
       text-align: center;
     }
 
     .settings-summary {
-      background: #ecf0f1;
+      background: var(--bg-settings);
       padding: 20px;
       border-radius: 6px;
       margin-bottom: 30px;
-      border-left: 4px solid #3498db;
+      border-left: 4px solid var(--accent-primary);
     }
 
     .settings-summary h2 {
       font-size: 18px;
       margin-bottom: 12px;
-      color: #2c3e50;
+      color: var(--text-tertiary);
     }
 
     .settings-grid {
@@ -648,11 +703,11 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
     .setting-label {
       font-weight: 600;
       margin-right: 8px;
-      color: #555;
+      color: var(--text-secondary);
     }
 
     .setting-value {
-      color: #2c3e50;
+      color: var(--text-tertiary);
       font-family: 'Courier New', monospace;
     }
 
@@ -664,10 +719,10 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
     }
 
     .svg-panel {
-      border: 1px solid #ddd;
+      border: 1px solid var(--border-primary);
       border-radius: 6px;
       padding: 15px;
-      background: #fafafa;
+      background: var(--bg-tertiary);
     }
 
     .panel-header {
@@ -677,31 +732,31 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
     .panel-title {
       font-size: 16px;
       font-weight: 600;
-      color: #2c3e50;
+      color: var(--text-tertiary);
       margin-bottom: 8px;
     }
 
     .file-link {
       display: inline-block;
-      color: #3498db;
+      color: var(--accent-primary);
       text-decoration: none;
       font-size: 13px;
       word-break: break-all;
       padding: 4px 8px;
-      background: white;
+      background: var(--bg-secondary);
       border-radius: 4px;
-      border: 1px solid #ddd;
+      border: 1px solid var(--border-primary);
       transition: all 0.2s;
     }
 
     .file-link:hover {
-      background: #3498db;
+      background: var(--accent-primary);
       color: white;
     }
 
     .svg-container {
-      background: white;
-      border: 1px solid #ddd;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-primary);
       border-radius: 4px;
       padding: 15px;
       margin: 12px 0;
@@ -715,11 +770,18 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
       max-width: 100%;
       max-height: 500px;
       height: auto;
+      /* Dotted border matching sbb-extractor */
+      border: 1px dashed rgba(0,0,0,0.4);
+      padding: 4px;
+    }
+
+    [data-theme="dark"] .svg-container svg {
+      border-color: rgba(255,255,255,0.3);
     }
 
     .diff-container {
-      background: white;
-      border: 1px solid #ddd;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-primary);
       border-radius: 4px;
       padding: 15px;
       margin: 12px 0;
@@ -737,8 +799,8 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
     }
 
     .info-panel {
-      background: white;
-      border: 1px solid #e0e0e0;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-secondary);
       border-radius: 4px;
       padding: 12px;
       font-size: 13px;
@@ -749,7 +811,7 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
       display: flex;
       justify-content: space-between;
       padding: 6px 0;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--border-tertiary);
     }
 
     .info-row:last-child {
@@ -758,18 +820,18 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
 
     .info-label {
       font-weight: 600;
-      color: #555;
+      color: var(--text-secondary);
     }
 
     .info-value {
-      color: #2c3e50;
+      color: var(--text-tertiary);
       font-family: 'Courier New', monospace;
       text-align: right;
     }
 
     .result-panel {
-      background: #e8f5e9;
-      border: 2px solid #4caf50;
+      background: var(--bg-result);
+      border: 2px solid var(--accent-secondary);
       border-radius: 6px;
       padding: 20px;
       text-align: center;
@@ -779,13 +841,13 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
     .result-percentage {
       font-size: 48px;
       font-weight: 700;
-      color: #2e7d32;
+      color: var(--accent-result);
       margin: 10px 0;
     }
 
     .result-label {
       font-size: 14px;
-      color: #555;
+      color: var(--text-secondary);
       text-transform: uppercase;
       letter-spacing: 1px;
     }
@@ -793,7 +855,81 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
     .result-stats {
       margin-top: 15px;
       font-size: 13px;
-      color: #666;
+      color: var(--text-secondary);
+    }
+
+    /* Header with logo */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid var(--border-primary);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-emoji {
+      font-size: 36px;
+      line-height: 1;
+    }
+
+    .logo-text {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text-tertiary);
+      letter-spacing: -0.5px;
+    }
+
+    /* Theme switcher */
+    .theme-switcher {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg-tertiary);
+      padding: 8px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--border-primary);
+    }
+
+    .theme-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .theme-toggle {
+      background: var(--accent-primary);
+      border: none;
+      border-radius: 16px;
+      padding: 6px 12px;
+      color: white;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 500;
+    }
+
+    .theme-toggle:hover {
+      transform: scale(1.05);
+      opacity: 0.9;
+    }
+
+    .theme-toggle:active {
+      transform: scale(0.95);
+    }
+
+    /* File modification date */
+    .file-modified {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      font-style: italic;
     }
 
     @media (max-width: 1200px) {
@@ -802,9 +938,73 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
       }
     }
   </style>
+  <script>
+    // Theme detection and switching
+    (function() {
+      // Detect system theme preference
+      function getSystemTheme() {
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+          return 'dark';
+        }
+        return 'light';
+      }
+
+      // Get stored theme or use system preference
+      function getInitialTheme() {
+        const stored = localStorage.getItem('svg-bbox-theme');
+        return stored || getSystemTheme();
+      }
+
+      // Apply theme
+      function applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('svg-bbox-theme', theme);
+        updateThemeButton(theme);
+      }
+
+      // Update button text
+      function updateThemeButton(theme) {
+        const button = document.getElementById('theme-toggle');
+        if (button) {
+          button.textContent = theme === 'dark' ? '☀️ Light' : '🌙 Dark';
+        }
+      }
+
+      // Toggle theme
+      window.toggleTheme = function() {
+        const current = document.documentElement.getAttribute('data-theme') || 'light';
+        const next = current === 'dark' ? 'light' : 'dark';
+        applyTheme(next);
+      };
+
+      // Listen for system theme changes
+      if (window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+          if (!localStorage.getItem('svg-bbox-theme')) {
+            applyTheme(e.matches ? 'dark' : 'light');
+          }
+        });
+      }
+
+      // Apply initial theme
+      applyTheme(getInitialTheme());
+    })();
+  </script>
 </head>
 <body>
   <div class="container">
+    <!-- Header with logo and theme switcher -->
+    <div class="header">
+      <div class="logo">
+        <span class="logo-emoji">📦</span>
+        <span class="logo-text">SVG-BBOX</span>
+      </div>
+      <div class="theme-switcher">
+        <span class="theme-label">Theme:</span>
+        <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()">🌙 Dark</button>
+      </div>
+    </div>
+
     <h1>📊 SVG Comparison Report</h1>
 
     <div class="settings-summary">
@@ -839,6 +1039,7 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
         <div class="panel-header">
           <div class="panel-title">📄 SVG 1</div>
           <a href="${svg1Relative}" class="file-link" target="_blank">${svg1Relative}</a>
+          <div class="file-modified">Modified: ${svg1Modified}</div>
         </div>
         <div class="svg-container">
           ${svg1Content}
@@ -868,6 +1069,7 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
         <div class="panel-header">
           <div class="panel-title">📄 SVG 2</div>
           <a href="${svg2Relative}" class="file-link" target="_blank">${svg2Relative}</a>
+          <div class="file-modified">Modified: ${svg2Modified}</div>
         </div>
         <div class="svg-container">
           ${svg2Content}

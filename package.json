@@ -9,6 +9,7 @@
     "sbb-extractor": "./sbb-extractor.cjs",
     "sbb-fix-viewbox": "./sbb-fix-viewbox.cjs",
     "sbb-render": "./sbb-render.cjs",
+    "sbb-comparer": "./sbb-comparer.cjs",
     "sbb-test": "./sbb-test.cjs"
   },
   "files": [
@@ -70,6 +71,7 @@
   },
   "dependencies": {
     "chrome-launcher": "^1.1.2",
+    "pngjs": "^7.0.0",
     "puppeteer": "^24.31.0"
   },
   "devDependencies": {

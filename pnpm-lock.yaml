@@ -11,6 +11,12 @@ importers:
       chrome-launcher:
         specifier: ^1.1.2
         version: 1.2.1
+      pngjs:
+        specifier: ^7.0.0
+        version: 7.0.0
+      puppeteer:
+        specifier: ^24.31.0
+        version: 24.31.0(typescript@5.9.3)
     devDependencies:
       '@eslint/js':
         specifier: ^9.9.0
@@ -42,9 +48,6 @@ importers:
       prettier:
         specifier: ^3.3.0
         version: 3.6.2
-      puppeteer:
-        specifier: ^24.31.0
-        version: 24.31.0(typescript@5.9.3)
       typescript:
         specifier: ^5.5.0
         version: 5.9.3
@@ -1303,6 +1306,10 @@ packages:
     resolution: {integrity: sha512-aFi5B0WovBHTEvpM3DzXTUaeN6eN0qWnTkKx4NQaH4Wvcmc153PdaY2UBdSYKaGYw+UyWXSVyxDUg5DoPEttjw==}
     engines: {node: '>=18'}
     hasBin: true
+
+  pngjs@7.0.0:
+    resolution: {integrity: sha512-LKWqWJRhstyYo9pGvgor/ivk2w94eSjE3RGVuzLGlr3NmD8bf7RcYGze1mNdEHRP6TRP6rMuDHk5t44hnTRyow==}
+    engines: {node: '>=14.19.0'}
 
   postcss@8.5.6:
     resolution: {integrity: sha512-3Ybi1tAuwAP9s0r1UQ2J4n5Y0G05bJkpUIO0/bI9MhwmD70S5aTWbXGBwxHrelT+XM1k6dM0pk+SwNkpTRN7Pg==}
@@ -2911,6 +2918,8 @@ snapshots:
       playwright-core: 1.56.1
     optionalDependencies:
       fsevents: 2.3.2
+
+  pngjs@7.0.0: {}
 
   postcss@8.5.6:
     dependencies:

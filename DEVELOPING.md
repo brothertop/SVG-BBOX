@@ -55,6 +55,7 @@ svg-bbox/
 │   ├── sbb-extractor.cjs      # Extract/export SVG objects
 │   ├── sbb-fix-viewbox.cjs    # Fix missing viewBox/dimensions
 │   ├── sbb-render.cjs         # Render SVG to PNG
+│   ├── sbb-comparer.cjs       # Compare two SVGs visually
 │   └── sbb-test.cjs           # Test harness
 ├── browser-utils.cjs          # Browser launch utilities
 ├── tests/                     # Test suites

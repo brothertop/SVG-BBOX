@@ -67,6 +67,7 @@ All tools work **cross-platform** (Windows, macOS, Linux) and handle **file path
 - [Tools](#-tools)
   - [Library: `SvgVisualBBox.js`](#library-svgvisualbboxjs)
   - [Renderer: `sbb-render.cjs`](#renderer-sbb-rendercjs)
+  - [Comparer: `sbb-comparer.cjs`](#comparer-sbb-comparercjs)
   - [Fixer: `sbb-fix-viewbox.cjs`](#fixer-sbb-fix-viewboxcjs)
   - [BBox Calculator: `sbb-getbbox.cjs`](#bbox-calculator-sbb-getbboxcjs)
   - [Multi-tool: `sbb-extractor.cjs`](#multi-tool-sbb-extractorcjs)
@@ -129,6 +130,7 @@ After installation, the following CLI commands are available:
 - `sbb-extractor` - List, extract, and export SVG objects
 - `sbb-fix-viewbox` - Fix missing viewBox/dimensions
 - `sbb-render` - Render SVG to PNG
+- `sbb-comparer` - Compare two SVGs visually (pixel-by-pixel)
 - `sbb-test` - Test library functions
 
 ### From Source
@@ -380,6 +382,67 @@ node sbb-render.cjs map.svg map.png \
   --margin 10 \
   --background transparent
 ```
+
+---
+
+### Comparer: `sbb-comparer.cjs`
+
+Compare two SVGs visually by rendering them to PNG and performing pixel-by-pixel comparison.
+
+#### Syntax
+
+```bash
+node sbb-comparer.cjs svg1.svg svg2.svg [options]
+```
+
+#### Options
+
+- `--out-diff <file>` - Output diff PNG file (white=different, black=same)
+- `--threshold <1-20>` - Pixel difference threshold (default: 1)
+  - Pixels differ if any RGBA channel differs by more than threshold/256
+- `--alignment <mode>` - How to align the two SVGs
+  - `origin` - Align using respective SVG origins (0,0) [default]
+  - `viewbox-topleft` - Align using top-left corners of viewBox
+  - `viewbox-center` - Align using centers of viewBox
+  - `object:<id>` - Align using coordinates of specified object ID
+  - `custom:<x>,<y>` - Align using custom coordinates
+- `--resolution <mode>` - How to determine render resolution
+  - `viewbox` - Use respective viewBox dimensions [default]
+  - `nominal` - Use respective nominal resolutions
+  - `full` - Use full drawing content (ignore viewBox)
+  - `scale` - Scale to match larger SVG (uniform)
+  - `stretch` - Stretch to match larger SVG (non-uniform)
+  - `clip` - Clip to match smaller SVG
+- `--meet-rule <rule>` - Aspect ratio rule for 'scale' mode (default: xMidYMid)
+- `--slice-rule <rule>` - Aspect ratio rule for 'clip' mode (default: xMidYMid)
+- `--json` - Output results as JSON
+- `--verbose` - Show detailed progress
+
+#### Examples
+
+```bash
+# Basic comparison
+node sbb-comparer.cjs original.svg modified.svg
+
+# Compare with custom threshold (more tolerant)
+node sbb-comparer.cjs v1.svg v2.svg --threshold 5 --out-diff changes.png
+
+# Align by viewBox centers, scale to match
+node sbb-comparer.cjs icon1.svg icon2.svg \
+  --alignment viewbox-center \
+  --resolution scale
+
+# JSON output for automation
+node sbb-comparer.cjs test1.svg test2.svg --json
+```
+
+#### Output
+
+Returns:
+- Difference percentage (0-100%)
+- Total pixels compared
+- Number of different pixels
+- Diff PNG image (white pixels = different, black = identical)
 
 ---
 

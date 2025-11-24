@@ -6,7 +6,7 @@
   "main": "./SvgVisualBBox.js",
   "bin": {
     "sbb-getbbox": "./sbb-getbbox.cjs",
-    "sbb-export": "./sbb-export.cjs",
+    "sbb-extractor": "./sbb-extractor.cjs",
     "sbb-fix-viewbox": "./sbb-fix-viewbox.cjs",
     "sbb-render": "./sbb-render.cjs",
     "sbb-test": "./sbb-test.cjs"

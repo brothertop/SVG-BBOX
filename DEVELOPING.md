@@ -52,7 +52,7 @@ svg-bbox/
 ├── SvgVisualBBox.js           # Core library (browser-side)
 ├── sbb-*.cjs                  # CLI tools (Node.js)
 │   ├── sbb-getbbox.cjs        # Compute visual bboxes
-│   ├── sbb-export.cjs         # Extract/export SVG objects
+│   ├── sbb-extractor.cjs      # Extract/export SVG objects
 │   ├── sbb-fix-viewbox.cjs    # Fix missing viewBox/dimensions
 │   ├── sbb-render.cjs         # Render SVG to PNG
 │   └── sbb-test.cjs           # Test harness

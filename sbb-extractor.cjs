@@ -161,7 +161,7 @@ const { getVersion, printVersion, hasVersionFlag } = require('./version.cjs');
 function printHelp() {
   console.log(`
 ╔════════════════════════════════════════════════════════════════════════════╗
-║ sbb-export.cjs - SVG Object Extraction & Manipulation Toolkit     ║
+║ sbb-extractor.cjs - SVG Object Extraction & Manipulation Toolkit     ║
 ╚════════════════════════════════════════════════════════════════════════════╝
 
 DESCRIPTION:
@@ -169,14 +169,14 @@ DESCRIPTION:
   with visual bbox calculation and interactive HTML catalog.
 
 USAGE:
-  node sbb-export.cjs input.svg <mode> [options]
+  node sbb-extractor.cjs input.svg <mode> [options]
 
 ═══════════════════════════════════════════════════════════════════════════════
 
 MODE 1: LIST OBJECTS (--list)
   Generate interactive HTML catalog with visual previews
 
-  node sbb-export.cjs input.svg --list \\
+  node sbb-extractor.cjs input.svg --list \\
     [--assign-ids] [--out-fixed fixed.svg] \\
     [--out-html list.html] [--auto-open] [--json]
 
@@ -198,14 +198,14 @@ MODE 1: LIST OBJECTS (--list)
     --json              Output JSON instead of human-readable format
 
   Example:
-    node sbb-export.cjs sprites.svg --list --assign-ids
+    node sbb-extractor.cjs sprites.svg --list --assign-ids
 
 ═══════════════════════════════════════════════════════════════════════════════
 
 MODE 2: RENAME IDS (--rename)
   Apply ID renaming from JSON mapping file
 
-  node sbb-export.cjs input.svg --rename mapping.json output.svg [--json]
+  node sbb-extractor.cjs input.svg --rename mapping.json output.svg [--json]
 
   What it does:
   • Validates ID syntax (^[A-Za-z_][A-Za-z0-9_.:-]*$)
@@ -228,14 +228,14 @@ MODE 2: RENAME IDS (--rename)
     • Object: { "oldId": "newId" }
 
   Example:
-    node sbb-export.cjs sprites.svg --rename map.json renamed.svg
+    node sbb-extractor.cjs sprites.svg --rename map.json renamed.svg
 
 ═══════════════════════════════════════════════════════════════════════════════
 
 MODE 3: EXTRACT OBJECT (--extract)
   Extract single object to standalone SVG
 
-  node sbb-export.cjs input.svg --extract objectId output.svg \\
+  node sbb-extractor.cjs input.svg --extract objectId output.svg \\
     [--margin N] [--include-context] [--json]
 
   Two behaviors:
@@ -255,14 +255,14 @@ MODE 3: EXTRACT OBJECT (--extract)
     --json                Output JSON metadata
 
   Example:
-    node sbb-export.cjs drawing.svg --extract logo logo.svg --margin 10
+    node sbb-extractor.cjs drawing.svg --extract logo logo.svg --margin 10
 
 ═══════════════════════════════════════════════════════════════════════════════
 
 MODE 4: EXPORT ALL OBJECTS (--export-all)
   Export each object as separate SVG file
 
-  node sbb-export.cjs input.svg --export-all out-dir \\
+  node sbb-extractor.cjs input.svg --export-all out-dir \\
     [--margin N] [--export-groups] [--json]
 
   What it does:
@@ -279,7 +279,7 @@ MODE 4: EXPORT ALL OBJECTS (--export-all)
     --json                Output JSON list of exported files
 
   Example:
-    node sbb-export.cjs sprites.svg --export-all ./sprites --margin 2
+    node sbb-extractor.cjs sprites.svg --export-all ./sprites --margin 2
 
   Perfect for sprite sheets! Extracts each sprite/icon automatically.
 
@@ -302,17 +302,17 @@ SPRITE SHEET DETECTION:
 
 COMPLETE WORKFLOW:
   1. List & browse objects:
-     node sbb-export.cjs sprites.svg --list --assign-ids
+     node sbb-extractor.cjs sprites.svg --list --assign-ids
 
   2. Open HTML, use filters, rename objects interactively
 
   3. Save JSON mapping from HTML page
 
   4. Apply renaming:
-     node sbb-export.cjs sprites.ids.svg --rename map.json renamed.svg
+     node sbb-extractor.cjs sprites.ids.svg --rename map.json renamed.svg
 
   5. Extract individual objects or export all:
-     node sbb-export.cjs renamed.svg --export-all ./icons --margin 5
+     node sbb-extractor.cjs renamed.svg --export-all ./icons --margin 5
 
 `);
 }
@@ -2202,13 +2202,13 @@ async function renameIds(inputPath, renameJsonPath, renameOutPath, jsonMode) {
 
   // Handle --version flag
   if (opts.version) {
-    printVersion('sbb-export');
+    printVersion('sbb-extractor');
     process.exit(0);
   }
 
   // Display version on execution (but not for help)
   if (!opts.help && opts.mode) {
-    console.log(`sbb-export v${getVersion()} | svg-bbox toolkit\n`);
+    console.log(`sbb-extractor v${getVersion()} | svg-bbox toolkit\n`);
   }
 
   try {

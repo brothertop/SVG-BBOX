@@ -69,7 +69,7 @@ All tools work **cross-platform** (Windows, macOS, Linux) and handle **file path
   - [Renderer: `sbb-render.cjs`](#renderer-sbb-rendercjs)
   - [Fixer: `sbb-fix-viewbox.cjs`](#fixer-sbb-fix-viewboxcjs)
   - [BBox Calculator: `sbb-getbbox.cjs`](#bbox-calculator-sbb-getbboxcjs)
-  - [Multi-tool: `sbb-export.cjs`](#multi-tool-sbb-exportcjs)
+  - [Multi-tool: `sbb-extractor.cjs`](#multi-tool-sbb-extractorcjs)
 - [Renaming workflow with the HTML viewer](#-renaming-workflow-with-the-html-viewer)
 - [Troubleshooting](#-troubleshooting)
 - [Contributing](#-contributing)
@@ -126,7 +126,7 @@ yarn add svg-bbox
 
 After installation, the following CLI commands are available:
 - `sbb-getbbox` - Compute visual bounding boxes
-- `sbb-export` - List, extract, and export SVG objects
+- `sbb-extractor` - List, extract, and export SVG objects
 - `sbb-fix-viewbox` - Fix missing viewBox/dimensions
 - `sbb-render` - Render SVG to PNG
 - `sbb-test` - Test library functions
@@ -237,7 +237,7 @@ node sbb-fix-viewbox.cjs broken.svg fixed/broken.fixed.svg
 ### List all objects visually & generate a rename JSON
 
 ```bash
-node sbb-export.cjs sprites.svg --list --assign-ids --out-fixed sprites.ids.svg
+node sbb-extractor.cjs sprites.svg --list --assign-ids --out-fixed sprites.ids.svg
 ```
 
 This produces:
@@ -252,7 +252,7 @@ Open `sprites.objects.html` in a browser to see previews and define new ID names
 ### Extract one object as its own SVG
 
 ```bash
-node sbb-export.cjs sprites.renamed.svg \
+node sbb-extractor.cjs sprites.renamed.svg \
   --extract icon_save icon_save.svg \
   --margin 5
 ```
@@ -264,7 +264,7 @@ This creates `icon_save.svg` sized exactly to the **visual bounds** of `#icon_sa
 ### Export all objects as individual SVGs
 
 ```bash
-node sbb-export.cjs sprites.renamed.svg \
+node sbb-extractor.cjs sprites.renamed.svg \
   --export-all exported \
   --export-groups \
   --margin 2
@@ -525,14 +525,14 @@ SVG: path/to/file.svg
 
 ---
 
-### Multi-tool: `sbb-export.cjs`
+### Multi-tool: `sbb-extractor.cjs`
 
 A versatile tool for **listing, renaming, extracting, and exporting** SVG objects.
 
 #### 1️⃣ List mode — `--list`
 
 ```bash
-node sbb-export.cjs input.svg --list \
+node sbb-extractor.cjs input.svg --list \
   [--assign-ids --out-fixed fixed.svg] \
   [--out-html list.html] \
   [--json]
@@ -593,7 +593,7 @@ node sbb-export.cjs input.svg --list \
 Apply renaming rules from a JSON mapping.
 
 ```bash
-node sbb-export.cjs input.svg --rename mapping.json output.svg [--json]
+node sbb-extractor.cjs input.svg --rename mapping.json output.svg [--json]
 ```
 
 Accepted JSON forms:
@@ -617,7 +617,7 @@ Accepted JSON forms:
 Extract a **single object** into its own SVG.
 
 ```bash
-node sbb-export.cjs input.svg --extract someId output.svg \
+node sbb-extractor.cjs input.svg --extract someId output.svg \
   [--margin N] \
   [--include-context] \
   [--json]
@@ -642,7 +642,7 @@ Two modes:
 Export every object (and optionally groups) as separate SVGs.
 
 ```bash
-node sbb-export.cjs input.svg --export-all out-dir \
+node sbb-extractor.cjs input.svg --export-all out-dir \
   [--margin N] \
   [--export-groups] \
   [--json]
@@ -672,7 +672,7 @@ A typical end‑to‑end workflow:
 1. **Analyze the SVG & give everything an ID**
 
    ```bash
-   node sbb-export.cjs sprites.svg \
+   node sbb-extractor.cjs sprites.svg \
      --list \
      --assign-ids \
      --out-fixed sprites.ids.svg
@@ -705,7 +705,7 @@ A typical end‑to‑end workflow:
 5. **Apply renaming to an SVG**
 
    ```bash
-   node sbb-export.cjs sprites.ids.svg \
+   node sbb-extractor.cjs sprites.ids.svg \
      --rename sprites.rename.json \
      sprites.renamed.svg
    ```
@@ -714,11 +714,11 @@ A typical end‑to‑end workflow:
 
    ```bash
    # One object
-   node sbb-export.cjs sprites.renamed.svg \
+   node sbb-extractor.cjs sprites.renamed.svg \
      --extract icon_save icon_save.svg --margin 5
 
    # All objects
-   node sbb-export.cjs sprites.renamed.svg \
+   node sbb-extractor.cjs sprites.renamed.svg \
      --export-all exported --export-groups --margin 2
    ```
 

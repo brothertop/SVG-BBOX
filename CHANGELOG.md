@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial public release
 - Core library `SvgVisualBBox.js` with visual bbox computation
 - CLI tool `sbb-getbbox` for computing visual bounding boxes
-- CLI tool `sbb-export` for listing, extracting, and exporting SVG objects
+- CLI tool `sbb-extractor` for listing, extracting, and exporting SVG objects
 - CLI tool `sbb-fix-viewbox` for fixing missing viewBox/dimensions
 - CLI tool `sbb-render` for rendering SVG to PNG
 - CLI tool `sbb-test` for testing library functions

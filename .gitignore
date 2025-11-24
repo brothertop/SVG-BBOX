@@ -16,6 +16,8 @@ playwright-report/
 *.ids.svg
 *.fixed.svg
 *.rename.json
+*_diff.png
+*_vs_*.png
 
 # Vitest
 vitest.config.js.timestamp-*

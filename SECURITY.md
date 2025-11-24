@@ -204,23 +204,36 @@ See `docs_dev/security-audit-2025-11-24.md` (if available) for complete details.
 - Created `lib/cli-utils.cjs` for standardized CLI tooling
 - Path validation (`validateFilePath`, `validateOutputPath`)
 - SVG sanitization (`readSVGFileSafe`, `sanitizeSVGContent`)
+  - Fixed event handler removal regex (changed `\son\w+` to `\s+on\w+`)
 - JSON validation (`readJSONFileSafe`, `validateRenameMapping`)
 - Secure temp file handling (`createSecureTempDir`)
 - Custom error classes for better error handling
+- **sbb-getbbox.cjs**: All 20 security fixes applied and tested
+  - Path traversal protection ✅
+  - Command injection protection ✅
+  - SVG sanitization ✅
+  - File extension validation ✅
+  - Resource cleanup ✅
+  - Timeout handling ✅
 
 ⏳ **In Progress:**
-- Applying security fixes to all 6 CLI tools
-- Adding comprehensive security tests
-- Updating all documentation
+- Applying security fixes to remaining 5 CLI tools:
+  - sbb-extractor.cjs (2255 lines, 4 modes) - 0% complete
+  - sbb-fix-viewbox.cjs - 0% complete
+  - sbb-render.cjs - 0% complete
+  - sbb-comparer.cjs - 0% complete
+  - sbb-test.cjs - 0% complete
 
 📋 **Planned:**
+- Adding comprehensive security tests
+- Updating all tool documentation
 - Refactoring duplicate code across CLI tools
 - Adding input size limits everywhere
-- Implementing proper timeout handling
 - Breaking up large functions (>100 lines)
 - Adding comprehensive JSDoc
 
-**Estimated Completion:** 5-7 weeks (200-270 hours)
+**Current Status:** 1/6 CLI tools secured (16.7% complete)
+**Estimated Completion:** 20-25 hours remaining for CLI tools + 10-15 hours for tests/docs = 30-40 hours total
 
 ## Known Limitations
 

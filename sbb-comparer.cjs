@@ -89,6 +89,10 @@ OPTIONS:
   --slice-rule <rule>       Aspect ratio rule for 'clip' mode (default: xMidYMid)
     (same options as --meet-rule)
 
+  --batch <file>            Batch comparison mode using tab-separated file
+                            Format: svg1_path.svg<TAB>svg2_path.svg (one pair per line)
+                            Output will be in JSON format with results array
+
   --json                    Output results as JSON
   --verbose                 Show detailed progress information
   --help                    Show this help
@@ -114,6 +118,9 @@ EXAMPLES:
 
   # JSON output for automation
   node sbb-comparer.cjs test1.svg test2.svg --json
+
+  # Batch comparison from tab-separated file
+  node sbb-comparer.cjs --batch comparisons.txt
 
 OUTPUT:
   Returns:
@@ -150,7 +157,8 @@ function parseArgs(argv) {
     meetRule: 'xMidYMid',
     sliceRule: 'xMidYMid',
     json: false,
-    verbose: false
+    verbose: false,
+    batch: null  // Path to batch comparison file
   };
 
   for (let i = 2; i < argv.length; i++) {
@@ -196,6 +204,8 @@ function parseArgs(argv) {
       args.meetRule = argv[++i];
     } else if (arg === '--slice-rule' && i + 1 < argv.length) {
       args.sliceRule = argv[++i];
+    } else if (arg === '--batch' && i + 1 < argv.length) {
+      args.batch = argv[++i];
     } else if (!arg.startsWith('-')) {
       if (!args.svg1) {
         args.svg1 = arg;
@@ -212,20 +222,77 @@ function parseArgs(argv) {
   }
 
   // Validate required arguments
-  if (!args.svg1 || !args.svg2) {
-    console.error('Error: Two SVG files required');
+  // In batch mode, we don't need svg1/svg2
+  if (!args.batch && (!args.svg1 || !args.svg2)) {
+    console.error('Error: Two SVG files required (or use --batch <file>)');
     console.error('Usage: node sbb-comparer.cjs svg1.svg svg2.svg [options]');
+    console.error('   or: node sbb-comparer.cjs --batch <file> [options]');
     process.exit(2);
   }
 
-  // Set default output diff file
-  if (!args.outDiff) {
+  // Batch mode requires only --batch, no individual SVG files
+  if (args.batch && (args.svg1 || args.svg2)) {
+    console.error('Error: --batch mode cannot be combined with individual SVG file arguments');
+    process.exit(2);
+  }
+
+  // Set default output diff file (only for non-batch mode)
+  if (!args.batch && !args.outDiff) {
     const base1 = path.basename(args.svg1, path.extname(args.svg1));
     const base2 = path.basename(args.svg2, path.extname(args.svg2));
     args.outDiff = `${base1}_vs_${base2}_diff.png`;
   }
 
   return args;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BATCH FILE PROCESSING
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Read and parse batch comparison file (tab-separated: svg1\tsvg2)
+ * Returns array of {svg1, svg2} pairs
+ */
+function readBatchFile(batchFilePath) {
+  // SECURITY: Validate batch file path
+  const safeBatchPath = validateFilePath(batchFilePath, {
+    requiredExtensions: ['.txt'],
+    mustExist: true
+  });
+
+  const content = fs.readFileSync(safeBatchPath, 'utf-8');
+  const lines = content.split('\n').filter(line => line.trim() && !line.trim().startsWith('#'));
+
+  const pairs = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    const parts = line.split('\t');
+
+    if (parts.length !== 2) {
+      throw new ValidationError(
+        `Invalid batch file format at line ${i + 1}: expected 2 tab-separated columns, got ${parts.length}. ` +
+        `Format: svg1_path.svg<TAB>svg2_path.svg`
+      );
+    }
+
+    const svg1 = parts[0].trim();
+    const svg2 = parts[1].trim();
+
+    if (!svg1 || !svg2) {
+      throw new ValidationError(
+        `Invalid batch file format at line ${i + 1}: empty SVG path`
+      );
+    }
+
+    pairs.push({ svg1, svg2 });
+  }
+
+  if (pairs.length === 0) {
+    throw new ValidationError('Batch file is empty or contains no valid comparison pairs');
+  }
+
+  return pairs;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1358,34 +1425,96 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// SINGLE COMPARISON
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Perform a single SVG comparison
+ * Returns comparison result object
+ */
+async function performSingleComparison(svg1Path, svg2Path, args, browser) {
+  // SECURITY: Validate input SVG files
+  const safeSvg1Path = validateFilePath(svg1Path, {
+    requiredExtensions: ['.svg'],
+    mustExist: true
+  });
+  const safeSvg2Path = validateFilePath(svg2Path, {
+    requiredExtensions: ['.svg'],
+    mustExist: true
+  });
+
+  // Set default output diff file if not provided
+  let outDiff = args.outDiff;
+  if (!outDiff) {
+    const base1 = path.basename(svg1Path, path.extname(svg1Path));
+    const base2 = path.basename(svg2Path, path.extname(svg2Path));
+    outDiff = `${base1}_vs_${base2}_diff.png`;
+  }
+
+  if (args.verbose && !args.json) {
+    console.log(`Comparing: ${safeSvg1Path} vs ${safeSvg2Path}`);
+  }
+
+  // Calculate render parameters
+  const params = await calculateRenderParams(safeSvg1Path, safeSvg2Path, args, browser);
+
+  // Store SVG analysis for HTML report
+  const svgAnalysis1 = await analyzeSvg(safeSvg1Path, browser);
+  const svgAnalysis2 = await analyzeSvg(safeSvg2Path, browser);
+
+  // Render SVGs to PNG
+  const tempDir = path.join(process.cwd(), '.tmp-compare');
+  if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir, { recursive: true });
+  }
+
+  const png1Path = path.join(tempDir, `svg1_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.png`);
+  const png2Path = path.join(tempDir, `svg2_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.png`);
+
+  try {
+    await renderSvgToPng(safeSvg1Path, png1Path, params.svg1.width, params.svg1.height, browser);
+    await renderSvgToPng(safeSvg2Path, png2Path, params.svg2.width, params.svg2.height, browser);
+
+    // Compare images
+    const result = await compareImages(png1Path, png2Path, outDiff, args.threshold);
+
+    // Clean up temp files
+    fs.unlinkSync(png1Path);
+    fs.unlinkSync(png2Path);
+
+    return {
+      svg1: svg1Path,
+      svg2: svg2Path,
+      totalPixels: result.totalPixels,
+      differentPixels: result.differentPixels,
+      diffPercentage: parseFloat(result.diffPercentage),
+      threshold: args.threshold,
+      diffImage: outDiff,
+      svgAnalysis1,
+      svgAnalysis2
+    };
+  } catch (error) {
+    // Clean up temp files on error
+    try {
+      if (fs.existsSync(png1Path)) fs.unlinkSync(png1Path);
+      if (fs.existsSync(png2Path)) fs.unlinkSync(png2Path);
+    } catch (cleanupErr) {
+      // Ignore cleanup errors
+    }
+    throw error;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MAIN
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function main() {
   const args = parseArgs(process.argv);
 
-  // Display version (but not in JSON mode)
-  if (!args.json) {
+  // Display version (but not in JSON mode or batch mode)
+  if (!args.json && !args.batch) {
     printInfo(`sbb-comparer v${getVersion()} | svg-bbox toolkit\n`);
-  }
-
-  // SECURITY: Validate input SVG files
-  const safeSvg1Path = validateFilePath(args.svg1, {
-    requiredExtensions: ['.svg'],
-    mustExist: true
-  });
-  const safeSvg2Path = validateFilePath(args.svg2, {
-    requiredExtensions: ['.svg'],
-    mustExist: true
-  });
-
-  if (args.verbose && !args.json) {
-    console.log('Starting SVG comparison...');
-    console.log(`SVG 1: ${safeSvg1Path}`);
-    console.log(`SVG 2: ${safeSvg2Path}`);
-    console.log(`Alignment: ${args.alignment}`);
-    console.log(`Resolution: ${args.resolution}`);
-    console.log(`Threshold: ${args.threshold}/256`);
   }
 
   let browser = null;
@@ -1397,83 +1526,123 @@ async function main() {
       timeout: BROWSER_TIMEOUT_MS
     });
 
-    // Calculate render parameters
-    if (args.verbose && !args.json) {
-      console.log('Analyzing SVG files...');
+    // BATCH MODE: Process multiple comparisons from file
+    if (args.batch) {
+      const pairs = readBatchFile(args.batch);
+
+      if (args.verbose) {
+        console.log(`Processing ${pairs.length} comparison pairs from ${args.batch}`);
+      }
+
+      const results = [];
+      for (let i = 0; i < pairs.length; i++) {
+        const { svg1, svg2 } = pairs[i];
+
+        if (args.verbose) {
+          console.log(`[${i + 1}/${pairs.length}] Comparing ${svg1} vs ${svg2}`);
+        }
+
+        try {
+          const result = await performSingleComparison(svg1, svg2, args, browser);
+          results.push(result);
+        } catch (error) {
+          // In batch mode, continue processing other pairs even if one fails
+          results.push({
+            svg1,
+            svg2,
+            error: error.message,
+            failed: true
+          });
+
+          if (args.verbose) {
+            console.error(`  Error: ${error.message}`);
+          }
+        }
+      }
+
+      // Clean up temp directory if it exists and is empty
+      const tempDir = path.join(process.cwd(), '.tmp-compare');
+      if (fs.existsSync(tempDir)) {
+        try {
+          fs.rmdirSync(tempDir);
+        } catch (err) {
+          // Directory not empty or other error - ignore
+        }
+      }
+
+      // Output batch results as JSON
+      console.log(JSON.stringify({
+        batchFile: args.batch,
+        totalComparisons: pairs.length,
+        successful: results.filter(r => !r.failed).length,
+        failed: results.filter(r => r.failed).length,
+        results
+      }, null, 2));
+
+      return;
     }
-    const params = await calculateRenderParams(safeSvg1Path, safeSvg2Path, args, browser);
 
-    // Store SVG analysis for HTML report
-    const svgAnalysis1 = await analyzeSvg(safeSvg1Path, browser);
-    const svgAnalysis2 = await analyzeSvg(safeSvg2Path, browser);
+    // SINGLE COMPARISON MODE
+    if (args.verbose && !args.json) {
+      console.log('Starting SVG comparison...');
+      console.log(`SVG 1: ${args.svg1}`);
+      console.log(`SVG 2: ${args.svg2}`);
+      console.log(`Alignment: ${args.alignment}`);
+      console.log(`Resolution: ${args.resolution}`);
+      console.log(`Threshold: ${args.threshold}/256`);
+    }
 
-    // Render SVGs to PNG
+    const result = await performSingleComparison(args.svg1, args.svg2, args, browser);
+
+    // Clean up temp directory if it exists and is empty
     const tempDir = path.join(process.cwd(), '.tmp-compare');
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
+    if (fs.existsSync(tempDir)) {
+      try {
+        fs.rmdirSync(tempDir);
+      } catch (err) {
+        // Directory not empty or other error - ignore
+      }
     }
-
-    const png1Path = path.join(tempDir, 'svg1.png');
-    const png2Path = path.join(tempDir, 'svg2.png');
-
-    if (args.verbose && !args.json) {
-      console.log('Rendering SVG 1 to PNG...');
-    }
-    await renderSvgToPng(safeSvg1Path, png1Path, params.svg1.width, params.svg1.height, browser);
-
-    if (args.verbose && !args.json) {
-      console.log('Rendering SVG 2 to PNG...');
-    }
-    await renderSvgToPng(safeSvg2Path, png2Path, params.svg2.width, params.svg2.height, browser);
-
-    // Compare images
-    if (args.verbose && !args.json) {
-      console.log('Comparing images...');
-    }
-    const result = await compareImages(png1Path, png2Path, args.outDiff, args.threshold);
-
-    // Clean up temp files
-    fs.unlinkSync(png1Path);
-    fs.unlinkSync(png2Path);
-    fs.rmdirSync(tempDir);
 
     // Output results
     if (args.json) {
       console.log(JSON.stringify({
-        svg1: args.svg1,
-        svg2: args.svg2,
+        svg1: result.svg1,
+        svg2: result.svg2,
         totalPixels: result.totalPixels,
         differentPixels: result.differentPixels,
-        diffPercentage: parseFloat(result.diffPercentage),
-        threshold: args.threshold,
-        diffImage: args.outDiff
+        diffPercentage: result.diffPercentage,
+        threshold: result.threshold,
+        diffImage: result.diffImage
       }, null, 2));
     } else {
       console.log('\n╔════════════════════════════════════════════════════════════════════════╗');
       console.log('║ COMPARISON RESULTS                                                     ║');
       console.log('╚════════════════════════════════════════════════════════════════════════╝\n');
-      console.log(`  SVG 1:              ${args.svg1}`);
-      console.log(`  SVG 2:              ${args.svg2}`);
+      console.log(`  SVG 1:              ${result.svg1}`);
+      console.log(`  SVG 2:              ${result.svg2}`);
       console.log(`  Total pixels:       ${result.totalPixels.toLocaleString()}`);
       console.log(`  Different pixels:   ${result.differentPixels.toLocaleString()}`);
       console.log(`  Difference:         ${result.diffPercentage}%`);
-      console.log(`  Threshold:          ${args.threshold}/256`);
-      console.log(`  Diff image:         ${args.outDiff}\n`);
-    }
+      console.log(`  Threshold:          ${result.threshold}/256`);
+      console.log(`  Diff image:         ${result.diffImage}\n`);
 
-    // Generate HTML report
-    if (!args.json) {
+      // Generate HTML report
       if (args.verbose) {
         console.log('Generating HTML report...');
       }
       const htmlPath = await generateHtmlReport(
-        safeSvg1Path,
-        safeSvg2Path,
-        args.outDiff,
-        result,
+        result.svg1,
+        result.svg2,
+        result.diffImage,
+        {
+          totalPixels: result.totalPixels,
+          differentPixels: result.differentPixels,
+          diffPercentage: result.diffPercentage.toFixed(2)
+        },
         args,
-        svgAnalysis1,
-        svgAnalysis2
+        result.svgAnalysis1,
+        result.svgAnalysis2
       );
 
       printSuccess(`HTML report: ${htmlPath}`);

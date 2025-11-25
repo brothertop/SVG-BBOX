@@ -314,22 +314,39 @@ async function runComparison(originalPath, convertedPath, jsonMode) {
 
 async function convertTextToPaths(inkscapePath, inputPath, outputPath, options) {
   // Build Inkscape command arguments
+  // Based on Inkscape CLI documentation and Python reference implementation
   const inkscapeArgs = [
+    // Export as SVG format
     '--export-type=svg',
+
+    // Export as plain SVG (no Inkscape-specific extensions)
     '--export-plain-svg',
+
+    // Convert all text elements to path outlines
     '--export-text-to-path',
   ];
 
   // Add optional flags
   if (options.overwrite) {
+    // Overwrite existing output file without prompting
     inkscapeArgs.push('--export-overwrite');
   }
 
   if (!options.preserveBaseline) {
+    // Use 'no-convert-text-baseline-spacing' to do not automatically fix text baselines in legacy
+    // (pre-0.92) files on opening. Inkscape 0.92 adopts the CSS standard definition for the
+    // 'line-height' property, which differs from past versions. By default, the line height values
+    // in files created prior to Inkscape 0.92 will be adjusted on loading to preserve the intended
+    // text layout. This command line option will skip that adjustment.
     inkscapeArgs.push('--no-convert-text-baseline-spacing');
   }
 
   if (!options.convertDpi) {
+    // Choose 'convert-dpi-method' method to rescale legacy (pre-0.92) files which render slightly
+    // smaller due to the switch from 90 DPI to 96 DPI when interpreting lengths expressed in units
+    // of pixels. Possible values are "none" (no change, document will render at 94% of its original
+    // size), "scale-viewbox" (document will be rescaled globally, individual lengths will stay
+    // untouched) and "scale-document" (each length will be re-scaled individually).
     inkscapeArgs.push('--convert-dpi-method=none');
   }
 

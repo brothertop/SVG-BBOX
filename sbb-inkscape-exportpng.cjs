@@ -374,62 +374,111 @@ async function exportPngWithInkscape(inputPath, outputPath, options = {}) {
   } = options;
 
   // Build Inkscape command arguments
+  // Based on Inkscape CLI documentation and Python reference implementation
+  // Uncomment the optional parameters when you need them. Do not remove the comments.
   const inkscapeArgs = [
+    // Export as PNG format
     '--export-type=png',
+
+    // Overwrite existing output file without prompting
     '--export-overwrite',
+
+    // Use 'no-convert-text-baseline-spacing' to do not automatically fix text baselines in legacy
+    // (pre-0.92) files on opening. Inkscape 0.92 adopts the CSS standard definition for the
+    // 'line-height' property, which differs from past versions. By default, the line height values
+    // in files created prior to Inkscape 0.92 will be adjusted on loading to preserve the intended
+    // text layout. This command line option will skip that adjustment.
     '--no-convert-text-baseline-spacing',
+
+    // Choose 'convert-dpi-method' method to rescale legacy (pre-0.92) files which render slightly
+    // smaller due to the switch from 90 DPI to 96 DPI when interpreting lengths expressed in units
+    // of pixels. Possible values are "none" (no change, document will render at 94% of its original
+    // size), "scale-viewbox" (document will be rescaled globally, individual lengths will stay
+    // untouched) and "scale-document" (each length will be re-scaled individually).
     `--convert-dpi-method=${convertDpiMethod}`,
+
+    // Output filename
     `--export-filename=${safeOutputPath}`
   ];
 
-  // Export area mode
+  // Export area mode (optional)
   if (areaPage) {
+    // Export the full SVG page/viewBox area
     inkscapeArgs.push('--export-area-page');
   } else if (areaDrawing) {
+    // By default the exported area is the viewbox, but if 'export-area-drawing' option is used
+    // the exported area will be the whole drawing, i.e. the bounding box of all objects of the
+    // document (or of the exported object if --export-id is used). With this option, the exported
+    // image will display all the visible objects of the document without margins or cropping.
     inkscapeArgs.push('--export-area-drawing');
   }
 
-  // Area snap
+  // Area snap (optional)
   if (areaSnap) {
+    // The option 'export-area-snap' will snap the export area outwards to the nearest integer px
+    // values. If you are using the default export resolution of 96 dpi and your graphics are
+    // pixel-snapped to minimize antialiasing, this switch allows you to preserve this alignment
+    // even if you are exporting some object's bounding box (with --export-area-drawing) which is
+    // itself not pixel-aligned.
     inkscapeArgs.push('--export-area-snap');
   }
 
-  // Export specific object by ID
+  // Export specific object by ID (optional)
   if (objectId) {
+    // Specify the ID of the object to export
     inkscapeArgs.push(`--export-id=${objectId}`);
+    // Export only the specified object (no other objects)
     inkscapeArgs.push('--export-id-only');
   }
 
-  // Dimensions and DPI
+  // Dimensions and DPI (optional)
   if (dpi !== null) {
+    // The resolution used for PNG export. It is also used for fallback rasterization of filtered
+    // objects when exporting to PS, EPS, or PDF (unless you specify --export-ignore-filters to
+    // suppress rasterization). The default is 96 dpi, which corresponds to 1 SVG user unit (px,
+    // also called "user unit") exporting to 1 bitmap pixel. This value overrides the DPI hint if
+    // used with --export-use-hints.
     inkscapeArgs.push(`--export-dpi=${dpi}`);
   }
   if (width !== null) {
+    // Export width in pixels
     inkscapeArgs.push(`--export-width=${width}`);
   }
   if (height !== null) {
+    // Export height in pixels
     inkscapeArgs.push(`--export-height=${height}`);
   }
   if (margin !== null) {
+    // Margin around export area in pixels
     inkscapeArgs.push(`--export-margin=${margin}`);
   }
 
-  // Color mode, compression, antialiasing
+  // Color mode, compression, antialiasing (optional)
   if (colorMode !== null) {
+    // Set the color mode (bit depth and color type) for exported bitmaps
+    // (Gray_1/Gray_2/Gray_4/Gray_8/Gray_16/RGB_8/RGB_16/GrayAlpha_8/GrayAlpha_16/RGBA_8/RGBA_16)
     inkscapeArgs.push(`--export-png-color-mode=${colorMode}`);
   }
   if (compression !== null) {
+    // Compression LEVEL: (0 to 9); default is 6.
     inkscapeArgs.push(`--export-png-compression=${compression}`);
   }
   if (antialias !== null) {
+    // Antialiasing LEVEL: (0 to 3); default is 2.
     inkscapeArgs.push(`--export-png-antialias=${antialias}`);
   }
 
-  // Background color and opacity
+  // Background color and opacity (optional)
   if (background !== null) {
+    // Background color of exported PNG. This may be any SVG supported color string,
+    // for example "#ff007f" or "rgb(255, 0, 128)".
     inkscapeArgs.push(`--export-background=${background}`);
   }
   if (backgroundOpacity !== null) {
+    // Opacity of the background of exported PNG. This may be a value either between 0.0 and 1.0
+    // (0.0 meaning full transparency, 1.0 full opacity) or greater than 1 up to 255 (255 meaning
+    // full opacity). If not set but the --export-background option is used, then the value of 255
+    // (full opacity) will be used.
     inkscapeArgs.push(`--export-background-opacity=${backgroundOpacity}`);
   } else if (background !== null) {
     // Default to fully opaque if background set but opacity not specified

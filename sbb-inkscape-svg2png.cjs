@@ -264,29 +264,59 @@ async function convertSvgToPngWithInkscape(inputPath, outputPath, options = {}) 
   } = options;
 
   // Build Inkscape command arguments
+  // Based on Inkscape CLI documentation and Python reference implementation
   const inkscapeArgs = [
+    // Export as PNG format
     '--export-type=png',
+
+    // Overwrite existing output file without prompting
     '--export-overwrite',
+
+    // Use 'no-convert-text-baseline-spacing' to do not automatically fix text baselines in legacy
+    // (pre-0.92) files on opening. Inkscape 0.92 adopts the CSS standard definition for the
+    // 'line-height' property, which differs from past versions. By default, the line height values
+    // in files created prior to Inkscape 0.92 will be adjusted on loading to preserve the intended
+    // text layout. This command line option will skip that adjustment.
     '--no-convert-text-baseline-spacing',
+
+    // Choose 'convert-dpi-method' method to rescale legacy (pre-0.92) files which render slightly
+    // smaller due to the switch from 90 DPI to 96 DPI when interpreting lengths expressed in units
+    // of pixels. Possible values are "none" (no change, document will render at 94% of its original
+    // size), "scale-viewbox" (document will be rescaled globally, individual lengths will stay
+    // untouched) and "scale-document" (each length will be re-scaled individually).
     '--convert-dpi-method=none',
+
+    // Output filename
     `--export-filename=${safeOutputPath}`
   ];
 
-  // Export area mode
+  // Export area mode (optional)
   if (areaPage) {
+    // Export the full SVG page/viewBox area
     inkscapeArgs.push('--export-area-page');
   } else if (areaDrawing) {
+    // By default the exported area is the viewbox, but if 'export-area-drawing' option is used
+    // the exported area will be the whole drawing, i.e. the bounding box of all objects of the
+    // document (or of the exported object if --export-id is used). With this option, the exported
+    // image will display all the visible objects of the document without margins or cropping.
     inkscapeArgs.push('--export-area-drawing');
   }
 
-  // Dimensions and DPI
+  // Dimensions and DPI (optional)
   if (dpi !== null) {
+    // The resolution used for PNG export. It is also used for fallback rasterization of filtered
+    // objects when exporting to PS, EPS, or PDF (unless you specify --export-ignore-filters to
+    // suppress rasterization). The default is 96 dpi, which corresponds to 1 SVG user unit (px,
+    // also called "user unit") exporting to 1 bitmap pixel. This value overrides the DPI hint if
+    // used with --export-use-hints.
     inkscapeArgs.push(`--export-dpi=${dpi}`);
   }
   if (width !== null) {
+    // Export width in pixels
     inkscapeArgs.push(`--export-width=${width}`);
   }
   if (height !== null) {
+    // Export height in pixels
     inkscapeArgs.push(`--export-height=${height}`);
   }
 

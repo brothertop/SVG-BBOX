@@ -217,23 +217,26 @@ See `docs_dev/security-audit-2025-11-24.md` (if available) for complete details.
   - Timeout handling ✅
 
 ⏳ **In Progress:**
-- Applying security fixes to remaining 5 CLI tools:
+- Applying security fixes to remaining 2 CLI tools:
+  - sbb-comparer.cjs (1399 lines) - 0% complete
   - sbb-extractor.cjs (2255 lines, 4 modes) - 0% complete
-  - sbb-fix-viewbox.cjs - 0% complete
-  - sbb-render.cjs - 0% complete
-  - sbb-comparer.cjs - 0% complete
-  - sbb-test.cjs - 0% complete
+
+✅ **CLI Tools Completed (4/6):**
+1. **sbb-getbbox.cjs** (807 → 755 lines) - All 20 security fixes applied ✅
+2. **sbb-fix-viewbox.cjs** (298 → 362 lines) - All 20 fixes + undefined variable bug fixed ✅
+3. **sbb-render.cjs** (610 → 671 lines) - All 20 fixes + PNG output validation ✅
+4. **sbb-test.cjs** (364 → 411 lines) - All 20 fixes + JSON/log output validation ✅
 
 📋 **Planned:**
-- Adding comprehensive security tests
-- Updating all tool documentation
+- Complete remaining 2 CLI tools (est. 10-12 hours)
+- Adding comprehensive security tests (est. 5-7 hours)
+- Updating all tool documentation (est. 3-5 hours)
 - Refactoring duplicate code across CLI tools
-- Adding input size limits everywhere
 - Breaking up large functions (>100 lines)
 - Adding comprehensive JSDoc
 
-**Current Status:** 1/6 CLI tools secured (16.7% complete)
-**Estimated Completion:** 20-25 hours remaining for CLI tools + 10-15 hours for tests/docs = 30-40 hours total
+**Current Status:** 4/6 CLI tools secured (66.7% complete)
+**Estimated Completion:** 18-24 hours remaining total
 
 ## Known Limitations
 

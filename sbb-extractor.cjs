@@ -156,6 +156,32 @@ const { execFile } = require('child_process');
 const { openInChrome } = require('./browser-utils.cjs');
 const { getVersion, printVersion, hasVersionFlag } = require('./version.cjs');
 
+// SECURITY: Constants for timeouts and limits
+const BROWSER_TIMEOUT_MS = 30000;  // 30 seconds
+const FONT_TIMEOUT_MS = 8000;       // 8 seconds
+
+// SECURITY: Import security utilities
+const {
+  validateFilePath,
+  validateOutputPath,
+  readSVGFileSafe,
+  sanitizeSVGContent,
+  writeFileSafe,
+  readJSONFileSafe,
+  validateRenameMapping,
+  SVGBBoxError,
+  ValidationError,
+  FileSystemError
+} = require('./lib/security-utils.cjs');
+
+const {
+  runCLI,
+  printSuccess,
+  printError,
+  printInfo,
+  printWarning
+} = require('./lib/cli-utils.cjs');
+
 // -------- CLI parsing --------
 
 function printHelp() {
@@ -479,20 +505,27 @@ function parseArgs(argv) {
 // -------- shared browser/page setup --------
 
 async function withPageForSvg(inputPath, handler) {
-  const svgPath = path.resolve(inputPath);
-  if (!fs.existsSync(svgPath)) {
-    throw new Error('SVG file does not exist: ' + svgPath);
-  }
+  // SECURITY: Validate and read SVG file safely
+  const safePath = validateFilePath(inputPath, {
+    requiredExtensions: ['.svg'],
+    mustExist: true
+  });
 
-  const svgContent = fs.readFileSync(svgPath, 'utf8');
+  const svgContent = readSVGFileSafe(safePath);
+  const sanitizedSvg = sanitizeSVGContent(svgContent);
 
+  // SECURITY: Launch browser with security args and timeout
   const browser = await puppeteer.launch({
     headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    timeout: BROWSER_TIMEOUT_MS
   });
 
   try {
     const page = await browser.newPage();
+
+    // SECURITY: Set browser timeout
+    page.setDefaultTimeout(BROWSER_TIMEOUT_MS);
 
     const html = `
 <!DOCTYPE html>
@@ -502,7 +535,7 @@ async function withPageForSvg(inputPath, handler) {
   <title>SVG Tool</title>
 </head>
 <body>
-${svgContent}
+${sanitizedSvg}
 </body>
 </html>`;
 
@@ -526,6 +559,7 @@ ${svgContent}
         throw new Error('No <svg> found in document.');
       }
 
+      // SECURITY: Wait for fonts with timeout
       await SvgVisualBBox.waitForDocumentFonts(document, 8000);
 
       const vbVal = rootSvg.viewBox && rootSvg.viewBox.baseVal;
@@ -567,7 +601,17 @@ ${svgContent}
 
     return await handler(page);
   } finally {
-    await browser.close();
+    // SECURITY: Ensure browser is always closed
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (closeErr) {
+        // Force kill if close fails
+        if (browser.process()) {
+          browser.process().kill('SIGKILL');
+        }
+      }
+    }
   }
 }
 
@@ -1013,10 +1057,19 @@ async function listAndAssignIds(inputPath, assignIds, outFixedPath, outHtmlPath,
     result.info,
     result.parentTransforms
   );
-  fs.writeFileSync(outHtmlPath, html, 'utf8');
+
+  // SECURITY: Validate and write HTML file safely
+  const safeHtmlPath = validateOutputPath(outHtmlPath, {
+    requiredExtensions: ['.html']
+  });
+  writeFileSafe(safeHtmlPath, html, 'utf-8');
 
   if (assignIds && result.fixedSvgString && outFixedPath) {
-    fs.writeFileSync(outFixedPath, result.fixedSvgString, 'utf8');
+    // SECURITY: Validate and write fixed SVG file safely
+    const safeFixedPath = validateOutputPath(outFixedPath, {
+      requiredExtensions: ['.svg']
+    });
+    writeFileSafe(safeFixedPath, result.fixedSvgString, 'utf-8');
   }
 
   // Count bbox failures
@@ -1804,7 +1857,11 @@ async function extractSingleObject(inputPath, elementId, outSvgPath, margin, inc
     };
   }, elementId, margin, includeContext));
 
-  fs.writeFileSync(outSvgPath, result.svgString, 'utf8');
+  // SECURITY: Validate and write extracted SVG file safely
+  const safeOutputPath = validateOutputPath(outSvgPath, {
+    requiredExtensions: ['.svg']
+  });
+  writeFileSafe(safeOutputPath, result.svgString, 'utf-8');
 
   if (jsonMode) {
     console.log(JSON.stringify({
@@ -2003,14 +2060,18 @@ async function exportAllObjects(inputPath, outDir, margin, exportGroups, jsonMod
 
   for (const ex of exports) {
     const outPath = path.join(outDir, ex.fileName);
-    fs.writeFileSync(outPath, ex.svgString, 'utf8');
+    // SECURITY: Validate and write exported SVG file safely
+    const safeOutputPath = validateOutputPath(outPath, {
+      requiredExtensions: ['.svg']
+    });
+    writeFileSafe(safeOutputPath, ex.svgString, 'utf-8');
     exportedMeta.push({
       id: ex.id,
-      file: outPath,
+      file: safeOutputPath,
       bbox: ex.bbox
     });
     if (!jsonMode) {
-      console.log(`✓ Exported ${ex.id} -> ${outPath}`);
+      console.log(`✓ Exported ${ex.id} -> ${safeOutputPath}`);
     }
   }
 
@@ -2031,13 +2092,12 @@ async function exportAllObjects(inputPath, outDir, margin, exportGroups, jsonMod
 // -------- RENAME mode --------
 
 async function renameIds(inputPath, renameJsonPath, renameOutPath, jsonMode) {
-  const raw = fs.readFileSync(renameJsonPath, 'utf8');
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (e) {
-    throw new Error('Failed to parse JSON mapping file: ' + e.message);
-  }
+  // SECURITY: Read and validate JSON mapping file safely
+  const safeJsonPath = validateFilePath(renameJsonPath, {
+    requiredExtensions: ['.json'],
+    mustExist: true
+  });
+  const parsed = readJSONFileSafe(safeJsonPath);
 
   let mappings = [];
   if (Array.isArray(parsed)) {
@@ -2048,14 +2108,18 @@ async function renameIds(inputPath, renameJsonPath, renameOutPath, jsonMode) {
     mappings = Object.entries(parsed).map(([from, to]) => ({ from, to }));
   }
 
+  // SECURITY: Validate mapping structure
   mappings = mappings
     .filter(m => m && typeof m.from === 'string' && typeof m.to === 'string')
     .map(m => ({ from: m.from.trim(), to: m.to.trim() }))
     .filter(m => m.from && m.to);
 
   if (!mappings.length) {
-    throw new Error('No valid mappings found in JSON.');
+    throw new ValidationError('No valid mappings found in JSON.');
   }
+
+  // SECURITY: Validate each mapping
+  validateRenameMapping(mappings);
 
   const result = await withPageForSvg(inputPath, async (page) => await page.evaluate((mappings) => {
     const SvgVisualBBox = window.SvgVisualBBox;
@@ -2169,7 +2233,11 @@ async function renameIds(inputPath, renameJsonPath, renameOutPath, jsonMode) {
     return { svgString, applied, skipped };
   }, mappings));
 
-  fs.writeFileSync(renameOutPath, result.svgString, 'utf8');
+  // SECURITY: Validate and write renamed SVG file safely
+  const safeOutputPath = validateOutputPath(renameOutPath, {
+    requiredExtensions: ['.svg']
+  });
+  writeFileSafe(safeOutputPath, result.svgString, 'utf-8');
 
   if (jsonMode) {
     console.log(JSON.stringify({
@@ -2195,21 +2263,15 @@ async function renameIds(inputPath, renameJsonPath, renameOutPath, jsonMode) {
   }
 }
 
-// -------- main entry --------
+// ═══════════════════════════════════════════════════════════════════════════
+// MAIN
+// ═══════════════════════════════════════════════════════════════════════════
 
-(async () => {
+async function main() {
+  // Display version
+  printInfo(`sbb-extractor v${getVersion()} | svg-bbox toolkit\n`);
+
   const opts = parseArgs(process.argv);
-
-  // Handle --version flag
-  if (opts.version) {
-    printVersion('sbb-extractor');
-    process.exit(0);
-  }
-
-  // Display version on execution (but not for help)
-  if (!opts.help && opts.mode) {
-    console.log(`sbb-extractor v${getVersion()} | svg-bbox toolkit\n`);
-  }
 
   try {
     if (opts.mode === 'list') {
@@ -2239,18 +2301,14 @@ async function renameIds(inputPath, renameJsonPath, renameOutPath, jsonMode) {
         opts.json
       );
     } else {
-      console.error('Unknown mode', opts.mode);
-      process.exit(1);
+      throw new SVGBBoxError(`Unknown mode: ${opts.mode}`);
     }
-  } catch (err) {
-    if (opts.json) {
-      console.log(JSON.stringify({
-        error: true,
-        message: err.message || String(err)
-      }, null, 2));
-    } else {
-      console.error('Error:', err.message || err);
-    }
-    process.exit(1);
+  } catch (error) {
+    throw new SVGBBoxError(`Operation failed: ${error.message}`, error);
   }
-})();
+}
+
+// SECURITY: Run with CLI error handling
+runCLI(main);
+
+module.exports = { main };

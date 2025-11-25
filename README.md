@@ -877,17 +877,30 @@ node sbb-inkscape-text2path.cjs input.svg [options]
 ```
 
 **Options:**
-- `--output <file>` - Output SVG file
+- `--output <file>` - Output SVG file (default: `<input>-paths.svg`)
 - `--batch <file>` - Batch mode (one SVG path per line)
+- `--overwrite` - Overwrite output file if it exists
+- `--skip-comparison` - Skip automatic similarity check (faster)
+- `--json` - Output results as JSON
 - `--help` - Show help
+- `--version` - Show version
 
 **Example:**
 ```bash
 # Convert text to paths
-node sbb-inkscape-text2path.cjs document.svg --output document-paths.svg
+node sbb-inkscape-text2path.cjs document.svg
+
+# Convert with custom output
+node sbb-inkscape-text2path.cjs document.svg document-paths.svg
 
 # Batch convert multiple files
 node sbb-inkscape-text2path.cjs --batch files.txt
+
+# Skip automatic comparison (faster)
+node sbb-inkscape-text2path.cjs document.svg --skip-comparison
+
+# Overwrite existing files
+node sbb-inkscape-text2path.cjs document.svg --overwrite
 ```
 
 ##### 2. `sbb-inkscape-extract.cjs` - Extract Object by ID
@@ -900,12 +913,17 @@ node sbb-inkscape-extract.cjs input.svg --id <object-id> [options]
 
 **Options:**
 - `--id <id>` - Object ID to extract (required)
-- `--output <file>` - Output SVG file
-- `--margin <pixels>` - Margin around extracted object
+- `--output <file>` - Output SVG file (default: `<input>_<id>.svg`)
+- `--margin <pixels>` - Margin around extracted object in pixels
+- `--help` - Show help
+- `--version` - Show version
 
 **Example:**
 ```bash
 # Extract specific object
+node sbb-inkscape-extract.cjs sprite.svg --id icon_home
+
+# Extract with custom output
 node sbb-inkscape-extract.cjs sprite.svg --id icon_home --output home.svg
 
 # Extract with margin
@@ -946,7 +964,11 @@ node sbb-inkscape-svg2png.cjs input.svg [options]
 - `--convert-dpi <method>` - none/scale-viewbox/scale-document
 
 **Batch Processing:**
-- `--batch <file>` - Process multiple files with shared settings
+- `--batch <file>` - Process multiple files (one SVG path per line)
+
+**Other Options:**
+- `--help` - Show help
+- `--version` - Show version
 
 **Examples:**
 ```bash

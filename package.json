@@ -10,13 +10,17 @@
     "sbb-fix-viewbox": "./sbb-fix-viewbox.cjs",
     "sbb-render": "./sbb-render.cjs",
     "sbb-comparer": "./sbb-comparer.cjs",
-    "sbb-test": "./sbb-test.cjs"
+    "sbb-test": "./sbb-test.cjs",
+    "sbb-inkscape-text2path": "./sbb-inkscape-text2path.cjs",
+    "sbb-inkscape-extract": "./sbb-inkscape-extract.cjs",
+    "sbb-inkscape-svg2png": "./sbb-inkscape-svg2png.cjs"
   },
   "files": [
     "SvgVisualBBox.js",
     "sbb-*.cjs",
     "browser-utils.cjs",
     "version.cjs",
+    "lib/",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"
@@ -41,6 +45,9 @@
     "svg-export",
     "svg-render",
     "sprite-sheet",
+    "inkscape",
+    "text-to-path",
+    "svg-to-png",
     "cli"
   ],
   "author": "Emasoft",

@@ -400,10 +400,14 @@ async function calculateRenderParams(svg1Path, svg2Path, args, browser) {
       break;
 
     case 'viewbox':
-      width1 = analysis1.viewBox?.width || analysis1.width || 800;
-      height1 = analysis1.viewBox?.height || analysis1.height || 600;
-      width2 = analysis2.viewBox?.width || analysis2.width || 800;
-      height2 = analysis2.viewBox?.height || analysis2.height || 600;
+      // BUG FIX: Use width/height attributes if available, NOT viewBox dimensions
+      // When an SVG has both width/height attributes AND viewBox, the attributes
+      // define the natural rendering size. Using viewBox dimensions for CSS sizing
+      // causes incorrect rendering when the aspect ratios differ.
+      width1 = analysis1.width || analysis1.viewBox?.width || 800;
+      height1 = analysis1.height || analysis1.viewBox?.height || 600;
+      width2 = analysis2.width || analysis2.viewBox?.width || 800;
+      height2 = analysis2.height || analysis2.viewBox?.height || 600;
       break;
 
     case 'full':
@@ -500,10 +504,11 @@ async function renderSvgToPng(svgPath, outputPath, width, height, browser) {
 
   await page.setViewport({ width: Math.ceil(width), height: Math.ceil(height) });
 
-  // BUG FIX: Preserve the original SVG's viewBox to maintain correct coordinate system
-  // The CSS width/height control the render size, but the viewBox must be preserved
-  // to ensure content is positioned correctly. Without this, SVGs with viewBox
-  // dimensions different from width/height attributes will be vertically/horizontally shifted.
+  // BUG FIX: The width/height parameters now correctly use the SVG's width/height
+  // attributes (not viewBox dimensions). This ensures proper rendering when the
+  // SVG has both attributes and viewBox with different aspect ratios.
+  //
+  // See calculateRenderParams() 'viewbox' mode for details on dimension selection.
   await page.setContent(`
     <!DOCTYPE html>
     <html>
@@ -518,7 +523,6 @@ async function renderSvgToPng(svgPath, outputPath, width, height, browser) {
           display: block;
           width: ${width}px;
           height: ${height}px;
-          /* Do NOT override viewBox - preserve it from the original SVG */
         }
       </style>
     </head>
@@ -1358,10 +1362,12 @@ async function generateHtmlReport(svg1Path, svg2Path, diffPngPath, result, args,
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function main() {
-  // Display version
-  printInfo(`sbb-comparer v${getVersion()} | svg-bbox toolkit\n`);
-
   const args = parseArgs(process.argv);
+
+  // Display version (but not in JSON mode)
+  if (!args.json) {
+    printInfo(`sbb-comparer v${getVersion()} | svg-bbox toolkit\n`);
+  }
 
   // SECURITY: Validate input SVG files
   const safeSvg1Path = validateFilePath(args.svg1, {

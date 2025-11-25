@@ -500,6 +500,10 @@ async function renderSvgToPng(svgPath, outputPath, width, height, browser) {
 
   await page.setViewport({ width: Math.ceil(width), height: Math.ceil(height) });
 
+  // BUG FIX: Preserve the original SVG's viewBox to maintain correct coordinate system
+  // The CSS width/height control the render size, but the viewBox must be preserved
+  // to ensure content is positioned correctly. Without this, SVGs with viewBox
+  // dimensions different from width/height attributes will be vertically/horizontally shifted.
   await page.setContent(`
     <!DOCTYPE html>
     <html>
@@ -514,6 +518,7 @@ async function renderSvgToPng(svgPath, outputPath, width, height, browser) {
           display: block;
           width: ${width}px;
           height: ${height}px;
+          /* Do NOT override viewBox - preserve it from the original SVG */
         }
       </style>
     </head>

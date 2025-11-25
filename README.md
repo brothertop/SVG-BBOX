@@ -127,12 +127,23 @@ yarn add svg-bbox
 ```
 
 After installation, the following CLI commands are available:
+
+**Core Tools (Recommended):**
 - `sbb-getbbox` - Compute visual bounding boxes
 - `sbb-extractor` - List, extract, and export SVG objects
 - `sbb-fix-viewbox` - Fix missing viewBox/dimensions
 - `sbb-render` - Render SVG to PNG
 - `sbb-comparer` - Compare two SVGs visually (pixel-by-pixel)
 - `sbb-test` - Test library functions
+
+**Inkscape Integration Tools** ⚠️ *(For comparison only - see warnings below)*:
+- `sbb-inkscape-text2path` - Convert text to paths using Inkscape
+- `sbb-inkscape-extract` - Extract objects by ID using Inkscape
+- `sbb-inkscape-svg2png` - Simple SVG to PNG using Inkscape
+- `sbb-inkscape-exportpng` - Advanced PNG export using Inkscape
+
+> **⚠️ Accuracy Warning:** Inkscape tools have known issues with font bounding boxes.
+> Use core tools for production. Inkscape tools are for comparison purposes only.
 
 ### From Source
 
@@ -838,6 +849,180 @@ Each exported SVG:
 - Has matching `width` / `height`.
 - Contains `<defs>` from the original.
 - Includes the ancestor chain from the root to the object, with the object’s full subtree.
+
+---
+
+### Inkscape Integration Tools: `sbb-inkscape-*` ⚠️
+
+**⚠️ IMPORTANT ACCURACY WARNING**
+
+The Inkscape-based tools (`sbb-inkscape-*`) are provided **for completeness and comparison purposes only**. They use Inkscape's rendering engine which has **known issues with font bounding box calculations** and may produce inaccurate results, especially for text elements.
+
+**For production use and accurate bounding box computation, always use the native svg-bbox tools:**
+- `sbb-render.cjs` - Native SVG rendering with accurate bbox
+- `sbb-getbbox.cjs` - Precise bounding box calculation
+- `sbb-extractor.cjs` - Multi-tool with accurate visual bbox
+
+These native tools use our custom algorithms that correctly handle font metrics and provide reliable, cross-platform results.
+
+---
+
+#### Available Inkscape Tools
+
+##### 1. `sbb-inkscape-text2path.cjs` - Convert Text to Paths
+
+Convert text elements to path outlines using Inkscape.
+
+```bash
+node sbb-inkscape-text2path.cjs input.svg [options]
+```
+
+**Options:**
+- `--output <file>` - Output SVG file
+- `--batch <file>` - Batch mode (one SVG path per line)
+- `--help` - Show help
+
+**Example:**
+```bash
+# Convert text to paths
+node sbb-inkscape-text2path.cjs document.svg --output document-paths.svg
+
+# Batch convert multiple files
+node sbb-inkscape-text2path.cjs --batch files.txt
+```
+
+##### 2. `sbb-inkscape-extract.cjs` - Extract Object by ID
+
+Extract a single object from an SVG file by its ID.
+
+```bash
+node sbb-inkscape-extract.cjs input.svg --id <object-id> [options]
+```
+
+**Options:**
+- `--id <id>` - Object ID to extract (required)
+- `--output <file>` - Output SVG file
+- `--margin <pixels>` - Margin around extracted object
+
+**Example:**
+```bash
+# Extract specific object
+node sbb-inkscape-extract.cjs sprite.svg --id icon_home --output home.svg
+
+# Extract with margin
+node sbb-inkscape-extract.cjs sprite.svg --id icon_home --margin 10
+```
+
+⚠️ **Note:** For more reliable object extraction with accurate bounding boxes, use `sbb-extractor.cjs --extract` instead.
+
+##### 3. `sbb-inkscape-svg2png.cjs` - Simple SVG to PNG Converter
+
+Basic SVG to PNG conversion using Inkscape.
+
+```bash
+node sbb-inkscape-svg2png.cjs input.svg [options]
+```
+
+**Options:**
+- `--output <file>` - Output PNG file
+- `--width <pixels>` - Export width
+- `--height <pixels>` - Export height
+- `--dpi <dpi>` - Export DPI (default: 96)
+- `--area-drawing` - Export bounding box of objects (default)
+- `--area-page` - Export full SVG page/viewBox
+- `--batch <file>` - Batch mode
+
+**Example:**
+```bash
+# Basic conversion
+node sbb-inkscape-svg2png.cjs icon.svg
+
+# With specific dimensions
+node sbb-inkscape-svg2png.cjs icon.svg --width 512 --height 512
+
+# High DPI export
+node sbb-inkscape-svg2png.cjs icon.svg --dpi 300
+```
+
+⚠️ **Note:** For production use with accurate rendering, use `sbb-render.cjs` instead.
+
+##### 4. `sbb-inkscape-exportpng.cjs` - Advanced PNG Export
+
+Comprehensive PNG export with full control over all Inkscape parameters.
+
+```bash
+node sbb-inkscape-exportpng.cjs input.svg [options]
+```
+
+**Dimension & Resolution Options:**
+- `--width <pixels>`, `--height <pixels>` - Export dimensions
+- `--dpi <dpi>` - Export DPI (default: 96)
+- `--margin <pixels>` - Margin around export area
+
+**Export Area Options:**
+- `--area-drawing` - Bounding box of all objects (default)
+- `--area-page` - Full SVG page/viewBox area
+- `--area-snap` - Snap to nearest integer px (pixel-perfect)
+- `--id <object-id>` - Export specific object by ID
+
+**Color & Quality Options:**
+- `--color-mode <mode>` - Gray_1-16, RGB_8-16, GrayAlpha_8-16, RGBA_8-16
+- `--compression <0-9>` - PNG compression level (default: 6)
+- `--antialias <0-3>` - Antialiasing level (default: 2)
+
+**Background Options:**
+- `--background <color>` - Background color (SVG color string)
+- `--background-opacity <n>` - Opacity: 0.0-1.0 or 1-255
+
+**Legacy File Handling:**
+- `--convert-dpi <method>` - none/scale-viewbox/scale-document
+
+**Batch Processing:**
+- `--batch <file>` - Process multiple files with shared settings
+
+**Examples:**
+```bash
+# High-quality export with maximum compression
+node sbb-inkscape-exportpng.cjs logo.svg \
+  --width 1024 --height 1024 \
+  --antialias 3 --compression 9
+
+# Export with white background
+node sbb-inkscape-exportpng.cjs document.svg \
+  --area-page \
+  --background white --background-opacity 1.0
+
+# Grayscale export
+node sbb-inkscape-exportpng.cjs drawing.svg --color-mode Gray_8
+
+# Pixel-perfect export
+node sbb-inkscape-exportpng.cjs pixel-art.svg --area-snap --dpi 96
+
+# Batch export with shared settings
+node sbb-inkscape-exportpng.cjs --batch icons.txt \
+  --width 256 --height 256 --compression 9
+```
+
+⚠️ **Note:** For production use, prefer `sbb-render.cjs` for accurate font rendering and bounding boxes.
+
+---
+
+#### Why Use Native Tools Instead?
+
+| Feature | Inkscape Tools (`sbb-inkscape-*`) | Native Tools (`sbb-*`) |
+|---------|-----------------------------------|------------------------|
+| **Font bbox accuracy** | ❌ Known issues, often incorrect | ✅ Accurate calculations |
+| **Text rendering** | ⚠️ Can vary by system | ✅ Consistent results |
+| **Cross-platform** | ⚠️ Requires Inkscape install | ✅ Works everywhere |
+| **Performance** | ⚠️ Slower (external process) | ✅ Fast (native) |
+| **Best for** | Testing/comparison | Production use |
+
+**Recommendation:** Use `sbb-inkscape-*` tools only when you need to:
+- Compare results with Inkscape's output
+- Test compatibility with Inkscape workflows
+- Convert text to paths (no native alternative yet)
+
+For all other use cases, especially involving text or requiring accurate bounding boxes, **always use the native `sbb-*` tools**.
 
 ---
 

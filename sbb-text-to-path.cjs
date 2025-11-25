@@ -54,6 +54,7 @@ REQUIREMENTS:
 
 USAGE:
   node sbb-text-to-path.cjs input.svg [output.svg] [options]
+  node sbb-text-to-path.cjs --batch files.txt [options]
 
 ARGUMENTS:
   input.svg             Input SVG file with text elements
@@ -61,7 +62,11 @@ ARGUMENTS:
                         Default: <input>-paths.svg
 
 OPTIONS:
+  --batch <file.txt>    Process multiple SVG files listed in text file
+                        (one file path per line)
   --overwrite           Overwrite output file if it exists
+  --skip-comparison     Skip automatic similarity check with sbb-comparer
+                        (only applies to single file mode)
   --preserve-baseline   Preserve text baseline spacing (Inkscape default)
                         Default: disabled (--no-convert-text-baseline-spacing)
   --convert-dpi         Allow DPI conversion (90 to 96)
@@ -72,17 +77,23 @@ OPTIONS:
 
 EXAMPLES:
 
-  # Basic conversion (creates input-paths.svg)
+  # Basic conversion (creates input-paths.svg, then compares with sbb-comparer)
   node sbb-text-to-path.cjs drawing.svg
 
   # Specify output file
   node sbb-text-to-path.cjs input.svg output.svg
 
-  # Overwrite existing file
-  node sbb-text-to-path.cjs input.svg output.svg --overwrite
+  # Skip automatic comparison
+  node sbb-text-to-path.cjs input.svg output.svg --skip-comparison
 
-  # Preserve baseline spacing
-  node sbb-text-to-path.cjs input.svg output.svg --preserve-baseline
+  # Batch conversion with comparison
+  node sbb-text-to-path.cjs --batch files.txt
+
+  # Batch conversion without comparison (faster)
+  node sbb-text-to-path.cjs --batch files.txt --skip-comparison
+
+  # Overwrite existing files
+  node sbb-text-to-path.cjs input.svg output.svg --overwrite
 
   # JSON output for automation
   node sbb-text-to-path.cjs input.svg output.svg --json
@@ -201,7 +212,9 @@ function parseArgs(argv) {
   const args = {
     input: null,
     output: null,
+    batch: null,
     overwrite: false,
+    skipComparison: false,
     preserveBaseline: false,
     convertDpi: false,
     json: false
@@ -216,8 +229,12 @@ function parseArgs(argv) {
     } else if (arg === '--version' || arg === '-v') {
       printVersion('sbb-text-to-path');
       process.exit(0);
+    } else if (arg === '--batch' && i + 1 < argv.length) {
+      args.batch = argv[++i];
     } else if (arg === '--overwrite') {
       args.overwrite = true;
+    } else if (arg === '--skip-comparison') {
+      args.skipComparison = true;
     } else if (arg === '--preserve-baseline') {
       args.preserveBaseline = true;
     } else if (arg === '--convert-dpi') {
@@ -237,19 +254,58 @@ function parseArgs(argv) {
     }
   }
 
-  // Validate required arguments
-  if (!args.input) {
-    throw new ValidationError('Input SVG file required');
+  // Validate batch vs single mode
+  if (args.batch && args.input) {
+    throw new ValidationError('Cannot use both --batch and input file argument');
   }
 
-  // Set default output file
-  if (!args.output) {
+  // Validate required arguments
+  if (!args.batch && !args.input) {
+    throw new ValidationError('Input SVG file or --batch option required');
+  }
+
+  // Set default output file (only for single mode)
+  if (args.input && !args.output) {
     const baseName = path.basename(args.input, path.extname(args.input));
     const dirName = path.dirname(args.input);
     args.output = path.join(dirName, `${baseName}-paths.svg`);
   }
 
   return args;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// COMPARISON
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Run sbb-comparer to check similarity between original and converted SVG.
+ * Returns comparison result or null if comparer fails.
+ */
+async function runComparison(originalPath, convertedPath, jsonMode) {
+  const comparerPath = path.join(__dirname, 'sbb-comparer.cjs');
+
+  if (!fs.existsSync(comparerPath)) {
+    if (!jsonMode) {
+      printWarning('sbb-comparer.cjs not found - skipping comparison');
+    }
+    return null;
+  }
+
+  try {
+    const { stdout } = await execFilePromise('node', [comparerPath, originalPath, convertedPath, '--json'], {
+      timeout: 120000,  // 2 minutes for comparison
+      maxBuffer: 10 * 1024 * 1024
+    });
+
+    const result = JSON.parse(stdout);
+    return result;
+  } catch (err) {
+    if (!jsonMode) {
+      printWarning(`Comparison failed: ${err.message}`);
+    }
+    return null;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -304,6 +360,93 @@ async function convertTextToPaths(inkscapePath, inputPath, outputPath, options) 
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// BATCH PROCESSING
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Read and parse batch file list.
+ * Returns array of file paths.
+ */
+function readBatchFile(batchFilePath) {
+  // SECURITY: Validate batch file
+  const safeBatchPath = validateFilePath(batchFilePath, {
+    requiredExtensions: ['.txt'],
+    mustExist: true
+  });
+
+  const content = fs.readFileSync(safeBatchPath, 'utf-8');
+  const lines = content.split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0 && !line.startsWith('#'));
+
+  if (lines.length === 0) {
+    throw new ValidationError(`Batch file is empty: ${safeBatchPath}`);
+  }
+
+  return lines;
+}
+
+/**
+ * Process a single file conversion.
+ * Returns conversion result with optional comparison.
+ */
+async function processSingleFile(inkscapePath, inputPath, outputPath, options, args) {
+  // SECURITY: Validate input SVG file
+  const safeInputPath = validateFilePath(inputPath, {
+    requiredExtensions: ['.svg'],
+    mustExist: true
+  });
+
+  // SECURITY: Validate output path
+  const safeOutputPath = validateOutputPath(outputPath, {
+    requiredExtensions: ['.svg']
+  });
+
+  // Check if output exists and --overwrite not specified
+  if (fs.existsSync(safeOutputPath) && !options.overwrite) {
+    throw new ValidationError(`Output file already exists: ${safeOutputPath}\nUse --overwrite to replace it.`);
+  }
+
+  // Convert text to paths
+  await convertTextToPaths(inkscapePath, safeInputPath, safeOutputPath, {
+    overwrite: options.overwrite,
+    preserveBaseline: options.preserveBaseline,
+    convertDpi: options.convertDpi
+  });
+
+  // Verify output file was created
+  if (!fs.existsSync(safeOutputPath)) {
+    throw new FileSystemError('Conversion failed: output file not created');
+  }
+
+  const inputStats = fs.statSync(safeInputPath);
+  const outputStats = fs.statSync(safeOutputPath);
+
+  const result = {
+    input: safeInputPath,
+    output: safeOutputPath,
+    inputSize: inputStats.size,
+    outputSize: outputStats.size,
+    sizeIncrease: ((outputStats.size / inputStats.size - 1) * 100).toFixed(2) + '%',
+    comparison: null
+  };
+
+  // Run comparison (unless skipped)
+  if (!options.skipComparison) {
+    const comparisonResult = await runComparison(safeInputPath, safeOutputPath, args.json);
+    if (comparisonResult) {
+      result.comparison = {
+        diffPercentage: parseFloat(comparisonResult.diffPercentage),
+        differentPixels: comparisonResult.differentPixels,
+        totalPixels: comparisonResult.totalPixels
+      };
+    }
+  }
+
+  return result;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MAIN
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -315,23 +458,7 @@ async function main() {
     printInfo(`sbb-text-to-path v${getVersion()} | svg-bbox toolkit\n`);
   }
 
-  // SECURITY: Validate input SVG file
-  const safeInputPath = validateFilePath(args.input, {
-    requiredExtensions: ['.svg'],
-    mustExist: true
-  });
-
-  // SECURITY: Validate output path
-  const safeOutputPath = validateOutputPath(args.output, {
-    requiredExtensions: ['.svg']
-  });
-
-  // Check if output exists and --overwrite not specified
-  if (fs.existsSync(safeOutputPath) && !args.overwrite) {
-    throw new ValidationError(`Output file already exists: ${safeOutputPath}\nUse --overwrite to replace it.`);
-  }
-
-  // Find Inkscape installation
+  // Find Inkscape installation (once for all conversions)
   if (!args.json) {
     printInfo('Detecting Inkscape installation...');
   }
@@ -349,40 +476,119 @@ async function main() {
   }
 
   if (!args.json) {
-    printInfo(`Found Inkscape: ${inkscapePath}`);
+    printInfo(`Found Inkscape: ${inkscapePath}\n`);
+  }
+
+  // BATCH MODE
+  if (args.batch) {
+    const inputFiles = readBatchFile(args.batch);
+    const results = [];
+
+    if (!args.json) {
+      printInfo(`Processing ${inputFiles.length} file(s) in batch mode...\n`);
+    }
+
+    for (let i = 0; i < inputFiles.length; i++) {
+      const inputFile = inputFiles[i];
+      const baseName = path.basename(inputFile, path.extname(inputFile));
+      const dirName = path.dirname(inputFile);
+      const outputFile = path.join(dirName, `${baseName}-paths.svg`);
+
+      try {
+        if (!args.json) {
+          printInfo(`[${i + 1}/${inputFiles.length}] Converting: ${inputFile}`);
+        }
+
+        const result = await processSingleFile(inkscapePath, inputFile, outputFile, {
+          overwrite: args.overwrite,
+          preserveBaseline: args.preserveBaseline,
+          convertDpi: args.convertDpi,
+          skipComparison: args.skipComparison
+        }, args);
+
+        results.push(result);
+
+        // Print result for batch mode (non-JSON)
+        if (!args.json) {
+          const similarity = result.comparison
+            ? (100 - result.comparison.diffPercentage).toFixed(2)
+            : 'N/A';
+
+          console.log(`  ✓ ${path.basename(result.output)}`);
+          if (!args.skipComparison && result.comparison) {
+            console.log(`    Similarity: ${similarity}% (${result.comparison.diffPercentage}% different)`);
+          }
+        }
+      } catch (err) {
+        const errorResult = {
+          input: inputFile,
+          output: outputFile,
+          error: err.message
+        };
+        results.push(errorResult);
+
+        if (!args.json) {
+          printError(`  ✗ Failed: ${inputFile}`);
+          printError(`    ${err.message}`);
+        }
+      }
+    }
+
+    // Output batch results
+    if (args.json) {
+      console.log(JSON.stringify({
+        mode: 'batch',
+        totalFiles: inputFiles.length,
+        successful: results.filter(r => !r.error).length,
+        failed: results.filter(r => r.error).length,
+        results: results
+      }, null, 2));
+    } else {
+      console.log('');
+      const successful = results.filter(r => !r.error).length;
+      const failed = results.filter(r => r.error).length;
+
+      if (failed === 0) {
+        printSuccess(`Batch complete! ${successful}/${inputFiles.length} files converted successfully.`);
+      } else {
+        printWarning(`Batch complete with errors: ${successful} succeeded, ${failed} failed.`);
+      }
+    }
+
+    return;
+  }
+
+  // SINGLE FILE MODE
+  if (!args.json) {
     printInfo('Converting text to paths...');
   }
 
-  // Convert text to paths
-  const result = await convertTextToPaths(inkscapePath, safeInputPath, safeOutputPath, {
+  const result = await processSingleFile(inkscapePath, args.input, args.output, {
     overwrite: args.overwrite,
     preserveBaseline: args.preserveBaseline,
-    convertDpi: args.convertDpi
-  });
-
-  // Verify output file was created
-  if (!fs.existsSync(safeOutputPath)) {
-    throw new FileSystemError('Conversion failed: output file not created');
-  }
-
-  const inputStats = fs.statSync(safeInputPath);
-  const outputStats = fs.statSync(safeOutputPath);
+    convertDpi: args.convertDpi,
+    skipComparison: args.skipComparison
+  }, args);
 
   // Output results
   if (args.json) {
-    console.log(JSON.stringify({
-      input: safeInputPath,
-      output: safeOutputPath,
-      inputSize: inputStats.size,
-      outputSize: outputStats.size,
-      sizeIncrease: ((outputStats.size / inputStats.size - 1) * 100).toFixed(2) + '%',
-      inkscapePath: inkscapePath
-    }, null, 2));
+    console.log(JSON.stringify(result, null, 2));
   } else {
     printSuccess('Conversion complete!');
-    console.log(`  Input:        ${safeInputPath} (${(inputStats.size / 1024).toFixed(1)} KB)`);
-    console.log(`  Output:       ${safeOutputPath} (${(outputStats.size / 1024).toFixed(1)} KB)`);
-    console.log(`  Size change:  ${outputStats.size > inputStats.size ? '+' : ''}${((outputStats.size / inputStats.size - 1) * 100).toFixed(1)}%`);
+    console.log(`  Input:        ${result.input} (${(result.inputSize / 1024).toFixed(1)} KB)`);
+    console.log(`  Output:       ${result.output} (${(result.outputSize / 1024).toFixed(1)} KB)`);
+    console.log(`  Size change:  ${result.outputSize > result.inputSize ? '+' : ''}${((result.outputSize / result.inputSize - 1) * 100).toFixed(1)}%`);
+
+    if (result.comparison) {
+      console.log('');
+      printInfo('Comparison with original:');
+      const similarity = (100 - result.comparison.diffPercentage).toFixed(2);
+      console.log(`  Similarity:   ${similarity}%`);
+      console.log(`  Difference:   ${result.comparison.diffPercentage}%`);
+      console.log(`  Total pixels: ${result.comparison.totalPixels.toLocaleString()}`);
+      console.log(`  Diff pixels:  ${result.comparison.differentPixels.toLocaleString()}`);
+    }
+
     console.log('');
     printInfo('All text elements have been converted to paths.');
     printWarning('Font information has been lost - text is now vector outlines.');

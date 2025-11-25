@@ -26,7 +26,27 @@ const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
 const chromeLauncher = require('chrome-launcher');
-const { getVersion, printVersion, hasVersionFlag } = require('./version.cjs'); // used for fallback to user Chrome
+const { getVersion, printVersion, hasVersionFlag } = require('./version.cjs');
+
+// SECURITY: Import security utilities
+const {
+  validateFilePath,
+  validateOutputPath,
+  readSVGFileSafe,
+  sanitizeSVGContent,
+  writeFileSafe,
+  SVGBBoxError,
+  ValidationError,
+  FileSystemError
+} = require('./lib/security-utils.cjs');
+
+const {
+  runCLI,
+  printSuccess,
+  printError,
+  printInfo,
+  printWarning
+} = require('./lib/cli-utils.cjs');
 
 /**
  * Launch Puppeteer with the best available browser:
@@ -104,41 +124,56 @@ function makeHtmlShell() {
 </html>`;
 }
 
+// SECURITY: Constants for timeouts
+const BROWSER_TIMEOUT_MS = 30000;  // 30 seconds
+const FONT_TIMEOUT_MS = 8000;       // 8 seconds
+
 /**
  * Main test runner.
  */
-async function main() {
+async function runTest() {
+  // Display version
+  printInfo(`sbb-test v${getVersion()} | svg-bbox toolkit\n`);
+
   const args = process.argv.slice(2);
   if (args.length < 1) {
-    console.error('Usage: node sbb-test.cjs path/to/file.svg');
-    process.exit(1);
+    throw new ValidationError('Usage: node sbb-test.cjs path/to/file.svg');
   }
 
-  const svgPath = path.resolve(args[0]);
-  if (!fs.existsSync(svgPath)) {
-    console.error('SVG file does not exist:', svgPath);
-    process.exit(1);
-  }
+  // SECURITY: Validate and sanitize input path
+  const safePath = validateFilePath(args[0], {
+    requiredExtensions: ['.svg'],
+    mustExist: true
+  });
 
-  const svgContent = fs.readFileSync(svgPath, 'utf8');
+  // SECURITY: Read SVG with size limit and validation
+  const svgContent = readSVGFileSafe(safePath);
 
-  const baseName = path.basename(svgPath, path.extname(svgPath));
+  // SECURITY: Sanitize SVG content (remove scripts, event handlers)
+  const sanitizedSvg = sanitizeSVGContent(svgContent);
+
+  const baseName = path.basename(safePath, path.extname(safePath));
   const outJsonPath = path.resolve(process.cwd(), `${baseName}-bbox-results.json`);
   const errLogPath  = path.resolve(process.cwd(), `${baseName}-bbox-errors.log`);
 
   const errorLogMessages = [];
 
-  let browser;
+  let browser = null;
   try {
     browser = await launchBrowserWithFallback(errorLogMessages);
   } catch (err) {
     errorLogMessages.push('[fatal] ' + err.stack);
-    fs.writeFileSync(errLogPath, errorLogMessages.join('\n'), 'utf8');
-    console.error('Failed to launch browser; see error log:', errLogPath);
-    process.exit(1);
+    // SECURITY: Use writeFileSafe for error log
+    const safeErrPath = validateOutputPath(errLogPath);
+    writeFileSafe(safeErrPath, errorLogMessages.join('\n'), 'utf8');
+    throw new Error(`Failed to launch browser; see error log: ${safeErrPath}`);
   }
 
   const page = await browser.newPage();
+
+  // SECURITY: Set page timeout
+  page.setDefaultTimeout(BROWSER_TIMEOUT_MS);
+  page.setDefaultNavigationTimeout(BROWSER_TIMEOUT_MS);
 
   // Collect page console + errors into error log
   page.on('console', (msg) => {
@@ -328,10 +363,13 @@ async function main() {
       }
 
       return res;
-    }, svgContent);
+    }, sanitizedSvg);
 
-    // Write output JSON
-    fs.writeFileSync(outJsonPath, JSON.stringify(results, null, 2), 'utf8');
+    // SECURITY: Write output JSON with path validation
+    const safeJsonPath = validateOutputPath(outJsonPath, {
+      requiredExtensions: ['.json']
+    });
+    writeFileSafe(safeJsonPath, JSON.stringify(results, null, 2), 'utf8');
 
     // Append any page-accumulated errors to error log
     if (results && Array.isArray(results.errors) && results.errors.length > 0) {
@@ -341,24 +379,32 @@ async function main() {
       }
     }
 
-    fs.writeFileSync(errLogPath, errorLogMessages.join('\n'), 'utf8');
+    // SECURITY: Write error log with path validation
+    const safeErrPath = validateOutputPath(errLogPath);
+    writeFileSafe(safeErrPath, errorLogMessages.join('\n'), 'utf8');
 
-    console.log('Results written to:', outJsonPath);
-    console.log('Errors written to :', errLogPath);
+    printSuccess(`Results written to: ${safeJsonPath}`);
+    printInfo(`Errors written to: ${safeErrPath}`);
 
   } catch (err) {
-    errorLogMessages.push('[fatal in main] ' + err.stack);
-    fs.writeFileSync(errLogPath, errorLogMessages.join('\n'), 'utf8');
-    console.error('Fatal error; see error log:', errLogPath);
-    process.exitCode = 1;
+    errorLogMessages.push('[fatal in runTest] ' + err.stack);
+    // SECURITY: Write error log with path validation
+    const safeErrPath = validateOutputPath(errLogPath);
+    writeFileSafe(safeErrPath, errorLogMessages.join('\n'), 'utf8');
+    throw new Error(`Fatal error; see error log: ${safeErrPath}`);
   } finally {
+    // SECURITY: Ensure browser is always closed
     if (browser) {
-      await browser.close();
+      try {
+        await browser.close();
+      } catch (closeErr) {
+        // Force kill if close fails
+        if (browser.process()) {
+          browser.process().kill('SIGKILL');
+        }
+      }
     }
   }
 }
 
-main().catch((err) => {
-  console.error('Unhandled error in main:', err);
-  process.exit(1);
-});
+runCLI(runTest);

@@ -67,10 +67,6 @@ OPTIONS:
   --overwrite           Overwrite output file if it exists
   --skip-comparison     Skip automatic similarity check with sbb-comparer
                         (only applies to single file mode)
-  --preserve-baseline   Preserve text baseline spacing (Inkscape default)
-                        Default: disabled (--no-convert-text-baseline-spacing)
-  --convert-dpi         Allow DPI conversion (90 to 96)
-                        Default: disabled (--convert-dpi-method=none)
   --json                Output results as JSON
   --help                Show this help
   --version             Show version
@@ -215,8 +211,6 @@ function parseArgs(argv) {
     batch: null,
     overwrite: false,
     skipComparison: false,
-    preserveBaseline: false,
-    convertDpi: false,
     json: false
   };
 
@@ -235,10 +229,6 @@ function parseArgs(argv) {
       args.overwrite = true;
     } else if (arg === '--skip-comparison') {
       args.skipComparison = true;
-    } else if (arg === '--preserve-baseline') {
-      args.preserveBaseline = true;
-    } else if (arg === '--convert-dpi') {
-      args.convertDpi = true;
     } else if (arg === '--json') {
       args.json = true;
     } else if (!arg.startsWith('-')) {
@@ -312,9 +302,10 @@ async function runComparison(originalPath, convertedPath, jsonMode) {
 // CONVERSION
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function convertTextToPaths(inkscapePath, inputPath, outputPath, options) {
+async function convertTextToPaths(inkscapePath, inputPath, outputPath) {
   // Build Inkscape command arguments
   // Based on Inkscape CLI documentation and Python reference implementation
+  // Non-commented parameters are the defaults that are ALWAYS used
   const inkscapeArgs = [
     // Export as SVG format
     '--export-type=svg',
@@ -324,35 +315,30 @@ async function convertTextToPaths(inkscapePath, inputPath, outputPath, options) 
 
     // Convert all text elements to path outlines
     '--export-text-to-path',
-  ];
 
-  // Add optional flags
-  if (options.overwrite) {
     // Overwrite existing output file without prompting
-    inkscapeArgs.push('--export-overwrite');
-  }
+    '--export-overwrite',
 
-  if (!options.preserveBaseline) {
     // Use 'no-convert-text-baseline-spacing' to do not automatically fix text baselines in legacy
     // (pre-0.92) files on opening. Inkscape 0.92 adopts the CSS standard definition for the
     // 'line-height' property, which differs from past versions. By default, the line height values
     // in files created prior to Inkscape 0.92 will be adjusted on loading to preserve the intended
     // text layout. This command line option will skip that adjustment.
-    inkscapeArgs.push('--no-convert-text-baseline-spacing');
-  }
+    '--no-convert-text-baseline-spacing',
 
-  if (!options.convertDpi) {
+    // Output filename
+    `--export-filename=${outputPath}`,
+
     // Choose 'convert-dpi-method' method to rescale legacy (pre-0.92) files which render slightly
     // smaller due to the switch from 90 DPI to 96 DPI when interpreting lengths expressed in units
     // of pixels. Possible values are "none" (no change, document will render at 94% of its original
     // size), "scale-viewbox" (document will be rescaled globally, individual lengths will stay
     // untouched) and "scale-document" (each length will be re-scaled individually).
-    inkscapeArgs.push('--convert-dpi-method=none');
-  }
+    '--convert-dpi-method=none',
 
-  // Add output and input files
-  inkscapeArgs.push(`--export-filename=${outputPath}`);
-  inkscapeArgs.push(inputPath);
+    // Input SVG file
+    inputPath
+  ];
 
   // Execute Inkscape
   try {
@@ -425,11 +411,7 @@ async function processSingleFile(inkscapePath, inputPath, outputPath, options, a
   }
 
   // Convert text to paths
-  await convertTextToPaths(inkscapePath, safeInputPath, safeOutputPath, {
-    overwrite: options.overwrite,
-    preserveBaseline: options.preserveBaseline,
-    convertDpi: options.convertDpi
-  });
+  await convertTextToPaths(inkscapePath, safeInputPath, safeOutputPath);
 
   // Verify output file was created
   if (!fs.existsSync(safeOutputPath)) {
@@ -518,8 +500,6 @@ async function main() {
 
         const result = await processSingleFile(inkscapePath, inputFile, outputFile, {
           overwrite: args.overwrite,
-          preserveBaseline: args.preserveBaseline,
-          convertDpi: args.convertDpi,
           skipComparison: args.skipComparison
         }, args);
 
@@ -582,8 +562,6 @@ async function main() {
 
   const result = await processSingleFile(inkscapePath, args.input, args.output, {
     overwrite: args.overwrite,
-    preserveBaseline: args.preserveBaseline,
-    convertDpi: args.convertDpi,
     skipComparison: args.skipComparison
   }, args);
 

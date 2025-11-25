@@ -165,6 +165,7 @@ async function extractObjectWithInkscape(inputPath, objectId, outputPath, margin
 
   // Build Inkscape command arguments
   // Based on Inkscape CLI documentation and Python reference implementation
+  // Non-commented parameters are the defaults that are ALWAYS used
   const inkscapeArgs = [
     // Export as SVG format
     '--export-type=svg',
@@ -188,6 +189,9 @@ async function extractObjectWithInkscape(inputPath, objectId, outputPath, margin
     // Specify the ID of the object to extract
     `--export-id=${objectId}`,
 
+    // ## Margin parameter - uncomment when needed
+    // `--export-margin=${MARGIN}`,
+
     // Output filename
     `--export-filename=${safeOutputPath}`,
 
@@ -196,17 +200,17 @@ async function extractObjectWithInkscape(inputPath, objectId, outputPath, margin
     // of pixels. Possible values are "none" (no change, document will render at 94% of its original
     // size), "scale-viewbox" (document will be rescaled globally, individual lengths will stay
     // untouched) and "scale-document" (each length will be re-scaled individually).
-    '--convert-dpi-method=none'
+    `--convert-dpi-method=none`,
+
+    // Input SVG file
+    safeInputPath
   ];
 
-  // Add margin if specified (optional)
+  // Add margin if specified (optional parameter)
   if (margin !== null && margin !== undefined) {
-    // Adds a margin (in pixels) around the exported object
-    inkscapeArgs.push(`--export-margin=${margin}`);
+    // Insert margin after export-id and before export-filename
+    inkscapeArgs.splice(6, 0, `--export-margin=${margin}`);
   }
-
-  // Add input file as last argument
-  inkscapeArgs.push(safeInputPath);
 
   try {
     // Execute Inkscape with timeout

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * sbb-inkscape-exportpng.cjs
+ * sbb-inkscape-svg2png.cjs
  *
  * Export SVG files to PNG format using Inkscape with comprehensive control
  * over all export parameters including color modes, compression, antialiasing,
@@ -41,7 +41,7 @@ const {
 function printHelp() {
   console.log(`
 ╔════════════════════════════════════════════════════════════════════════════╗
-║ sbb-inkscape-exportpng.cjs - Advanced SVG to PNG Export Tool        ║
+║ sbb-inkscape-svg2png.cjs - Advanced SVG to PNG Export Tool          ║
 ╚════════════════════════════════════════════════════════════════════════════╝
 
 DESCRIPTION:
@@ -50,8 +50,8 @@ DESCRIPTION:
   compression, antialiasing, background, and export areas.
 
 USAGE:
-  node sbb-inkscape-exportpng.cjs input.svg [options]
-  node sbb-inkscape-exportpng.cjs --batch <file> [options]
+  node sbb-inkscape-svg2png.cjs input.svg [options]
+  node sbb-inkscape-svg2png.cjs --batch <file> [options]
 
 DIMENSION & RESOLUTION OPTIONS:
   --output <file>           Output PNG file (default: <input>.png)
@@ -103,33 +103,33 @@ OTHER OPTIONS:
 EXAMPLES:
 
   # Basic PNG export (default: area-drawing, 96 DPI)
-  node sbb-inkscape-exportpng.cjs icon.svg
+  node sbb-inkscape-svg2png.cjs icon.svg
 
   # Export with specific dimensions
-  node sbb-inkscape-exportpng.cjs icon.svg --width 512 --height 512
+  node sbb-inkscape-svg2png.cjs icon.svg --width 512 --height 512
 
   # Export at high DPI with margin
-  node sbb-inkscape-exportpng.cjs icon.svg --dpi 300 --margin 10
+  node sbb-inkscape-svg2png.cjs icon.svg --dpi 300 --margin 10
 
   # Export specific object by ID
-  node sbb-inkscape-exportpng.cjs sprite.svg --id icon_home --output home.png
+  node sbb-inkscape-svg2png.cjs sprite.svg --id icon_home --output home.png
 
   # Export full page area with white background
-  node sbb-inkscape-exportpng.cjs document.svg --area-page \\
+  node sbb-inkscape-svg2png.cjs document.svg --area-page \\
     --background white --background-opacity 1.0
 
   # High-quality export with maximum compression
-  node sbb-inkscape-exportpng.cjs logo.svg --width 1024 --height 1024 \\
+  node sbb-inkscape-svg2png.cjs logo.svg --width 1024 --height 1024 \\
     --antialias 3 --compression 9
 
   # Export to grayscale 8-bit PNG
-  node sbb-inkscape-exportpng.cjs drawing.svg --color-mode Gray_8
+  node sbb-inkscape-svg2png.cjs drawing.svg --color-mode Gray_8
 
   # Pixel-perfect export with snap
-  node sbb-inkscape-exportpng.cjs pixel-art.svg --area-snap --dpi 96
+  node sbb-inkscape-svg2png.cjs pixel-art.svg --area-snap --dpi 96
 
   # Batch export with shared settings
-  node sbb-inkscape-exportpng.cjs --batch icons.txt \\
+  node sbb-inkscape-svg2png.cjs --batch icons.txt \\
     --width 256 --height 256 --compression 9
 
 OUTPUT:
@@ -192,7 +192,7 @@ function parseArgs(argv) {
       printHelp();
       process.exit(0);
     } else if (arg === '--version' || arg === '-v') {
-      printVersion('sbb-inkscape-exportpng');
+      printVersion('sbb-inkscape-svg2png');
       process.exit(0);
     } else if (arg === '--output' && i + 1 < argv.length) {
       args.output = argv[++i];
@@ -293,8 +293,8 @@ function parseArgs(argv) {
   // Validate required arguments
   if (!args.batch && !args.input) {
     console.error('Error: Input SVG file required (or use --batch <file>)');
-    console.error('Usage: node sbb-inkscape-exportpng.cjs input.svg [options]');
-    console.error('   or: node sbb-inkscape-exportpng.cjs --batch <file> [options]');
+    console.error('Usage: node sbb-inkscape-svg2png.cjs input.svg [options]');
+    console.error('   or: node sbb-inkscape-svg2png.cjs --batch <file> [options]');
     process.exit(2);
   }
 
@@ -546,7 +546,7 @@ async function exportPngWithInkscape(inputPath, outputPath, options = {}) {
 async function main() {
   const args = parseArgs(process.argv);
 
-  printInfo(`sbb-inkscape-exportpng v${getVersion()} | svg-bbox toolkit\n`);
+  printInfo(`sbb-inkscape-svg2png v${getVersion()} | svg-bbox toolkit\n`);
 
   // BATCH MODE: Export multiple SVG files
   if (args.batch) {

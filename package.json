@@ -4,6 +4,19 @@
   "description": "A set of tools to compute and to use a SVG bounding box you can trust (as opposed to the unreliable .getBBox() scourge)",
   "type": "module",
   "main": "./SvgVisualBBox.js",
+  "browser": "./SvgVisualBBox.js",
+  "unpkg": "./SvgVisualBBox.min.js",
+  "jsdelivr": "./SvgVisualBBox.min.js",
+  "exports": {
+    ".": {
+      "browser": "./SvgVisualBBox.js",
+      "import": "./SvgVisualBBox.js",
+      "default": "./SvgVisualBBox.js"
+    },
+    "./min": {
+      "default": "./SvgVisualBBox.min.js"
+    }
+  },
   "bin": {
     "sbb-getbbox": "./sbb-getbbox.cjs",
     "sbb-extractor": "./sbb-extractor.cjs",
@@ -17,6 +30,7 @@
   },
   "files": [
     "SvgVisualBBox.js",
+    "SvgVisualBBox.min.js",
     "sbb-*.cjs",
     "browser-utils.cjs",
     "version.cjs",
@@ -48,7 +62,11 @@
     "inkscape",
     "text-to-path",
     "svg-to-png",
-    "cli"
+    "cli",
+    "browser",
+    "cdn",
+    "umd",
+    "minified"
   ],
   "author": "Emasoft",
   "license": "MIT",
@@ -56,6 +74,7 @@
     "node": ">=18.0.0"
   },
   "scripts": {
+    "build": "node scripts/build-min.cjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:unit": "vitest run tests/unit",
@@ -74,7 +93,7 @@
     "version:bump:minor": "node scripts/bump-version.cjs minor",
     "version:bump:major": "node scripts/bump-version.cjs major",
     "version:bump": "node scripts/bump-version.cjs",
-    "prepublishOnly": "npm run lint && npm run typecheck && npm run test"
+    "prepublishOnly": "npm run build && npm run lint && npm run typecheck && npm run test"
   },
   "dependencies": {
     "chrome-launcher": "^1.1.2",
@@ -92,6 +111,7 @@
     "happy-dom": "^14.12.0",
     "jsdom": "^27.2.0",
     "prettier": "^3.3.0",
+    "terser": "^5.44.1",
     "typescript": "^5.5.0",
     "vitest": "^2.0.0"
   }

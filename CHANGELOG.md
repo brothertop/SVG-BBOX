@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **CDN Distribution Support**:
+  - Minified UMD build (`SvgVisualBBox.min.js`) for CDN usage
+  - 65.3% size reduction (72.9 KB → 25.3 KB)
+  - Available via unpkg and jsdelivr CDNs
+  - Build script with terser minification (`npm run build`)
+  - Configured package.json with `browser`, `unpkg`, `jsdelivr` fields
+  - Proper `exports` configuration for modern bundlers
 - CLI tool `sbb-comparer` for visual comparison of two SVG files
   - Pixel-by-pixel comparison with configurable threshold
   - Multiple alignment modes (origin, viewBox, object-based, custom)
@@ -26,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `lib/cli-utils.cjs` - CLI formatting and error handling
 - Comprehensive integration tests for all Inkscape tools (26 tests)
 - Updated README with detailed Inkscape tools documentation
-- Added `pngjs` dependency for PNG manipulation
+- Added `pngjs` and `terser` dependencies
 
 ## [1.0.1] - 2025-11-24
 

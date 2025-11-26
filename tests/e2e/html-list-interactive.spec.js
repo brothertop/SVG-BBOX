@@ -91,9 +91,7 @@ test.describe('HTML List Interactive Features', () => {
     await page.waitForTimeout(100);
 
     // Check NO red background (should be white or transparent)
-    const bgColor = await firstRow.evaluate((el) => {
-      return window.getComputedStyle(el).backgroundColor;
-    });
+    const bgColor = await firstRow.evaluate((el) => window.getComputedStyle(el).backgroundColor);
     expect(bgColor).not.toContain('255, 0, 0'); // Not red
     expect(bgColor).not.toContain('rgb(255, 200, 200)'); // Not light red
 
@@ -120,9 +118,7 @@ test.describe('HTML List Interactive Features', () => {
     const bgColor = await firstRow
       .locator('td')
       .first()
-      .evaluate((el) => {
-        return window.getComputedStyle(el).backgroundColor;
-      });
+      .evaluate((el) => window.getComputedStyle(el).backgroundColor);
     expect(bgColor).toMatch(/rgb\(255, 200, 200\)|rgba\(255, 200, 200/);
 
     // Check error message appears
@@ -156,9 +152,7 @@ test.describe('HTML List Interactive Features', () => {
     const bgColor2 = await secondRow
       .locator('td')
       .first()
-      .evaluate((el) => {
-        return window.getComputedStyle(el).backgroundColor;
-      });
+      .evaluate((el) => window.getComputedStyle(el).backgroundColor);
     expect(bgColor2).toMatch(/rgb\(255, 200, 200\)|rgba\(255, 200, 200/);
 
     // Check error message
@@ -197,9 +191,7 @@ test.describe('HTML List Interactive Features', () => {
     const bgColor = await secondRow
       .locator('td')
       .first()
-      .evaluate((el) => {
-        return window.getComputedStyle(el).backgroundColor;
-      });
+      .evaluate((el) => window.getComputedStyle(el).backgroundColor);
     expect(bgColor).toMatch(/rgb\(255, 200, 200\)|rgba\(255, 200, 200/);
 
     // Check error message
@@ -379,20 +371,21 @@ test.describe('HTML List Interactive Features', () => {
     await page.waitForTimeout(100);
 
     // Count visible rows (should be fewer than initial)
-    const visibleRows = await rows.evaluateAll((rows) => {
-      return rows.filter((row) => row.style.display !== 'none');
-    });
+    const visibleRows = await rows.evaluateAll((rows) =>
+      rows.filter((row) => row.style.display !== 'none')
+    );
     const filteredCount = visibleRows.length;
 
     // At least some rows should be hidden
     expect(filteredCount).toBeLessThan(initialCount);
 
     // Check that all visible rows match the filter
-    const visibleIds = await rows.evaluateAll((rows) => {
-      return rows
-        .filter((row) => /** @type {HTMLElement} */ (row).style.display !== 'none')
-        .map((row) => /** @type {HTMLTableRowElement} */ (row).cells[1]?.textContent?.trim()); // ID column
-    });
+    const visibleIds = await rows.evaluateAll(
+      (rows) =>
+        rows
+          .filter((row) => /** @type {HTMLElement} */ (row).style.display !== 'none')
+          .map((row) => /** @type {HTMLTableRowElement} */ (row).cells[1]?.textContent?.trim()) // ID column
+    );
     visibleIds.forEach((id) => {
       expect(id).toMatch(/^g/);
     });
@@ -411,16 +404,16 @@ test.describe('HTML List Interactive Features', () => {
     await page.waitForTimeout(100);
 
     // Get all visible rows
-    const visibleRows = await rows.evaluateAll((rows) => {
-      return rows
+    const visibleRows = await rows.evaluateAll((rows) =>
+      rows
         .filter((row) => /** @type {HTMLElement} */ (row).style.display !== 'none')
         .map((row) => {
           const text = /** @type {HTMLTableRowElement} */ (row).cells[2]?.textContent?.trim(); // Tag column
           // Extract tag name from <tag> format
           const match = text?.match(/<(\w+)>/);
           return match ? match[1] : text;
-        });
-    });
+        })
+    );
 
     // All visible rows should be "path"
     visibleRows.forEach((tag) => {
@@ -446,9 +439,7 @@ test.describe('HTML List Interactive Features', () => {
     let bgColor = await firstRow
       .locator('td')
       .first()
-      .evaluate((el) => {
-        return window.getComputedStyle(el).backgroundColor;
-      });
+      .evaluate((el) => window.getComputedStyle(el).backgroundColor);
     expect(bgColor).toMatch(/rgb\(255, 200, 200\)|rgba\(255, 200, 200/);
 
     // Now type a valid prefix
@@ -460,9 +451,7 @@ test.describe('HTML List Interactive Features', () => {
     bgColor = await firstRow
       .locator('td')
       .first()
-      .evaluate((el) => {
-        return window.getComputedStyle(el).backgroundColor;
-      });
+      .evaluate((el) => window.getComputedStyle(el).backgroundColor);
     expect(bgColor).not.toContain('255, 200, 200');
 
     // Continue typing valid characters
@@ -473,9 +462,7 @@ test.describe('HTML List Interactive Features', () => {
     bgColor = await firstRow
       .locator('td')
       .first()
-      .evaluate((el) => {
-        return window.getComputedStyle(el).backgroundColor;
-      });
+      .evaluate((el) => window.getComputedStyle(el).backgroundColor);
     expect(bgColor).not.toContain('255, 200, 200');
   });
 
@@ -497,9 +484,7 @@ test.describe('HTML List Interactive Features', () => {
     const bgColor = await firstRow
       .locator('td')
       .first()
-      .evaluate((el) => {
-        return window.getComputedStyle(el).backgroundColor;
-      });
+      .evaluate((el) => window.getComputedStyle(el).backgroundColor);
     expect(bgColor).toMatch(/rgb\(255, 200, 200\)|rgba\(255, 200, 200/);
 
     // Error message should appear

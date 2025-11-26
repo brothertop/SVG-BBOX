@@ -66,9 +66,7 @@ const testPagePath = path.join(os.tmpdir(), 'setViewBoxOnObjects_test.html');
 const baseScenarios = [
   {
     name: 'Stretch mode: single element',
-    generateContent: (id) => {
-      return `<circle id="${id}" cx="200" cy="150" r="50" fill="#e74c3c"/>`;
-    },
+    generateContent: (id) => `<circle id="${id}" cx="200" cy="150" r="50" fill="#e74c3c"/>`,
     options: { aspect: 'stretch' },
     validate: (result) => {
       expect(result.success).toBe(true);
@@ -77,9 +75,8 @@ const baseScenarios = [
   },
   {
     name: 'Stretch with margin (user units)',
-    generateContent: (id) => {
-      return `<rect id="${id}" x="150" y="100" width="100" height="80" fill="#3498db"/>`;
-    },
+    generateContent: (id) =>
+      `<rect id="${id}" x="150" y="100" width="100" height="80" fill="#3498db"/>`,
     options: { aspect: 'stretch', margin: 20 },
     validate: (result) => {
       expect(result.success).toBe(true);
@@ -90,10 +87,9 @@ const baseScenarios = [
   },
   {
     name: 'ChangePosition mode',
-    generateContent: (id) => {
+    generateContent: (id) =>
       // Place element far from center to ensure detectable position change
-      return `<text id="${id}" x="50" y="50" font-size="24" text-anchor="middle" fill="#2c3e50">Test</text>`;
-    },
+      `<text id="${id}" x="50" y="50" font-size="24" text-anchor="middle" fill="#2c3e50">Test</text>`,
     options: { aspect: 'changePosition' },
     validate: (result) => {
       expect(result.success).toBe(true);
@@ -109,9 +105,7 @@ const baseScenarios = [
   },
   {
     name: 'PreserveAspectRatio (meet)',
-    generateContent: (id) => {
-      return `<circle id="${id}" cx="200" cy="150" r="40" fill="#9b59b6"/>`;
-    },
+    generateContent: (id) => `<circle id="${id}" cx="200" cy="150" r="40" fill="#9b59b6"/>`,
     options: { aspect: 'preserveAspectRatio', aspectRatioMode: 'meet', align: 'xMidYMid' },
     validate: (result) => {
       expect(result.success).toBe(true);
@@ -127,9 +121,8 @@ const baseScenarios = [
   },
   {
     name: 'PreserveAspectRatio (slice)',
-    generateContent: (id) => {
-      return `<rect id="${id}" x="180" y="130" width="40" height="40" fill="#1abc9c"/>`;
-    },
+    generateContent: (id) =>
+      `<rect id="${id}" x="180" y="130" width="40" height="40" fill="#1abc9c"/>`,
     options: { aspect: 'preserveAspectRatio', aspectRatioMode: 'slice', align: 'xMidYMid' },
     validate: (result) => {
       expect(result.success).toBe(true);
@@ -138,9 +131,7 @@ const baseScenarios = [
   },
   {
     name: 'Alignment xMinYMin',
-    generateContent: (id) => {
-      return `<circle id="${id}" cx="100" cy="80" r="30" fill="#e67e22"/>`;
-    },
+    generateContent: (id) => `<circle id="${id}" cx="100" cy="80" r="30" fill="#e67e22"/>`,
     options: { aspect: 'preserveAspectRatio', aspectRatioMode: 'meet', align: 'xMinYMin' },
     validate: (result) => {
       expect(result.success).toBe(true);
@@ -151,10 +142,8 @@ const baseScenarios = [
   },
   {
     name: 'Visibility hideAllExcept',
-    generateContent: (id) => {
-      return `<circle id="${id}" cx="200" cy="150" r="40" fill="#27ae60"/>
-              <rect id="other_${id}" x="50" y="50" width="50" height="50" fill="#c0392b"/>`;
-    },
+    generateContent: (id) => `<circle id="${id}" cx="200" cy="150" r="40" fill="#27ae60"/>
+              <rect id="other_${id}" x="50" y="50" width="50" height="50" fill="#c0392b"/>`,
     options: { aspect: 'stretch', visibility: 'hideAllExcept' },
     validate: async (result, page) => {
       expect(result.success).toBe(true);
@@ -173,9 +162,7 @@ const baseScenarios = [
   },
   {
     name: 'Dry-run mode',
-    generateContent: (id) => {
-      return `<circle id="${id}" cx="200" cy="150" r="50" fill="#34495e"/>`;
-    },
+    generateContent: (id) => `<circle id="${id}" cx="200" cy="150" r="50" fill="#34495e"/>`,
     options: { aspect: 'stretch', dryRun: true },
     validate: (result) => {
       expect(result.success).toBe(true);
@@ -259,10 +246,9 @@ test.describe('setViewBoxOnObjects() - Comprehensive Edge Case Tests', () => {
 
           // Execute test in browser context
           const result = await page.evaluate(
-            ({ svg, elem, opts }) => {
+            ({ svg, elem, opts }) =>
               // @ts-ignore - testViewBox is defined in the test HTML page
-              return window.testViewBox(svg, elem, opts);
-            },
+              window.testViewBox(svg, elem, opts),
             { svg: svgId, elem: targetId, opts: options }
           );
 
@@ -323,10 +309,10 @@ test.describe('setViewBoxOnObjects() - Comprehensive Edge Case Tests', () => {
   test('Error: nonexistent element ID', async ({ page }) => {
     await page.goto('file://' + testPagePath);
 
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate(() =>
       // @ts-ignore - testViewBox is defined in the test HTML page
-      return window.testViewBox('svg_normal_0', 'nonexistent', { aspect: 'stretch' });
-    });
+      window.testViewBox('svg_normal_0', 'nonexistent', { aspect: 'stretch' })
+    );
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('not found');

@@ -68,15 +68,11 @@ const edgeCases = {
   },
   noViewBox: {
     name: 'No viewBox (only width/height)',
-    generateSVG: (content, id) => {
-      return `<svg id="svg_${id}" width="400" height="300">${content}</svg>`;
-    }
+    generateSVG: (content, id) => `<svg id="svg_${id}" width="400" height="300">${content}</svg>`
   },
   noResolution: {
     name: 'No resolution (only viewBox)',
-    generateSVG: (content, id) => {
-      return `<svg id="svg_${id}" viewBox="0 0 400 300">${content}</svg>`;
-    }
+    generateSVG: (content, id) => `<svg id="svg_${id}" viewBox="0 0 400 300">${content}</svg>`
   },
   negativeViewBox: {
     name: 'Negative viewBox coordinates',
@@ -190,9 +186,8 @@ const baseScenarios = [
   },
   {
     name: 'Auto theme detection',
-    generateContent: (id) => {
-      return `<text id="${id}" x="200" y="150" font-size="32" text-anchor="middle" fill="#2c3e50">Theme</text>`;
-    },
+    generateContent: (id) =>
+      `<text id="${id}" x="200" y="150" font-size="32" text-anchor="middle" fill="#2c3e50">Theme</text>`,
     options: { theme: 'auto' },
     validate: (result) => {
       expect(result.success).toBe(true);
@@ -207,9 +202,7 @@ const baseScenarios = [
   },
   {
     name: 'Forced dark theme',
-    generateContent: (id) => {
-      return `<circle id="${id}" cx="200" cy="150" r="50" fill="#16a085"/>`;
-    },
+    generateContent: (id) => `<circle id="${id}" cx="200" cy="150" r="50" fill="#16a085"/>`,
     options: { theme: 'dark' },
     validate: (result) => {
       expect(result.success).toBe(true);
@@ -221,9 +214,7 @@ const baseScenarios = [
   },
   {
     name: 'Forced light theme',
-    generateContent: (id) => {
-      return `<circle id="${id}" cx="200" cy="150" r="50" fill="#c0392b"/>`;
-    },
+    generateContent: (id) => `<circle id="${id}" cx="200" cy="150" r="50" fill="#c0392b"/>`,
     options: { theme: 'light' },
     validate: (result) => {
       expect(result.success).toBe(true);
@@ -234,9 +225,8 @@ const baseScenarios = [
   },
   {
     name: 'Custom border color',
-    generateContent: (id) => {
-      return `<rect id="${id}" x="150" y="100" width="100" height="80" fill="#27ae60"/>`;
-    },
+    generateContent: (id) =>
+      `<rect id="${id}" x="150" y="100" width="100" height="80" fill="#27ae60"/>`,
     options: { borderColor: 'rgb(255, 0, 0)' },
     validate: (result) => {
       expect(result.success).toBe(true);
@@ -271,7 +261,7 @@ test.beforeAll(async () => {
   }
 
   // Generate all SVG combinations dynamically
-  let sections = [];
+  const sections = [];
 
   for (const edgeKey of Object.keys(edgeCases)) {
     const edge = edgeCases[edgeKey];
@@ -429,10 +419,9 @@ test.describe('showTrueBBoxBorder() - Comprehensive Edge Case Tests', () => {
           const options = scenario.options || {};
           /** @type {TestBorderResult} */
           const result = await page.evaluate(
-            ({ elemId, opts }) => {
+            ({ elemId, opts }) =>
               // @ts-expect-error - testBorder is added dynamically in the test page
-              return window.testBorder(elemId, opts);
-            },
+              window.testBorder(elemId, opts),
             { elemId: targetId, opts: options }
           );
 
@@ -456,10 +445,12 @@ test.describe('showTrueBBoxBorder() - Comprehensive Edge Case Tests', () => {
 
     // Use first element
     const firstId = 'elem_normal_0';
-    await page.evaluate((id) => {
-      // @ts-expect-error - testBorder is added dynamically in the test page
-      return window.testBorder(id);
-    }, firstId);
+    await page.evaluate(
+      (id) =>
+        // @ts-expect-error - testBorder is added dynamically in the test page
+        window.testBorder(id),
+      firstId
+    );
 
     let count = await page.evaluate(
       () => document.querySelectorAll('[data-svg-bbox-overlay]').length

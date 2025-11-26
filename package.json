@@ -18,16 +18,16 @@
     }
   },
   "bin": {
-    "svg-bbox": "./svg-bbox.cjs",
-    "sbb-getbbox": "./sbb-getbbox.cjs",
-    "sbb-extractor": "./sbb-extractor.cjs",
-    "sbb-fix-viewbox": "./sbb-fix-viewbox.cjs",
-    "sbb-render": "./sbb-render.cjs",
-    "sbb-comparer": "./sbb-comparer.cjs",
-    "sbb-test": "./sbb-test.cjs",
-    "sbb-inkscape-text2path": "./sbb-inkscape-text2path.cjs",
-    "sbb-inkscape-extract": "./sbb-inkscape-extract.cjs",
-    "sbb-inkscape-svg2png": "./sbb-inkscape-svg2png.cjs"
+    "svg-bbox": "svg-bbox.cjs",
+    "sbb-getbbox": "sbb-getbbox.cjs",
+    "sbb-extractor": "sbb-extractor.cjs",
+    "sbb-fix-viewbox": "sbb-fix-viewbox.cjs",
+    "sbb-render": "sbb-render.cjs",
+    "sbb-comparer": "sbb-comparer.cjs",
+    "sbb-test": "sbb-test.cjs",
+    "sbb-inkscape-text2path": "sbb-inkscape-text2path.cjs",
+    "sbb-inkscape-extract": "sbb-inkscape-extract.cjs",
+    "sbb-inkscape-svg2png": "sbb-inkscape-svg2png.cjs"
   },
   "files": [
     "SvgVisualBBox.js",
@@ -43,7 +43,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/Emasoft/SVG-BBOX.git"
+    "url": "git+https://github.com/Emasoft/SVG-BBOX.git"
   },
   "bugs": {
     "url": "https://github.com/Emasoft/SVG-BBOX/issues"

@@ -58,9 +58,9 @@ methods. Both examples demonstrate the same fundamental issues.
     <th style="background-color: white; color: black; border: 1px solid black; width: 33.34%;"><strong>SvgVisualBBox</strong></th>
   </tr>
   <tr>
-    <td style="background-color: white; color: black; border: 1px solid black;"><img src="assets/text39_inkscape.png" alt="Inkscape extraction - undersized by 55%" style="height: 200px; width: auto;" /></td>
-    <td style="background-color: white; color: black; border: 1px solid black;"><img src="assets/text39_getbbox.png" alt="Chrome getBBox - oversized vertically" style="height: 200px; width: auto;" /></td>
-    <td style="background-color: white; color: black; border: 1px solid black;"><img src="assets/text39_svgvisualbbox.png" alt="SvgVisualBBox - pixel-perfect accuracy" style="height: 200px; width: auto;" /></td>
+    <td style="background-color: white; color: black; border: 1px solid black;"><img src="assets/text39_inkscape.png" alt="Inkscape extraction - undersized by 55%" style="max-height: 200px; width: auto;" /></td>
+    <td style="background-color: white; color: black; border: 1px solid black;"><img src="assets/text39_getbbox.png" alt="Chrome getBBox - oversized vertically" style="max-height: 200px; width: auto;" /></td>
+    <td style="background-color: white; color: black; border: 1px solid black;"><img src="assets/text39_svgvisualbbox.png" alt="SvgVisualBBox - pixel-perfect accuracy" style="max-height: 200px; width: auto;" /></td>
   </tr>
   <tr>
     <td align="center" style="background-color: white; color: black; border: 1px solid black;"><a href="assets/text39_inkscape.svg">SVG</a></td>
@@ -68,17 +68,17 @@ methods. Both examples demonstrate the same fundamental issues.
     <td align="center" style="background-color: white; color: black; border: 1px solid black;"><a href="assets/text39_svgvisualbbox.svg">SVG</a></td>
   </tr>
   <tr>
-    <td style="background-color: white; color: black; border: 1px solid black;">❌ Width: 324px<br/><em>Undersized by ~55%</em><br/>Lost coordinate context</td>
-    <td style="background-color: white; color: black; border: 1px solid black;">⚠️ Width: 730px<br/>Height: 74px<br/><em>Oversized vertically by 30%</em></td>
-    <td style="background-color: white; color: black; border: 1px solid black;">✅ Width: 729px<br/>Height: 57px<br/><em>Pixel-perfect accuracy</em></td>
+    <td style="background-color: white; color: black; border: 1px solid black; padding: 8px;">❌ Width: 324px<br/><em>Undersized by ~55%</em><br/>Lost coordinate context</td>
+    <td style="background-color: white; color: black; border: 1px solid black; padding: 8px;">⚠️ Width: 730px<br/>Height: 74px<br/><em>Oversized vertically by 30%</em></td>
+    <td style="background-color: white; color: black; border: 1px solid black; padding: 8px;">✅ Width: 729px<br/>Height: 57px<br/><em>Pixel-perfect accuracy</em></td>
   </tr>
   <tr>
     <td colspan="3" style="background-color: white; color: black; border: 1px solid black;"><hr/><strong>Example 2: Oval Badge with Dashed Stroke</strong> (<a href="assets/test_oval_badge.svg">source SVG</a>)</td>
   </tr>
   <tr>
-    <td style="background-color: white; color: black; border: 1px solid black;"><img src="assets/oval_badge_inkscape.png" alt="Inkscape - undersized width" style="height: 200px; width: auto;" /></td>
-    <td style="background-color: white; color: black; border: 1px solid black;"><img src="assets/oval_badge_getbbox.png" alt="getBBox - missing stroke width" style="height: 200px; width: auto;" /></td>
-    <td style="background-color: white; color: black; border: 1px solid black;"><img src="assets/oval_badge_svgvisualbbox.png" alt="SvgVisualBBox - includes full stroke" style="height: 200px; width: auto;" /></td>
+    <td style="background-color: white; color: black; border: 1px solid black;"><img src="assets/oval_badge_inkscape.png" alt="Inkscape - undersized width" style="max-height: 200px; width: auto;" /></td>
+    <td style="background-color: white; color: black; border: 1px solid black;"><img src="assets/oval_badge_getbbox.png" alt="getBBox - missing stroke width" style="max-height: 200px; width: auto;" /></td>
+    <td style="background-color: white; color: black; border: 1px solid black;"><img src="assets/oval_badge_svgvisualbbox.png" alt="SvgVisualBBox - includes full stroke" style="max-height: 200px; width: auto;" /></td>
   </tr>
   <tr>
     <td align="center" style="background-color: white; color: black; border: 1px solid black;"><a href="assets/oval_badge_inkscape.svg">SVG</a></td>
@@ -86,9 +86,9 @@ methods. Both examples demonstrate the same fundamental issues.
     <td align="center" style="background-color: white; color: black; border: 1px solid black;"><a href="assets/oval_badge_svgvisualbbox.svg">SVG</a></td>
   </tr>
   <tr>
-    <td style="background-color: white; color: black; border: 1px solid black;">❌ Width: 554px<br/>Height: 379px<br/><em>Undersized by ~48%</em></td>
-    <td style="background-color: white; color: black; border: 1px solid black;">❌ Width: 999px<br/>Height: 301px<br/><em>Missing ~78px of stroke</em></td>
-    <td style="background-color: white; color: black; border: 1px solid black;">✅ Width: 1077px<br/>Height: 379px<br/><em>Includes full visual bounds</em></td>
+    <td style="background-color: white; color: black; border: 1px solid black; padding: 8px;">❌ Width: 554px<br/>Height: 379px<br/><em>Undersized by ~48%</em></td>
+    <td style="background-color: white; color: black; border: 1px solid black; padding: 8px;">❌ Width: 999px<br/>Height: 301px<br/><em>Missing ~78px of stroke</em></td>
+    <td style="background-color: white; color: black; border: 1px solid black; padding: 8px;">✅ Width: 1077px<br/>Height: 379px<br/><em>Includes full visual bounds</em></td>
   </tr>
 </table>
 

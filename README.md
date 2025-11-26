@@ -88,13 +88,9 @@ create your own comparison with timestamped output directory.
 
 **Why the differences?**
 
-- **Inkscape:** Significantly undersizes elements with text, missing ~48% of
-  width. Recenters coordinates, losing the original document context.
-- **`.getBBox()`:** Uses geometric calculations that completely ignore stroke
-  width (missing 78px in this example).
-- **SvgVisualBBox:** Rasterizes and measures actual pixel data. Captures
-  complete visual bounds including strokes, filters, and text overflow. What you
-  see is exactly what you get.
+- **Inkscape:** Truncates half the image!
+- **`.getBBox()`:** Ignores stroke width - bbox is wrong!
+- **SvgVisualBBox:** Perfect!
 
 ---
 

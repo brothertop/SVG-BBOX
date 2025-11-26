@@ -8,7 +8,7 @@
 
 const puppeteer = require('puppeteer');
 const fs = require('fs');
-const path = require('path');
+// const path = require('path'); // Reserved for future use
 const { getVersion } = require('./version.cjs');
 const { printError, printSuccess, printInfo, runCLI } = require('./lib/cli-utils.cjs');
 
@@ -16,7 +16,8 @@ const { printError, printSuccess, printInfo, runCLI } = require('./lib/cli-utils
  * Extract SVG element using native .getBBox() method
  */
 async function extractWithGetBBox(options) {
-  const { inputFile, elementId, outputSvg, outputPng, margin, background, scale, width, height } = options;
+  const { inputFile, elementId, outputSvg, outputPng, margin, background, scale, width, height } =
+    options;
 
   const browser = await puppeteer.launch({
     headless: true,
@@ -45,68 +46,82 @@ async function extractWithGetBBox(options) {
     `);
 
     // Get bbox using standard .getBBox()
-    const result = await page.evaluate((id, marginValue) => {
-      const element = document.getElementById(id);
-      if (!element) {
-        throw new Error(`Element with id "${id}" not found`);
-      }
-
-      // Get the standard SVG .getBBox()
-      const bbox = element.getBBox();
-
-      // Get SVG root and its viewBox
-      const svg = element.ownerSVGElement;
-
-      // Apply margin
-      const bboxWithMargin = {
-        x: bbox.x - marginValue,
-        y: bbox.y - marginValue,
-        width: bbox.width + (2 * marginValue),
-        height: bbox.height + (2 * marginValue)
-      };
-
-      return {
-        bbox: bboxWithMargin,
-        originalBbox: {
-          x: bbox.x,
-          y: bbox.y,
-          width: bbox.width,
-          height: bbox.height
-        },
-        svgViewBox: svg.getAttribute('viewBox'),
-        element: {
-          tagName: element.tagName,
-          id: element.id
+    const result = await page.evaluate(
+      (id, marginValue) => {
+        /* eslint-disable-next-line no-undef */
+        const element = document.getElementById(id);
+        if (!element) {
+          throw new Error(`Element with id "${id}" not found`);
         }
-      };
-    }, elementId, margin);
 
-    printInfo(`Standard .getBBox() result: ${result.originalBbox.width.toFixed(2)} × ${result.originalBbox.height.toFixed(2)}`);
-    printInfo(`With margin (${margin}): ${result.bbox.width.toFixed(2)} × ${result.bbox.height.toFixed(2)}`);
+        // Get the standard SVG .getBBox()
+        const bbox = element.getBBox();
+
+        // Get SVG root and its viewBox
+        const svg = element.ownerSVGElement;
+
+        // Apply margin
+        const bboxWithMargin = {
+          x: bbox.x - marginValue,
+          y: bbox.y - marginValue,
+          width: bbox.width + 2 * marginValue,
+          height: bbox.height + 2 * marginValue
+        };
+
+        return {
+          bbox: bboxWithMargin,
+          originalBbox: {
+            x: bbox.x,
+            y: bbox.y,
+            width: bbox.width,
+            height: bbox.height
+          },
+          svgViewBox: svg.getAttribute('viewBox'),
+          element: {
+            tagName: element.tagName,
+            id: element.id
+          }
+        };
+      },
+      elementId,
+      margin
+    );
+
+    printInfo(
+      `Standard .getBBox() result: ${result.originalBbox.width.toFixed(2)} × ${result.originalBbox.height.toFixed(2)}`
+    );
+    printInfo(
+      `With margin (${margin}): ${result.bbox.width.toFixed(2)} × ${result.bbox.height.toFixed(2)}`
+    );
 
     // Create a new SVG with just this element and the getBBox dimensions
-    const extractedSvg = await page.evaluate((id, bbox) => {
-      const element = document.getElementById(id);
-      const svg = element.ownerSVGElement;
+    const extractedSvg = await page.evaluate(
+      (id, bbox) => {
+        /* eslint-disable-next-line no-undef */
+        const element = document.getElementById(id);
+        const svg = element.ownerSVGElement;
 
-      // Clone the element
-      const clone = element.cloneNode(true);
+        // Clone the element
+        const clone = element.cloneNode(true);
 
-      // Get defs if any
-      const defs = svg.querySelectorAll('defs');
-      let defsContent = '';
-      defs.forEach(def => {
-        defsContent += def.outerHTML + '\n';
-      });
+        // Get defs if any
+        const defs = svg.querySelectorAll('defs');
+        let defsContent = '';
+        defs.forEach((def) => {
+          defsContent += def.outerHTML + '\n';
+        });
 
-      // Create new SVG with viewBox set to getBBox result
-      const newViewBox = `${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}`;
+        // Create new SVG with viewBox set to getBBox result
+        const newViewBox = `${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}`;
 
-      return `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+        return `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg id="getbbox_extraction" version="1.1" x="0px" y="0px" width="${bbox.width}" height="${bbox.height}" viewBox="${newViewBox}" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg">
 ${defsContent}${clone.outerHTML}
 </svg>`;
-    }, elementId, result.bbox);
+      },
+      elementId,
+      result.bbox
+    );
 
     // Write the extracted SVG
     fs.writeFileSync(outputSvg, extractedSvg);
@@ -123,7 +138,6 @@ ${defsContent}${clone.outerHTML}
       });
       printSuccess(`PNG rendered to: ${outputPng}`);
     }
-
   } finally {
     await browser.close();
   }
@@ -396,7 +410,9 @@ function parseArgs(argv) {
   // Validate required arguments
   if (positional.length < 1) {
     printError('Missing required argument: input.svg');
-    console.log('\nUsage: node sbb-getbbox-extract.cjs input.svg --id <element-id> --output <output.svg>');
+    console.log(
+      '\nUsage: node sbb-getbbox-extract.cjs input.svg --id <element-id> --output <output.svg>'
+    );
     process.exit(1);
   }
 

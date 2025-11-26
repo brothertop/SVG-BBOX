@@ -82,7 +82,9 @@ methods:
 **Source:** [test_oval_badge.svg](assets/test_oval_badge.svg)
 
 **Generate this comparison yourself:**
-[examples/bbox-comparison.js](examples/bbox-comparison.js) - Run `node examples/bbox-comparison.js assets/test_oval_badge.svg oval_badge` to create your own comparison with timestamped output directory.
+[examples/bbox-comparison.js](examples/bbox-comparison.js) - Run
+`node examples/bbox-comparison.js assets/test_oval_badge.svg oval_badge` to
+create your own comparison with timestamped output directory.
 
 **Why the differences?**
 

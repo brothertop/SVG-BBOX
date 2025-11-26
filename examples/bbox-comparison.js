@@ -71,17 +71,22 @@ console.log('══════════════════════�
 const inkscapeSvg = path.join(outputDir, `${objectId}_inkscape.svg`);
 const inkscapePng = path.join(outputDir, `${objectId}_inkscape.png`);
 
-run(
-  'Extracting with Inkscape',
-  '../sbb-inkscape-extract.cjs',
-  [svgFile, '--id', objectId, '--output', inkscapeSvg]
-);
+run('Extracting with Inkscape', '../sbb-inkscape-extract.cjs', [
+  svgFile,
+  '--id',
+  objectId,
+  '--output',
+  inkscapeSvg
+]);
 
-run(
-  'Rendering Inkscape result to PNG',
-  '../sbb-render.cjs',
-  [inkscapeSvg, inkscapePng, '--mode', 'full', '--background', 'transparent']
-);
+run('Rendering Inkscape result to PNG', '../sbb-render.cjs', [
+  inkscapeSvg,
+  inkscapePng,
+  '--mode',
+  'full',
+  '--background',
+  'transparent'
+]);
 
 // 2. Extract using Chrome .getBBox() (geometric, ignores stroke width)
 console.log('═══════════════════════════════════════════════════');
@@ -93,17 +98,23 @@ const getbboxPng = path.join(outputDir, `${objectId}_getbbox.png`);
 
 // Note: For demonstration, we use sbb-extractor which internally uses .getBBox()
 // In a real scenario, you'd need to implement a version that uses geometric getBBox
-run(
-  'Extracting with geometric getBBox',
-  '../sbb-extractor.cjs',
-  [svgFile, '--extract', objectId, getbboxSvg, '--margin', '0']
-);
+run('Extracting with geometric getBBox', '../sbb-extractor.cjs', [
+  svgFile,
+  '--extract',
+  objectId,
+  getbboxSvg,
+  '--margin',
+  '0'
+]);
 
-run(
-  'Rendering getBBox result to PNG',
-  '../sbb-render.cjs',
-  [getbboxSvg, getbboxPng, '--mode', 'full', '--background', 'transparent']
-);
+run('Rendering getBBox result to PNG', '../sbb-render.cjs', [
+  getbboxSvg,
+  getbboxPng,
+  '--mode',
+  'full',
+  '--background',
+  'transparent'
+]);
 
 // 3. Extract using SvgVisualBBox (pixel-accurate, includes everything)
 console.log('═══════════════════════════════════════════════════');
@@ -113,17 +124,23 @@ console.log('══════════════════════�
 const svgvisualbboxSvg = path.join(outputDir, `${objectId}_svgvisualbbox.svg`);
 const svgvisualbboxPng = path.join(outputDir, `${objectId}_svgvisualbbox.png`);
 
-run(
-  'Extracting with SvgVisualBBox',
-  '../sbb-extractor.cjs',
-  [svgFile, '--extract', objectId, svgvisualbboxSvg, '--margin', '0']
-);
+run('Extracting with SvgVisualBBox', '../sbb-extractor.cjs', [
+  svgFile,
+  '--extract',
+  objectId,
+  svgvisualbboxSvg,
+  '--margin',
+  '0'
+]);
 
-run(
-  'Rendering SvgVisualBBox result to PNG',
-  '../sbb-render.cjs',
-  [svgvisualbboxSvg, svgvisualbboxPng, '--mode', 'full', '--background', 'transparent']
-);
+run('Rendering SvgVisualBBox result to PNG', '../sbb-render.cjs', [
+  svgvisualbboxSvg,
+  svgvisualbboxPng,
+  '--mode',
+  'full',
+  '--background',
+  'transparent'
+]);
 
 // Summary
 console.log('═══════════════════════════════════════════════════');

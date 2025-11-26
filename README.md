@@ -48,14 +48,14 @@ methods:
 
 <table style="background-color: white; color: black; border: 1px solid black; table-layout: fixed; width: 100%;">
   <tr>
-    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/inkscape-logo.svg" alt="Inkscape" style="width: 80%; height: auto;" /></th>
-    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/chrome-logo.svg" alt="Chrome" style="width: 80%; height: auto;" /></th>
-    <th style="background-color: white; color: black; border: 1px solid black; width: 33.34%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/SvgVisualBBox_logo_no_text_portrait.svg" alt="SvgVisualBBox" style="width: 80%; height: auto;" /></th>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/inkscape-logo.svg" alt="Inkscape" style="height: 60px; width: auto;" /></th>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/chrome-logo.svg" alt="Chrome" style="height: 60px; width: auto;" /></th>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.34%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/SvgVisualBBox_logo_no_text_portrait.svg" alt="SvgVisualBBox" style="height: 60px; width: auto;" /></th>
   </tr>
   <tr>
-    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; text-align: left; padding: 8px;">Inkscape BBox</th>
-    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; text-align: left; padding: 8px;">Chrome <code style="background-color: white; color: black;">.getBBox()</code></th>
-    <th style="background-color: white; color: black; border: 1px solid black; width: 33.34%; text-align: left; padding: 8px;"><strong>SvgVisualBBox</strong></th>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; text-align: center; padding: 8px;">Inkscape BBox</th>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; text-align: center; padding: 8px;">Chrome <code style="background-color: white; color: black;">.getBBox()</code></th>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.34%; text-align: center; padding: 8px;"><strong>SvgVisualBBox</strong></th>
   </tr>
   <tr>
     <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/oval_badge_inkscape.png" alt="Inkscape - undersized width" style="height: 100px; width: auto;" /></td>

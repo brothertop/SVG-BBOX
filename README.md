@@ -46,11 +46,11 @@ geometry guesswork, no lies.
 Here's what happens when extracting different SVG elements using three different
 methods. Both examples demonstrate the same fundamental issues.
 
-<table style="background-color: white; color: black; border: 1px solid black;">
+<table style="background-color: white; color: black; border: 1px solid black; table-layout: fixed; width: 100%;">
   <tr>
-    <th style="background-color: white; color: black; border: 1px solid black;">Inkscape BBox</th>
-    <th style="background-color: white; color: black; border: 1px solid black;">Chrome <code>.getBBox()</code></th>
-    <th style="background-color: white; color: black; border: 1px solid black;"><strong>SvgVisualBBox</strong></th>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%;">Inkscape BBox</th>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%;">Chrome <code>.getBBox()</code></th>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.34%;"><strong>SvgVisualBBox</strong></th>
   </tr>
   <tr>
     <td style="background-color: white; color: black; border: 1px solid black;"><img src="assets/text39_inkscape.png" alt="Inkscape extraction - undersized by 55%" /></td>

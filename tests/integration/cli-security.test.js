@@ -100,7 +100,8 @@ describe('CLI Security Integration Tests', () => {
 
     it('sbb-text-to-path should reject paths with shell metacharacters', async () => {
       /**Test that sbb-text-to-path rejects command injection attempts*/
-      const maliciousPath = path.join(testDir, 'file$(whoami).svg');
+      // Use semicolon instead of $() to avoid shell expansion issues on different platforms
+      const maliciousPath = path.join(testDir, 'file;rm -rf.svg');
       const outputPath = path.join(testDir, 'output.svg');
 
       try {

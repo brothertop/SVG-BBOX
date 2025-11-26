@@ -462,24 +462,55 @@
     // ═══════════════════════════════════════════════════════════════════════════════
     // PROBLEM: Elements without IDs were failing with "Element not found in cloned SVG"
     //
-    // WRONG APPROACH (original code):
-    //   1. Clone SVG first
-    //   2. Assign temp ID to original element after cloning
-    //   3. Try to find element in clone by temp ID → FAILS! Clone doesn't have the ID!
+    // ❌ WRONG SOLUTION #1 - Assign temp ID AFTER cloning (original broken code):
+    //   const clonedSvg = svgRoot.cloneNode(true);           // Clone first
+    //   if (!el.id) {
+    //     el.id = '__temp_' + Math.random();                  // Assign ID after
+    //   }
+    //   const cloneTarget = clonedSvg.getElementById(el.id); // Try to find → FAILS!
     //
-    // WHY THIS FAILED:
-    //   - cloneNode(true) creates a deep copy of the DOM tree at the moment of cloning
-    //   - Any changes to the original element AFTER cloning don't affect the clone
-    //   - If element has no ID when cloned, the cloned element also has no ID
-    //   - getElementById cannot find an element without an ID
+    // WHY IT FAILS:
+    //   - cloneNode() creates snapshot of DOM at moment of cloning
+    //   - Element has NO ID when cloned → cloned element also has NO ID
+    //   - Adding ID to original AFTER clone doesn't affect the clone
+    //   - getElementById(el.id) searches clone for an ID that doesn't exist
+    //   - Result: cloneTarget = null → "Element not found" error
     //
-    // CORRECT SOLUTION:
-    //   1. Assign temp ID to original element BEFORE cloning
-    //   2. Clone SVG (clone now includes the temp ID)
-    //   3. Remove temp ID from original (keeps original DOM unchanged)
-    //   4. Find cloned element by temp ID → SUCCESS! Clone has the ID
+    // ❌ WRONG SOLUTION #2 - Don't remove temp ID from original:
+    //   if (!el.id) {
+    //     el.id = '__temp_' + Math.random();
+    //   }
+    //   const clonedSvg = svgRoot.cloneNode(true);
+    //   const cloneTarget = clonedSvg.getElementById(el.id); // This works BUT...
+    //   // Missing: el.removeAttribute('id')
     //
-    // This ensures the cloned element has the ID at the moment of cloning.
+    // WHY IT FAILS:
+    //   - Pollutes original DOM with temp IDs that never get cleaned up
+    //   - Multiple calls accumulate temp IDs in the document
+    //   - Breaks ID uniqueness assumptions in user's code
+    //   - User's code might rely on elements not having IDs
+    //   - Memory leak: temp IDs persist forever
+    //
+    // ✅ CORRECT SOLUTION - Assign BEFORE clone, remove AFTER clone:
+    //   const hadId = !!el.id;
+    //   let tmpId;
+    //   if (!hadId) {
+    //     tmpId = '__svg_visual_bbox_tmp_' + Math.random().toString(36).slice(2);
+    //     el.id = tmpId;                                     // Assign BEFORE clone
+    //   }
+    //   const clonedSvg = svgRoot.cloneNode(true);          // Clone (includes temp ID)
+    //   if (!hadId) {
+    //     el.removeAttribute('id');                          // Clean up original DOM
+    //   }
+    //   const idToFind = tmpId || el.id;                    // Use saved tmpId
+    //   const cloneTarget = clonedSvg.getElementById(idToFind); // SUCCESS!
+    //
+    // WHY IT WORKS:
+    //   1. Element HAS ID when cloned → cloned element also HAS ID
+    //   2. We save tmpId BEFORE cleanup so we can use it later
+    //   3. Original DOM is restored to pristine state (no temp IDs left behind)
+    //   4. We can find cloned element by the ID it actually has
+    //   5. No pollution, no memory leaks, no side effects
     const hadId = !!el.id;
     let tmpId;
     if (!hadId) {
@@ -567,29 +598,56 @@
     // PROBLEM #2: Couldn't measure SVG root element itself
     // PROBLEM #3: After removing temp ID from original, el.id was empty when searching clone
     //
-    // WRONG APPROACH (original code):
-    //   - Always use getElementById to find element in clone
-    //   - Use el.id to search for cloned element
+    // ❌ WRONG SOLUTION #1 - Always use getElementById (original broken code):
+    //   const cloneTarget = clonedSvg.getElementById(el.id); // Fails for SVG root!
     //
-    // WHY THIS FAILED:
-    //   Issue 2: getElementById searches DESCENDANTS of the element you call it on
-    //     - clonedSvg.getElementById(id) searches children/descendants of clonedSvg
-    //     - It CANNOT find clonedSvg itself (you can't be your own descendant!)
-    //     - If el === svgRoot, we're trying to measure the SVG root itself
-    //     - getElementById will NEVER find it because it's the element we're searching FROM
+    // WHY IT FAILS (Issue #2):
+    //   - getElementById() searches DESCENDANTS only, not the element itself
+    //   - clonedSvg.getElementById(id) searches INSIDE clonedSvg, not clonedSvg itself
+    //   - If el === svgRoot, we're measuring the root SVG element
+    //   - But getElementById can't find the root because it IS the root!
+    //   - Analogy: You can't find yourself by looking inside yourself
+    //   - Result: cloneTarget = null for SVG root elements
     //
-    //   Issue 3: We removed the temp ID from the original element after cloning
-    //     - Line 496: el.removeAttribute('id') removes the temp ID
-    //     - Then we tried to use el.id to find the cloned element
-    //     - But el.id is now empty! The ID only exists in the clone, not the original
+    // ❌ WRONG SOLUTION #2 - Use el.id after cleanup (another bug):
+    //   if (!hadId) {
+    //     el.removeAttribute('id');  // Remove temp ID from original
+    //   }
+    //   const cloneTarget = clonedSvg.getElementById(el.id); // el.id is empty now!
     //
-    // CORRECT SOLUTION:
-    //   Fix 2: Special case check - if measuring SVG root, return clonedSvg directly
-    //   Fix 3: Use the saved tmpId variable instead of el.id
-    //     - tmpId was saved BEFORE we removed the ID from the original element
-    //     - It contains the exact ID that exists in the cloned element
-    //     - For elements with original IDs, use el.id (still intact)
-    //     - For elements with temp IDs, use tmpId (saved before cleanup)
+    // WHY IT FAILS (Issue #3):
+    //   - We removed the temp ID from original element at line 496
+    //   - Now el.id is empty string (no ID attribute)
+    //   - getElementById("") searches for empty string → returns null
+    //   - The temp ID still exists in CLONE, but we lost the value!
+    //   - We're asking "find element with ID ''" → nonsensical query
+    //
+    // ❌ WRONG SOLUTION #3 - Re-read ID from original element:
+    //   const cloneTarget = clonedSvg.getElementById(el.getAttribute('id'));
+    //
+    // WHY IT FAILS:
+    //   - getAttribute('id') returns null if no ID (after we removed it)
+    //   - getElementById(null) searches for string "null" → wrong!
+    //   - Still doesn't solve SVG root issue (#2)
+    //
+    // ✅ CORRECT SOLUTION - Special case for root + use saved tmpId:
+    //   let cloneTarget;
+    //   if (el === svgRoot) {
+    //     cloneTarget = clonedSvg;              // Fix #2: Return root directly
+    //   } else {
+    //     const idToFind = tmpId || el.id;      // Fix #3: Use SAVED tmpId
+    //     cloneTarget = clonedSvg.getElementById(idToFind);
+    //   }
+    //
+    // WHY IT WORKS:
+    //   Fix #2: Detect when measuring SVG root and return cloned root directly
+    //     - No need for getElementById when target IS the root
+    //     - Direct reference: clonedSvg is exactly what we need
+    //   Fix #3: Use tmpId variable saved BEFORE cleanup
+    //     - tmpId was captured at line 498 before removeAttribute
+    //     - It contains the exact temp ID that exists in the clone
+    //     - For elements with original IDs: tmpId is undefined, use el.id (still intact)
+    //     - For elements with temp IDs: use tmpId (saved value before cleanup)
     let cloneTarget;
     if (el === svgRoot) {
       cloneTarget = clonedSvg;
@@ -655,13 +713,9 @@
     // ═══════════════════════════════════════════════════════════════════════════════
     // CRITICAL FIX #4: Cross-SVG Reference Resolution
     // ═══════════════════════════════════════════════════════════════════════════════
-    // Add all referenced elements (for textPath, use, gradients, filters, etc.)
-    // Scan target and descendants for xlink:href, href, and url(#...) references
-    //
     // PROBLEM: <use href="#id"/> elements referencing elements in DIFFERENT SVG roots failed
     //
-    // REAL-WORLD SCENARIO:
-    //   HTML Preview Catalogs (generated by sbb-extractor.cjs --list):
+    // REAL-WORLD SCENARIO (HTML Preview Catalogs generated by sbb-extractor.cjs --list):
     //
     //   <!-- Hidden container with actual elements -->
     //   <div style="display:none">
@@ -679,37 +733,92 @@
     //     </g>
     //   </svg>
     //
-    // WRONG APPROACH (original code):
-    //   - Only look for referenced elements within clonedSvg
-    //   - If getElementById(refId) returns null, ignore it
+    // ❌ WRONG SOLUTION #1 - Only search within cloned SVG (original broken code):
+    //   const refEl = clonedSvg.getElementById(refId);
+    //   if (refEl) {
+    //     allowed.add(refEl); // Add to whitelist
+    //   }
+    //   // If not found, do nothing (WRONG!)
     //
-    // WHY THIS FAILED:
+    // WHY IT FAILS:
     //   - We clone ONLY the preview SVG (id="preview")
-    //   - The <use href="#text8"/> element is in the clone
-    //   - But #text8 is in a DIFFERENT SVG (id="root")!
-    //   - When we try clonedSvg.getElementById("text8"), it returns null
-    //   - The referenced element isn't in the cloned SVG at all
-    //   - Browser can't render <use> element without its target
-    //   - Result: blank/empty rendering
+    //   - The clone contains: <use href="#text8" />
+    //   - But #text8 lives in DIFFERENT SVG (id="root" in hidden container)
+    //   - clonedSvg.getElementById("text8") returns null
+    //   - We don't add the referenced element to the clone
+    //   - Browser tries to render <use href="#text8" /> but can't find #text8
+    //   - Result: Blank rendering (use element renders nothing)
     //
-    // CORRECT SOLUTION:
-    //   1. Try to find referenced element in cloned SVG first (normal case)
-    //   2. If not found, search the ENTIRE DOCUMENT with document.getElementById()
-    //   3. If found in document, clone it and add to <defs> in cloned SVG
-    //   4. This makes the referenced element available in the cloned SVG
-    //   5. Browser can now render the <use> element correctly
+    // ❌ WRONG SOLUTION #2 - Clone element WITH parent transforms:
+    //   const originalRefEl = document.getElementById(refId);
+    //   if (originalRefEl) {
+    //     // Build transform chain from parent <g> elements
+    //     const transforms = [];
+    //     let parent = originalRefEl.parentNode;
+    //     while (parent && parent.tagName !== 'svg') {
+    //       if (parent.getAttribute('transform')) {
+    //         transforms.push(parent.getAttribute('transform'));
+    //       }
+    //       parent = parent.parentNode;
+    //     }
+    //     // Wrap cloned element in <g> with transforms
+    //     let wrapped = originalRefEl.cloneNode(true);
+    //     for (const t of transforms) {
+    //       const g = document.createElementNS('...', 'g');
+    //       g.setAttribute('transform', t);
+    //       g.appendChild(wrapped);
+    //       wrapped = g;
+    //     }
+    //     defs.appendChild(wrapped);
+    //   }
     //
-    // WHY THIS WORKS:
-    //   - SVG <use> elements work like "imports" - they instantiate a copy of the target
-    //   - The target element must exist in the same SVG document (or in <defs>)
-    //   - By cloning cross-SVG references into <defs>, we make them accessible
-    //   - The <use> element can now find and instantiate its target
-    //   - Parent transforms are already handled by wrapper <g> elements in the HTML
+    // WHY IT FAILS:
+    //   - Original element has transform: translate(-13.5,-10.2) from parent <g id="g37">
+    //   - We wrap cloned element with this transform
+    //   - But preview SVG ALSO has <g transform="translate(-13.5,-10.2)">!
+    //   - Transform gets applied TWICE: once from wrapped element, once from preview <g>
+    //   - Result: Element appears at WRONG position (double transform)
+    //   - Example: text at x=-50 should be at -63.5, but appears at -77 (double offset)
     //
-    // NOTE: We DON'T wrap the cloned element with parent transforms because:
-    //   - The HTML already has the correct transform wrapper in the preview SVG
-    //   - Adding transforms from the original would DOUBLE the transformation
-    //   - We just need the element definition, not its original context
+    // ❌ WRONG SOLUTION #3 - Don't clone, just reference original:
+    //   // Don't clone at all, assume browser will find it in original document
+    //
+    // WHY IT FAILS:
+    //   - The cloned SVG is rendered in isolation (via data URL to canvas)
+    //   - It's a SEPARATE document context from the original DOM
+    //   - References can't reach across document boundaries
+    //   - Browser can't find #text8 because it's in different document
+    //
+    // ✅ CORRECT SOLUTION - Clone referenced element to <defs>, no transform wrapper:
+    //   let refEl = clonedSvg.getElementById(refId);
+    //   if (!refEl) {
+    //     const originalRefEl = document.getElementById(refId);  // Search whole document
+    //     if (originalRefEl) {
+    //       let defs = clonedSvg.querySelector('defs');
+    //       if (!defs) {
+    //         defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    //         clonedSvg.insertBefore(defs, clonedSvg.firstChild);
+    //       }
+    //       refEl = originalRefEl.cloneNode(true);  // Clone WITHOUT transform wrapper
+    //       defs.appendChild(refEl);
+    //       allowed.add(defs);
+    //     }
+    //   }
+    //
+    // WHY IT WORKS:
+    //   1. Search cloned SVG first (handles normal same-SVG references)
+    //   2. If not found, search ENTIRE document with document.getElementById()
+    //   3. Clone the referenced element and add to <defs>
+    //   4. DON'T wrap with parent transforms (preview SVG already has them)
+    //   5. <use> element can now find its target in <defs>
+    //   6. Browser renders <use> correctly with transform from preview SVG
+    //   7. Transform applied ONCE (not doubled)
+    //
+    // KEY INSIGHT:
+    //   - <use> elements instantiate a COPY of the target (like a function call)
+    //   - The target just needs to EXIST in the document (in <defs> is fine)
+    //   - Transforms should be on the <use> or its parents, NOT on the definition
+    //   - This is why HTML preview has <g transform="..."><use /></g> structure
     (function addReferencedElements(n) {
       // Check for xlink:href or href attributes (textPath, use, image, etc.)
       const xlinkHref = n.getAttribute && n.getAttribute('xlink:href');

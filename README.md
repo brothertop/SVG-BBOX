@@ -71,17 +71,17 @@ methods. Both examples demonstrate the same fundamental issues.
     <td colspan="3"><hr/><strong>Example 2: Oval Badge with Dashed Stroke</strong> (<a href="assets/test_oval_badge.svg">source SVG</a>)</td>
   </tr>
   <tr>
-    <td><em>N/A</em><br/><small>(Inkscape not tested)</small></td>
+    <td><img src="assets/oval_badge_inkscape.png" alt="Inkscape - undersized width" /></td>
     <td><img src="assets/oval_badge_getbbox.png" alt="getBBox - missing stroke width" /></td>
     <td><img src="assets/oval_badge_svgvisualbbox.png" alt="SvgVisualBBox - includes full stroke" /></td>
   </tr>
   <tr>
-    <td align="center">—</td>
+    <td align="center"><a href="assets/oval_badge_inkscape.svg">SVG</a></td>
     <td align="center"><a href="assets/oval_badge_getbbox.svg">SVG</a></td>
     <td align="center"><a href="assets/oval_badge_svgvisualbbox.svg">SVG</a></td>
   </tr>
   <tr>
-    <td>—</td>
+    <td>❌ Width: 554px<br/>Height: 379px<br/><em>Undersized by ~48%</em></td>
     <td>❌ Width: 999px<br/>Height: 301px<br/><em>Missing ~78px of stroke</em></td>
     <td>✅ Width: 1077px<br/>Height: 379px<br/><em>Includes full visual bounds</em></td>
   </tr>
@@ -94,8 +94,9 @@ methods. Both examples demonstrate the same fundamental issues.
 **Why the differences?**
 
 - **Inkscape:** Uses font metrics that don't account for italic overflow,
-  ligatures, and actual glyph rendering. Recenters coordinates, losing the
-  original document context. (Example 1)
+  ligatures, and actual glyph rendering (Example 1). Also significantly
+  undersizes elements with text, missing ~48% of width in Example 2. Recenters
+  coordinates, losing the original document context.
 - **`.getBBox()`:** Uses geometric calculations that completely ignore stroke
   width (Example 2: missing 78px) and approximate text bounds using font metrics
   (Example 1: wrong vertical bounds). Both demonstrate geometric vs visual

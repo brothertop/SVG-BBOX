@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [1.0.3] - 2025-11-26
+
 ## [1.0.2] - 2025-11-26
 
 ### Added
@@ -75,7 +77,8 @@ and this project adheres to
 
 - Initial release
 
-[Unreleased]: https://github.com/Emasoft/SVG-BBOX/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/Emasoft/SVG-BBOX/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/Emasoft/SVG-BBOX/releases/tag/v1.0.3
 [1.0.2]: https://github.com/Emasoft/SVG-BBOX/releases/tag/v1.0.2
 [1.0.1]: https://github.com/Emasoft/SVG-BBOX/releases/tag/v1.0.1
 [1.0.0]: https://github.com/Emasoft/SVG-BBOX/releases/tag/v1.0.0

@@ -38,7 +38,6 @@ import { JSDOM } from 'jsdom';
 // Skip this test suite on Node 18 due to jsdom/webidl-conversions compatibility issue
 // See: https://github.com/jsdom/jsdom/issues/3613
 const nodeVersion = parseInt(process.versions.node.split('.')[0]);
-const skipOnNode18 = nodeVersion === 18 ? test.skip : test;
 
 const execFilePromise = promisify(execFile);
 

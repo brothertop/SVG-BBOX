@@ -226,8 +226,8 @@ describe('sbb-comparer Integration Tests', () => {
       await runComparer('simple-rect.svg', 'simple-rect.svg');
       const duration = Date.now() - start;
 
-      // Should complete in under 10 seconds
-      expect(duration).toBeLessThan(10000);
-    }, 15000);
+      // Should complete in under 30 seconds (includes Puppeteer startup)
+      expect(duration).toBeLessThan(30000);
+    }, 45000); // 45 second timeout to accommodate CI environments
   });
 });

@@ -48,9 +48,9 @@ methods:
 
 <table style="background-color: white; color: black; border: 1px solid black; table-layout: fixed; width: 100%;">
   <tr>
-    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/inkscape-logo.svg" alt="Inkscape" style="height: 60px; width: auto;" /></th>
-    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/chrome-logo.svg" alt="Chrome" style="height: 60px; width: auto;" /></th>
-    <th style="background-color: white; color: black; border: 1px solid black; width: 33.34%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/SvgVisualBBox_logo_no_text_portrait.svg" alt="SvgVisualBBox" style="height: 60px; width: auto;" /></th>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/inkscape-logo.svg" alt="Inkscape" style="height: 100px; width: auto;" /></th>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/chrome-logo.svg" alt="Chrome" style="height: 100px; width: auto;" /></th>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.34%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/SvgVisualBBox_logo_no_text_portrait.svg" alt="SvgVisualBBox" style="height: 100px; width: auto;" /></th>
   </tr>
   <tr>
     <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; text-align: center; padding: 8px;">Inkscape BBox</th>
@@ -58,9 +58,9 @@ methods:
     <th style="background-color: white; color: black; border: 1px solid black; width: 33.34%; text-align: center; padding: 8px;"><strong>SvgVisualBBox</strong></th>
   </tr>
   <tr>
-    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/oval_badge_inkscape.png" alt="Inkscape - undersized width" style="height: 100px; width: auto;" /></td>
-    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/oval_badge_getbbox.png" alt="getBBox - missing stroke width" style="height: 100px; width: auto;" /></td>
-    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/oval_badge_svgvisualbbox.png" alt="SvgVisualBBox - includes full stroke" style="height: 100px; width: auto;" /></td>
+    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/oval_badge_inkscape.png" alt="Inkscape - undersized width" style="max-height: 100px; width: auto; display: block; margin: 0 auto;" /></td>
+    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/oval_badge_getbbox.png" alt="getBBox - missing stroke width" style="max-height: 100px; width: auto; display: block; margin: 0 auto;" /></td>
+    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/oval_badge_svgvisualbbox.png" alt="SvgVisualBBox - includes full stroke" style="max-height: 100px; width: auto; display: block; margin: 0 auto;" /></td>
   </tr>
   <tr>
     <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 12px; font-size: 48px; line-height: 1.2;">❌<br/><span style="font-size: 48px; font-weight: bold; color: #DC143C;">WRONG</span></td>

@@ -485,6 +485,20 @@ async function main() {
     printInfo(`sbb-inkscape-text2path v${getVersion()} | svg-bbox toolkit\n`);
   }
 
+  // SECURITY: Validate input paths BEFORE checking for Inkscape
+  // This ensures security errors are caught early, even if Inkscape isn't installed
+  // (important for CI environments where Inkscape may not be available)
+  if (args.batch) {
+    // Validate batch file path early
+    validateFilePath(args.batch, { mustExist: true });
+  } else if (args.input) {
+    // Validate single input file path early (validates before Inkscape check)
+    validateFilePath(args.input, {
+      requiredExtensions: ['.svg'],
+      mustExist: false // File existence checked later, but security validation happens now
+    });
+  }
+
   // Find Inkscape installation (once for all conversions)
   if (!args.json) {
     printInfo('Detecting Inkscape installation...');

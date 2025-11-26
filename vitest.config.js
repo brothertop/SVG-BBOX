@@ -46,13 +46,17 @@ export default defineConfig({
     include: ['tests/**/*.test.js', 'tests/**/*.spec.js'],
 
     // Test exclude patterns
+    // IMPORTANT: E2E tests (tests/e2e/*.spec.js) are excluded because they use Playwright
+    // and must be run via `pnpm run test:e2e` (playwright test), not Vitest.
+    // Running Playwright tests through Vitest causes "two different versions of @playwright/test" errors.
     exclude: [
       'node_modules/**',
       'coverage/**',
       'test-results/**',
       'playwright-report/**',
       '**/node_modules/**',
-      '**/.{idea,git,cache,output,temp}/**'
+      '**/.{idea,git,cache,output,temp}/**',
+      'tests/e2e/**' // Playwright E2E tests - run separately via test:e2e
     ],
 
     // Reporter

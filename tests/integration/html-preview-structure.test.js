@@ -91,7 +91,7 @@ if (nodeVersion === 18) {
         expect(use.tagName).toBe('use');
         expect(use.hasAttribute('href')).toBe(true);
       });
-    }, 30000);
+    }, 120000); // 2 minute timeout - this test runs a browser via puppeteer
 
     test('Hidden container SVG has NO viewBox attribute', async () => {
       const html = await fs.readFile(TEST_HTML, 'utf8');

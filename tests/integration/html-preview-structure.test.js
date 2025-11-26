@@ -35,13 +35,18 @@ import fs from 'fs/promises';
 import path from 'path';
 import { JSDOM } from 'jsdom';
 
+// Skip this test suite on Node 18 due to jsdom/webidl-conversions compatibility issue
+// See: https://github.com/jsdom/jsdom/issues/3613
+const nodeVersion = parseInt(process.versions.node.split('.')[0]);
+const skipOnNode18 = nodeVersion === 18 ? test.skip : test;
+
 const execFilePromise = promisify(execFile);
 
 // Use project-local temp directory
 const TEMP_DIR = path.join(process.cwd(), 'tests', '.tmp-html-structure-tests');
 const TEST_HTML = path.join(TEMP_DIR, 'test_structure.html');
 
-describe('HTML Preview Structure Validation', () => {
+describe.skipIf(nodeVersion === 18)('HTML Preview Structure Validation', () => {
   beforeAll(async () => {
     // Create temp directory
     await fs.mkdir(TEMP_DIR, { recursive: true });

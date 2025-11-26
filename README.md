@@ -162,14 +162,16 @@ accurate visual bounding boxes using canvas rasterization.
 
 Command-line utilities that leverage the library for common SVG tasks:
 
-| Tool              | Purpose                                         |
-| ----------------- | ----------------------------------------------- |
-| `svg-bbox`        | Main entry point - shows all available commands |
-| `sbb-getbbox`     | Compute bounding boxes from command line        |
-| `sbb-extractor`   | Extract/export SVG objects with correct viewBox |
-| `sbb-render`      | Render SVG to PNG with accurate bounds          |
-| `sbb-fix-viewbox` | Repair missing/broken viewBox attributes        |
-| `sbb-comparer`    | Visual diff between SVGs (pixel-by-pixel)       |
+| Tool                   | Purpose                                                          |
+| ---------------------- | ---------------------------------------------------------------- |
+| `svg-bbox`             | Main entry point - shows all available commands                  |
+| `sbb-getbbox`          | Compute bounding boxes from command line                         |
+| `sbb-getbbox-extract`  | Extract using native .getBBox() method (for comparison)          |
+| `sbb-extractor`        | Extract/export SVG objects with correct viewBox                  |
+| `sbb-render`           | Render SVG to PNG with accurate bounds                           |
+| `sbb-fix-viewbox`      | Repair missing/broken viewBox attributes                         |
+| `sbb-comparer`         | Visual diff between SVGs (pixel-by-pixel)                        |
+| `sbb-test`             | Test SVG visual bounding box computation accuracy                |
 
 ### 3. Inkscape Comparison Tools
 
@@ -268,6 +270,21 @@ Wait for fonts to load before measuring text.
 ```javascript
 await SvgVisualBBox.waitForDocumentFonts(document, 5000);
 ```
+
+### Core Capabilities
+
+**Font-aware text bounds**
+Works with complex scripts (Arabic, CJK, Tamil), ligatures, RTL/LTR, `textPath`,
+`tspan`, and custom fonts. Automatically waits for fonts to load before
+measuring.
+
+**Filter-safe bounds**
+Includes blur, shadows, masks, clipping, symbols, and bitmap images in bounding
+box calculations.
+
+**Stroke-aware bounds**
+Takes into account stroke width, caps, joins, markers, and patterns when
+computing visual bounds.
 
 ---
 
@@ -480,36 +497,6 @@ compareSVGs('v1.svg', 'v2.svg').then((result) =>
   console.log('Difference:', result.diffPercentage + '%')
 );
 ```
-
----
-
-## 💡 Features
-
-- **Sprite sheet detection & processing** Automatically detects SVGs used as
-  icon/sprite stacks and provides batch processing capabilities.
-
-- **Font-aware text bounds** Works with complex scripts (Arabic, CJK, Tamil),
-  ligatures, RTL/LTR, `textPath`, `tspan`, and more.
-
-- **Filter-safe bounds**  
-  Includes blur, shadows, masks, clipping, symbols, and bitmap images.
-
-- **Stroke-aware bounds**  
-  Takes into account stroke width, caps, joins, markers, and patterns.
-
-- **ViewBox repair**  
-  Fixes SVGs with missing or inconsistent `viewBox`, `width`, and `height`.
-
-- **Visual object catalog**  
-  Interactive HTML page that:
-  - Lists all objects (`<g>`, `<path>`, `<use>`, `<text>`, etc.).
-  - Shows each object clipped to its bounding box.
-  - Lets you interactively rename IDs with live validation.
-  - Exports a ready-to-use JSON mapping for batch renaming.
-
-- **Clean cut-outs & exports**  
-  Extract a single object or export all objects/groups as standalone SVGs, each
-  sized exactly to its visual bounds.
 
 ---
 
@@ -1105,6 +1092,12 @@ Returns:
 ### Fixer: `sbb-fix-viewbox.cjs`
 
 Fix missing/inconsistent viewBox and sizes.
+
+#### Features
+
+**ViewBox repair**
+Fixes SVGs with missing or inconsistent `viewBox`, `width`, and `height`
+attributes. Uses pixel-accurate visual bounds to compute correct values.
 
 #### Syntax
 

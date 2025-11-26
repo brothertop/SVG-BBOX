@@ -37,6 +37,7 @@
     "browser-utils.cjs",
     "version.cjs",
     "lib/",
+    "assets/",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"

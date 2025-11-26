@@ -41,6 +41,49 @@ The native SVG `.getBBox()` method is fundamentally broken:
 **Our approach:** Measure what the browser actually paints, pixel by pixel. No
 geometry guesswork, no lies.
 
+### Visual Comparison: Real-World Example
+
+Here's what happens when extracting italic text with the `.New York` font from
+an SVG document. The same text element extracted using three different methods:
+
+<table>
+  <tr>
+    <th>Inkscape BBox</th>
+    <th>Chrome <code>.getBBox()</code></th>
+    <th><strong>SvgVisualBBox</strong></th>
+  </tr>
+  <tr>
+    <td><img src="assets/text39_inkscape.png" alt="Inkscape extraction - undersized by 55%" /></td>
+    <td><img src="assets/text39_getbbox.png" alt="Chrome getBBox - oversized vertically" /></td>
+    <td><img src="assets/text39_svgvisualbbox.png" alt="SvgVisualBBox - pixel-perfect accuracy" /></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="assets/text39_inkscape.svg">SVG</a></td>
+    <td align="center"><a href="assets/text39_getbbox.svg">SVG</a></td>
+    <td align="center"><a href="assets/text39_svgvisualbbox.svg">SVG</a></td>
+  </tr>
+  <tr>
+    <td>❌ Width: 324px<br/><em>Undersized by ~55%</em><br/>Lost coordinate context</td>
+    <td>⚠️ Width: 730px<br/>Height: 74px<br/><em>Oversized vertically by 30%</em></td>
+    <td>✅ Width: 729px<br/>Height: 57px<br/><em>Pixel-perfect accuracy</em></td>
+  </tr>
+</table>
+
+> **Note:** SVG files use the `.New York` font which may not be installed on
+> your system. PNGs are provided so you can see the true rendering. The original
+> font could be embedded using WOFF2, but that's beyond our scope here.
+
+**Why the differences?**
+
+- **Inkscape:** Uses font metrics that don't account for italic overflow,
+  ligatures, and actual glyph rendering. Recenters coordinates, losing the
+  original document context.
+- **`.getBBox()`:** Uses geometric calculations that ignore stroke width and
+  approximate text bounds using font metrics. Oversizes vertically due to
+  ascender/descender metrics that don't match actual ink.
+- **SvgVisualBBox:** Rasterizes and measures actual pixel data. What you see is
+  exactly what you get.
+
 ---
 
 ## Quick Start

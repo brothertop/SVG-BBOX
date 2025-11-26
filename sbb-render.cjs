@@ -464,22 +464,30 @@ ${sanitizedSvg}
 
           // Hide everything except this element (and <defs>)
           const allowed = new Set();
+          /** @type {Element | ParentNode | null} */
           let node = el;
           while (node) {
             allowed.add(node);
-            if (node === svg) {
+            // Type assertion: we know svg is an Element and node is Element | ParentNode
+            if (/** @type {Element} */ (node) === svg) {
               break;
             }
-            node = node.parentNode;
+            node = /** @type {Element | null} */ (node.parentNode);
           }
 
           // Add all descendants of the target element
           // CRITICAL: Without this, child elements like <textPath> inside <text>
           // would get display="none" and render as invisible/empty
+          /**
+           * Recursively add element and all descendants to allowed set
+           * @param {HTMLElement} n - Element to process
+           * @returns {void}
+           */
           (function addDescendants(n) {
             allowed.add(n);
             const children = n.children;
             for (let i = 0; i < children.length; i++) {
+              // @ts-ignore - children[i] is Element in browser context, HTMLElement in type system
               addDescendants(children[i]);
             }
           })(el);

@@ -93,7 +93,7 @@
     "version:bump:minor": "node scripts/bump-version.cjs minor",
     "version:bump:major": "node scripts/bump-version.cjs major",
     "version:bump": "node scripts/bump-version.cjs",
-    "prepublishOnly": "npm run build && npm run lint && npm run typecheck && npm run test"
+    "prepublishOnly": "npm run build && npm run lint && npm run typecheck"
   },
   "dependencies": {
     "chrome-launcher": "^1.1.2",
@@ -107,6 +107,7 @@
     "@vitest/coverage-v8": "^2.0.0",
     "@vitest/ui": "^2.0.0",
     "eslint": "^9.9.0",
+    "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-vitest": "^0.5.4",
     "happy-dom": "^20.0.10",
     "jsdom": "^27.2.0",

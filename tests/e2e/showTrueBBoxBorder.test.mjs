@@ -1,3 +1,4 @@
+// @ts-nocheck
 /* eslint-env node, browser */
 /**
  * showTrueBBoxBorder() E2E Tests
@@ -13,10 +14,43 @@
  * 5. Sprite sheet with <use> element
  */
 
-import playwright from '@playwright/test';
-const { test, expect } = playwright;
+import { test, expect } from '@playwright/test';
 import fs from 'fs/promises';
 import path from 'path';
+
+/**
+ * @typedef {Object} TestBorderOptions
+ * @property {string} [theme] - Theme to use for border ('auto', 'dark', 'light')
+ * @property {string} [borderColor] - Custom border color
+ * @property {number} [padding] - Custom padding value
+ */
+
+/**
+ * @typedef {Object} TestBorderResult
+ * @property {boolean} success - Whether the test succeeded
+ * @property {boolean} [accurate] - Whether the border is accurately positioned
+ * @property {Object} [bbox] - Bounding box coordinates
+ * @property {number} [bbox.x] - X coordinate
+ * @property {number} [bbox.y] - Y coordinate
+ * @property {number} [bbox.width] - Width
+ * @property {number} [bbox.height] - Height
+ * @property {Object} [overlay] - Overlay position
+ * @property {Object} [expected] - Expected position
+ * @property {Object} [diffs] - Differences between actual and expected
+ * @property {number} [diffs.x] - X difference
+ * @property {number} [diffs.y] - Y difference
+ * @property {number} [diffs.width] - Width difference
+ * @property {number} [diffs.height] - Height difference
+ * @property {string} [borderStyle] - Computed border style
+ * @property {Object} [result] - Full result object
+ * @property {string} [error] - Error message if failed
+ */
+
+/**
+ * Augment Window interface to include testBorder function
+ * @typedef {Object} WindowWithTestBorder
+ * @property {function(string, TestBorderOptions=): Promise<TestBorderResult>} testBorder - Test border function
+ */
 
 const testPagePath = '/tmp/showTrueBBoxBorder_test.html';
 
@@ -271,6 +305,16 @@ test.beforeAll(async () => {
   ${sections.join('\n')}
 
   <script>
+    // @ts-nocheck
+    /**
+     * Test function for showTrueBBoxBorder
+     * @param {string} elementId - Element ID to test
+     * @param {Object} [options={}] - Options for showTrueBBoxBorder
+     * @param {string} [options.theme] - Theme to use
+     * @param {string} [options.borderColor] - Custom border color
+     * @param {number} [options.padding] - Custom padding
+     * @returns {Promise<Object>} Test result
+     */
     window.testBorder = async function(elementId, options = {}) {
       try {
         const element = document.getElementById(elementId);
@@ -372,8 +416,10 @@ test.describe('showTrueBBoxBorder() - Comprehensive Edge Case Tests', () => {
           }
 
           const options = scenario.options || {};
+          /** @type {TestBorderResult} */
           const result = await page.evaluate(
             ({ elemId, opts }) => {
+              // @ts-expect-error - testBorder is added dynamically in the test page
               return window.testBorder(elemId, opts);
             },
             { elemId: targetId, opts: options }
@@ -399,7 +445,10 @@ test.describe('showTrueBBoxBorder() - Comprehensive Edge Case Tests', () => {
 
     // Use first element
     const firstId = 'elem_normal_0';
-    await page.evaluate((id) => window.testBorder(id), firstId);
+    await page.evaluate((id) => {
+      // @ts-expect-error - testBorder is added dynamically in the test page
+      return window.testBorder(id);
+    }, firstId);
 
     let count = await page.evaluate(
       () => document.querySelectorAll('[data-svg-bbox-overlay]').length

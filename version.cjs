@@ -50,7 +50,7 @@ function getVersionInfo() {
 
 /**
  * Print version information to console
- * @param {string} toolName - Name of the CLI tool
+ * @param {string} [toolName] - Name of the CLI tool (optional, defaults to package name)
  */
 function printVersion(toolName) {
   const info = getVersionInfo();

@@ -28,12 +28,15 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 describe('HTML Preview Rendering - Critical Bug Fixes', () => {
+  /** @type {import('puppeteer').Browser} */
   let browser;
+  /** @type {import('puppeteer').Page} */
   let page;
+  /** @type {string[]} */
   let availableFonts;
 
   beforeAll(async () => {
-    browser = await puppeteer.launch({ headless: 'new' });
+    browser = await puppeteer.launch({ headless: true });
     const testPage = await browser.newPage();
 
     // Discover fonts available on this system
@@ -119,6 +122,7 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
 
   /**
    * Helper: Load SvgVisualBBox library into page after content is set
+   * @returns {Promise<void>}
    */
   async function loadLibrary() {
     const libPath = path.join(__dirname, '../../SvgVisualBBox.js');
@@ -130,6 +134,11 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
     await page.close();
   });
 
+  /**
+   * Get N random fonts from available fonts list
+   * @param {number} n - Number of fonts to select
+   * @returns {string[]} Array of font names
+   */
   function getRandomFonts(n = 3) {
     const selected = [];
     const available = [...availableFonts];

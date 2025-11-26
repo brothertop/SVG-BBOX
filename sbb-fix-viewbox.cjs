@@ -247,14 +247,22 @@ ${sanitizedSvg}
       const full = both.full; // {x,y,width,height} in SVG user units
 
       // 2) Ensure viewBox
-      let vb = svg.viewBox && svg.viewBox.baseVal;
-      if (!vb || !vb.width || !vb.height) {
+      // Define viewBox-like object type (not a full DOMRect, just coordinates)
+      /** @type {{ x: number; y: number; width: number; height: number }} */
+      let vb;
+      const viewBoxBaseVal = svg.viewBox && svg.viewBox.baseVal;
+      if (!viewBoxBaseVal || !viewBoxBaseVal.width || !viewBoxBaseVal.height) {
         // No viewBox → set it to full drawing bbox
         svg.setAttribute('viewBox', `${full.x} ${full.y} ${full.width} ${full.height}`);
         vb = { x: full.x, y: full.y, width: full.width, height: full.height };
       } else {
         // If there *is* a viewBox already, we won't change it here.
-        vb = { x: vb.x, y: vb.y, width: vb.width, height: vb.height };
+        vb = {
+          x: viewBoxBaseVal.x,
+          y: viewBoxBaseVal.y,
+          width: viewBoxBaseVal.width,
+          height: viewBoxBaseVal.height
+        };
       }
 
       // 3) Ensure width/height attributes

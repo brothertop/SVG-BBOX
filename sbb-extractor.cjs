@@ -520,7 +520,7 @@ async function withPageForSvg(inputPath, handler) {
 
   // SECURITY: Launch browser with security args and timeout
   const browser = await puppeteer.launch({
-    headless: 'new',
+    headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
     timeout: BROWSER_TIMEOUT_MS
   });
@@ -805,8 +805,9 @@ async function listAndAssignIds(
 
         // Compute group ancestors (IDs of ancestor <g>)
         const groupIds = [];
+        /** @type {HTMLElement | null} */
         let parent = el.parentElement;
-        while (parent && parent !== rootSvg) {
+        while (parent && parent !== /** @type {unknown} */ (rootSvg)) {
           if (parent.tagName && parent.tagName.toLowerCase() === 'g' && parent.id) {
             groupIds.push(parent.id);
           }
@@ -898,7 +899,7 @@ async function listAndAssignIds(
       //   → Tests real bug from text8 at x=-455.64
       // - "EDGE CASE: Element with coordinates in all quadrants"
       //   → Tests negative X, negative Y, positive X, positive Y
-      const clonedForMarkup = rootSvg.cloneNode(true);
+      const clonedForMarkup = /** @type {Element} */ (rootSvg.cloneNode(true));
       clonedForMarkup.removeAttribute('viewBox');
       clonedForMarkup.removeAttribute('width');
       clonedForMarkup.removeAttribute('height');
@@ -1064,11 +1065,15 @@ async function listAndAssignIds(
 
         // Collect transforms from all ancestor groups (bottom-up, then reverse for correct order)
         const transforms = [];
+        /** @type {Node | null} */
         let node = el.parentNode;
         while (node && node !== rootSvg) {
-          const transform = node.getAttribute('transform');
-          if (transform) {
-            transforms.unshift(transform); // Prepend to maintain parent→child order
+          // Type guard: Check if node is an Element before accessing getAttribute
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            const transform = /** @type {Element} */ (node).getAttribute('transform');
+            if (transform) {
+              transforms.unshift(transform); // Prepend to maintain parent→child order
+            }
           }
           node = node.parentNode;
         }
@@ -1859,7 +1864,7 @@ async function extractSingleObject(
           throw new Error('Degenerate bbox after margin.');
         }
 
-        const clonedRoot = rootSvg.cloneNode(false);
+        const clonedRoot = /** @type {Element} */ (rootSvg.cloneNode(false));
         if (!clonedRoot.getAttribute('xmlns')) {
           clonedRoot.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
         }
@@ -1879,11 +1884,13 @@ async function extractSingleObject(
 
         if (!includeContext) {
           const ancestors = [];
+          /** @type {Node | null} */
           let node = el;
           while (node && node !== rootSvg) {
             ancestors.unshift(node);
             node = node.parentNode;
           }
+          /** @type {Element} */
           let currentParent = clonedRoot;
           for (const original of ancestors) {
             const clone = original.cloneNode(false);
@@ -1891,7 +1898,7 @@ async function extractSingleObject(
               const fullSubtree = original.cloneNode(true);
               currentParent.appendChild(fullSubtree);
             } else {
-              const nextParent = clone;
+              const nextParent = /** @type {Element} */ (clone);
               currentParent.appendChild(nextParent);
               currentParent = nextParent;
             }
@@ -1899,7 +1906,11 @@ async function extractSingleObject(
         } else {
           const children = Array.from(rootSvg.childNodes);
           for (const child of children) {
-            if (child.nodeType === Node.ELEMENT_NODE && child.tagName.toLowerCase() === 'defs') {
+            // Type guard: Check if child is an Element before accessing tagName
+            if (
+              child.nodeType === Node.ELEMENT_NODE &&
+              /** @type {Element} */ (child).tagName.toLowerCase() === 'defs'
+            ) {
               continue;
             }
             clonedRoot.appendChild(child.cloneNode(true));
@@ -2017,7 +2028,7 @@ async function exportAllObjects(inputPath, outDir, margin, exportGroups, jsonMod
         const defsList = Array.from(rootSvg.querySelectorAll('defs'));
 
         function makeRootSvgWithBBox(bbox) {
-          const clonedRoot = rootSvg.cloneNode(false);
+          const clonedRoot = /** @type {Element} */ (rootSvg.cloneNode(false));
           if (!clonedRoot.getAttribute('xmlns')) {
             clonedRoot.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
           }

@@ -13,8 +13,24 @@
  * 5. Sprite sheet with <use> element
  */
 
-import playwright from '@playwright/test';
-const { test, expect } = playwright;
+/**
+ * @typedef {Object} ViewBoxResult
+ * @property {boolean} success - Whether the operation succeeded
+ * @property {string} [error] - Error message if operation failed
+ * @property {{x: number, y: number, width: number, height: number}} bbox - The bounding box
+ * @property {{x: number, y: number, width: number, height: number}} oldViewBox - The original viewBox
+ * @property {{x: number, y: number, width: number, height: number}} actualViewBox - The new viewBox
+ * @property {Function} restore - Function to restore the original viewBox
+ */
+
+/**
+ * Extend Window interface with test helper functions
+ * @typedef {Window & typeof globalThis & {
+ *   testViewBox: (svgId: string, elemId: string, options: any) => Promise<ViewBoxResult>
+ * }} TestWindow
+ */
+
+import { test, expect } from '@playwright/test';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
@@ -33,10 +49,19 @@ import {
 const testPagePath = path.join(os.tmpdir(), 'setViewBoxOnObjects_test.html');
 
 /**
+ * @typedef {Object} TestScenario
+ * @property {string} name - Scenario name
+ * @property {(id: string) => string} generateContent - Function to generate SVG content
+ * @property {Object} options - Options to pass to setViewBoxOnObjects
+ * @property {(result: ViewBoxResult, page?: import('@playwright/test').Page, targetId?: string, svgId?: string) => void | Promise<void>} validate - Validation function
+ */
+
+/**
  * Base test scenarios - each defines content generation and validation logic.
  *
  * Each scenario tests a specific setViewBoxOnObjects option or combination.
  * Scenarios are cross-multiplied with all 5 edge cases for comprehensive coverage.
+ * @type {TestScenario[]}
  */
 const baseScenarios = [
   {
@@ -235,6 +260,7 @@ test.describe('setViewBoxOnObjects() - Comprehensive Edge Case Tests', () => {
           // Execute test in browser context
           const result = await page.evaluate(
             ({ svg, elem, opts }) => {
+              // @ts-ignore - testViewBox is defined in the test HTML page
               return window.testViewBox(svg, elem, opts);
             },
             { svg: svgId, elem: targetId, opts: options }
@@ -243,6 +269,7 @@ test.describe('setViewBoxOnObjects() - Comprehensive Edge Case Tests', () => {
           // Run scenario-specific validation
           // Check function arity to determine if validation needs page access
           if (scenario.validate.length > 1) {
+            // @ts-ignore - validate function may accept optional parameters
             await scenario.validate(result, page, targetId, svgId);
           } else {
             scenario.validate(result);
@@ -268,6 +295,7 @@ test.describe('setViewBoxOnObjects() - Comprehensive Edge Case Tests', () => {
       const svg = document.getElementById(svgId);
       const oldVBString = svg.getAttribute('viewBox');
 
+      // @ts-ignore - testViewBox is defined in the test HTML page
       const res = await window.testViewBox(svgId, 'elem_normal_0', { aspect: 'stretch' });
 
       const changedVBString = svg.getAttribute('viewBox');
@@ -296,6 +324,7 @@ test.describe('setViewBoxOnObjects() - Comprehensive Edge Case Tests', () => {
     await page.goto('file://' + testPagePath);
 
     const result = await page.evaluate(() => {
+      // @ts-ignore - testViewBox is defined in the test HTML page
       return window.testViewBox('svg_normal_0', 'nonexistent', { aspect: 'stretch' });
     });
 

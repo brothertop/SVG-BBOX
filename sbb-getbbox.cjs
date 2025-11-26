@@ -209,7 +209,15 @@ async function detectSpriteSheet(page) {
     const sprites = [];
     for (const child of children) {
       const id = child.id || `auto_${child.tagName}_${sprites.length}`;
-      const bbox = child.getBBox ? child.getBBox() : null;
+      // Type guard: getBBox exists on SVGGraphicsElement
+      /** @type {DOMRect | null} */
+      let bbox = null;
+      try {
+        // Cast to any to access getBBox which exists on SVG elements
+        bbox = /** @type {any} */ (child).getBBox ? /** @type {any} */ (child).getBBox() : null;
+      } catch {
+        bbox = null;
+      }
 
       if (bbox && bbox.width > 0 && bbox.height > 0) {
         sprites.push({

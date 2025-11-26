@@ -401,7 +401,10 @@ async function getObjectBBox(svgPath, objectId, browser) {
       return null;
     }
 
-    const rect = element.getBBox();
+    // Type assertion: getBBox is only available on SVGGraphicsElement
+    // Cast through unknown to satisfy TypeScript's strict type checking
+    const svgElement = /** @type {SVGGraphicsElement} */ (/** @type {unknown} */ (element));
+    const rect = svgElement.getBBox();
     return {
       x: rect.x + rect.width / 2,
       y: rect.y + rect.height / 2
@@ -1624,8 +1627,8 @@ async function main() {
           {
             batchFile: args.batch,
             totalComparisons: pairs.length,
-            successful: results.filter((r) => !r.failed).length,
-            failed: results.filter((r) => r.failed).length,
+            successful: results.filter((r) => !('failed' in r && r.failed)).length,
+            failed: results.filter((r) => 'failed' in r && r.failed).length,
             results
           },
           null,

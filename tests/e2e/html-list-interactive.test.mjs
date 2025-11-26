@@ -18,8 +18,7 @@
  * - Validates actual DOM changes and computed styles
  */
 
-import playwright from '@playwright/test';
-const { test, expect } = playwright;
+import { test, expect } from '@playwright/test';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs/promises';
@@ -163,6 +162,7 @@ test.describe('HTML List Interactive Features', () => {
     const currentId = await firstRow.locator('td').nth(1).textContent();
 
     if (!currentId || currentId.trim() === '') {
+      // @ts-expect-error - Playwright test.skip can be called with a string message
       test.skip('First row has no ID to test collision');
       return;
     }
@@ -375,8 +375,8 @@ test.describe('HTML List Interactive Features', () => {
     // Check that all visible rows match the filter
     const visibleIds = await rows.evaluateAll((rows) => {
       return rows
-        .filter((row) => row.style.display !== 'none')
-        .map((row) => row.cells[1]?.textContent?.trim()); // ID column
+        .filter((row) => /** @type {HTMLElement} */ (row).style.display !== 'none')
+        .map((row) => /** @type {HTMLTableRowElement} */ (row).cells[1]?.textContent?.trim()); // ID column
     });
     visibleIds.forEach((id) => {
       expect(id).toMatch(/^g/);
@@ -398,9 +398,9 @@ test.describe('HTML List Interactive Features', () => {
     // Get all visible rows
     const visibleRows = await rows.evaluateAll((rows) => {
       return rows
-        .filter((row) => row.style.display !== 'none')
+        .filter((row) => /** @type {HTMLElement} */ (row).style.display !== 'none')
         .map((row) => {
-          const text = row.cells[2]?.textContent?.trim(); // Tag column
+          const text = /** @type {HTMLTableRowElement} */ (row).cells[2]?.textContent?.trim(); // Tag column
           // Extract tag name from <tag> format
           const match = text?.match(/<(\w+)>/);
           return match ? match[1] : text;

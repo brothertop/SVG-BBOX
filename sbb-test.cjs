@@ -58,15 +58,22 @@ const {
  *  2. If that fails, try to find a system Chrome/Chromium via chrome-launcher
  *     and launch Puppeteer using its executablePath.
  */
+/**
+ * Launch browser with fallback to system Chrome
+ * @param {string[]} errorLogMessages - Array to collect error messages
+ * @returns {Promise<import('puppeteer').Browser>}
+ */
 async function launchBrowserWithFallback(errorLogMessages) {
   try {
     const browser = await puppeteer.launch({
+      // @ts-ignore - 'new' is valid for newer puppeteer versions
       headless: 'new' // new headless mode in recent Chrome versions
     });
     return browser;
   } catch (err) {
     errorLogMessages.push(
-      '[launch] Failed to launch bundled Chromium with Puppeteer: ' + err.message
+      '[launch] Failed to launch bundled Chromium with Puppeteer: ' +
+        /** @type {Error} */ (err).message
     );
   }
 
@@ -75,7 +82,9 @@ async function launchBrowserWithFallback(errorLogMessages) {
   try {
     chromePaths = chromeLauncher.Launcher.getInstallations();
   } catch (err) {
-    errorLogMessages.push('[launch] chrome-launcher.getInstallations failed: ' + err.message);
+    errorLogMessages.push(
+      '[launch] chrome-launcher.getInstallations failed: ' + /** @type {Error} */ (err).message
+    );
     throw new Error(
       'Could not launch any browser (no bundled Chromium and chrome-launcher failed).'
     );
@@ -92,12 +101,16 @@ async function launchBrowserWithFallback(errorLogMessages) {
 
   try {
     const browser = await puppeteer.launch({
+      // @ts-ignore - 'new' is valid for newer puppeteer versions
       headless: 'new',
       executablePath: chosen
     });
     return browser;
   } catch (err) {
-    errorLogMessages.push('[launch] Failed to launch Puppeteer with system Chrome: ' + err.message);
+    errorLogMessages.push(
+      '[launch] Failed to launch Puppeteer with system Chrome: ' +
+        /** @type {Error} */ (err).message
+    );
     throw new Error('Could not launch system Chrome/Chromium with Puppeteer.');
   }
 }
@@ -185,7 +198,7 @@ async function runTest() {
   });
 
   page.on('pageerror', (err) => {
-    errorLogMessages.push('[page error] ' + err.stack);
+    errorLogMessages.push('[page error] ' + /** @type {Error} */ (err).stack);
   });
 
   try {
@@ -335,6 +348,7 @@ async function runTest() {
 
         // --- 4) union of *all* drawable elements (if any) ---------------
         if (allCandidates.length > 0) {
+          // @ts-ignore - concat types work correctly at runtime
           const unionTargets = [importedSvg].concat(allCandidates.slice(0, 20)); // limit for sanity
           try {
             res.unionAll = await SvgVisualBBox.getSvgElementsUnionVisualBBox(unionTargets, {
@@ -350,6 +364,7 @@ async function runTest() {
 
         // --- 5) root: viewBox expansion for full drawing ----------------
         try {
+          // @ts-ignore - getSvgRootViewBoxExpansionForFullDrawing exists at runtime
           res.viewBoxExpansion = await SvgVisualBBox.getSvgRootViewBoxExpansionForFullDrawing(
             importedSvg,
             {

@@ -1,5 +1,6 @@
 import js from '@eslint/js';
 import vitestPlugin from 'eslint-plugin-vitest';
+import prettierConfig from 'eslint-config-prettier';
 
 export default [
   // Base recommended config
@@ -205,5 +206,8 @@ export default [
     rules: {
       'no-undef': 'off' // Disable for UMD pattern
     }
-  }
+  },
+
+  // Prettier config must be last to disable conflicting rules
+  prettierConfig
 ];

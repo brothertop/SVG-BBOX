@@ -27,7 +27,7 @@ let sharedBrowser = null;
 export async function getBrowser() {
   if (!sharedBrowser) {
     sharedBrowser = await puppeteer.launch({
-      headless: 'new',
+      headless: /** @type {boolean} */ (true), // Use true instead of 'new' for type compatibility
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -170,7 +170,9 @@ export async function getBBoxById(page, elementId, options = {}) {
     );
   } catch (error) {
     // Check if there's debug SVG data to save
-    const debugData = await page.evaluate(() => window.__DEBUG_SVG_DATA__ || null);
+    const debugData = await page.evaluate(
+      () => /** @type {any} */ (window).__DEBUG_SVG_DATA__ || null
+    );
 
     if (debugData && debugData.content && debugData.filename) {
       // Save debug SVG to current directory
@@ -178,7 +180,12 @@ export async function getBBoxById(page, elementId, options = {}) {
       fs.writeFileSync(debugPath, debugData.content, 'utf8');
 
       // Add the saved path to error message
-      if (error.message) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'message' in error &&
+        typeof error.message === 'string'
+      ) {
         error.message = error.message.replace(
           /DEBUG SVG WILL BE AUTOMATICALLY SAVED:\s+([^\n]+)/,
           `DEBUG SVG AUTOMATICALLY SAVED:\n   ✓ ${debugPath}`

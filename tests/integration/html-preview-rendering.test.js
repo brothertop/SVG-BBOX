@@ -36,7 +36,10 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
   let availableFonts;
 
   beforeAll(async () => {
-    browser = await puppeteer.launch({ headless: true });
+    browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
     const testPage = await browser.newPage();
 
     // Discover fonts available on this system

@@ -624,7 +624,7 @@
                 defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
                 clonedSvg.insertBefore(defs, clonedSvg.firstChild);
               }
-              refEl = originalRefEl.cloneNode(true);
+              refEl = /** @type {Element} */ (originalRefEl.cloneNode(true));
               defs.appendChild(refEl);
               allowed.add(defs);
             }

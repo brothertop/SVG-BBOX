@@ -63,14 +63,19 @@ methods:
     <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/oval_badge_svgvisualbbox.png" alt="SvgVisualBBox - includes full stroke" style="height: 100px; width: auto;" /></td>
   </tr>
   <tr>
+    <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 12px; font-size: 48px; line-height: 1.2;">❌<br/><span style="font-size: 16px; font-weight: bold;">WRONG</span></td>
+    <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 12px; font-size: 48px; line-height: 1.2;">❌<br/><span style="font-size: 16px; font-weight: bold;">WRONG</span></td>
+    <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 12px; font-size: 48px; line-height: 1.2;">✅<br/><span style="font-size: 16px; font-weight: bold;">CORRECT</span></td>
+  </tr>
+  <tr>
     <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 8px;"><a href="assets/oval_badge_inkscape.svg">SVG</a></td>
     <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 8px;"><a href="assets/oval_badge_getbbox.svg">SVG</a></td>
     <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 8px;"><a href="assets/oval_badge_svgvisualbbox.svg">SVG</a></td>
   </tr>
   <tr>
-    <td style="background-color: white; color: black; border: 1px solid black; text-align: left; padding: 8px;">❌ Width: 554px<br/>Height: 379px<br/><em>Undersized by ~48%</em></td>
-    <td style="background-color: white; color: black; border: 1px solid black; text-align: left; padding: 8px;">❌ Width: 999px<br/>Height: 301px<br/><em>Missing ~78px of stroke</em></td>
-    <td style="background-color: white; color: black; border: 1px solid black; text-align: left; padding: 8px;">✅ Width: 1077px<br/>Height: 379px<br/><em>Includes full visual bounds</em></td>
+    <td style="background-color: white; color: black; border: 1px solid black; text-align: left; padding: 8px;">Width: 554px<br/>Height: 379px<br/><em>Undersized by ~48%</em></td>
+    <td style="background-color: white; color: black; border: 1px solid black; text-align: left; padding: 8px;">Width: 999px<br/>Height: 301px<br/><em>Missing ~78px of stroke</em></td>
+    <td style="background-color: white; color: black; border: 1px solid black; text-align: left; padding: 8px;">Width: 1077px<br/>Height: 379px<br/><em>Includes full visual bounds</em></td>
   </tr>
 </table>
 

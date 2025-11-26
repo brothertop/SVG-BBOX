@@ -53,9 +53,9 @@ methods. Both examples demonstrate the same fundamental issues.
     <th><strong>SvgVisualBBox</strong></th>
   </tr>
   <tr>
-    <td><img src="assets/text39_inkscape.png" alt="Inkscape extraction - undersized by 55%" /></td>
-    <td><img src="assets/text39_getbbox.png" alt="Chrome getBBox - oversized vertically" /></td>
-    <td><img src="assets/text39_svgvisualbbox.png" alt="SvgVisualBBox - pixel-perfect accuracy" /></td>
+    <td style="background-color: white;"><img src="assets/text39_inkscape.png" alt="Inkscape extraction - undersized by 55%" /></td>
+    <td style="background-color: white;"><img src="assets/text39_getbbox.png" alt="Chrome getBBox - oversized vertically" /></td>
+    <td style="background-color: white;"><img src="assets/text39_svgvisualbbox.png" alt="SvgVisualBBox - pixel-perfect accuracy" /></td>
   </tr>
   <tr>
     <td align="center"><a href="assets/text39_inkscape.svg">SVG</a></td>
@@ -71,9 +71,9 @@ methods. Both examples demonstrate the same fundamental issues.
     <td colspan="3"><hr/><strong>Example 2: Oval Badge with Dashed Stroke</strong> (<a href="assets/test_oval_badge.svg">source SVG</a>)</td>
   </tr>
   <tr>
-    <td><img src="assets/oval_badge_inkscape.png" alt="Inkscape - undersized width" /></td>
-    <td><img src="assets/oval_badge_getbbox.png" alt="getBBox - missing stroke width" /></td>
-    <td><img src="assets/oval_badge_svgvisualbbox.png" alt="SvgVisualBBox - includes full stroke" /></td>
+    <td style="background-color: white;"><img src="assets/oval_badge_inkscape.png" alt="Inkscape - undersized width" /></td>
+    <td style="background-color: white;"><img src="assets/oval_badge_getbbox.png" alt="getBBox - missing stroke width" /></td>
+    <td style="background-color: white;"><img src="assets/oval_badge_svgvisualbbox.png" alt="SvgVisualBBox - includes full stroke" /></td>
   </tr>
   <tr>
     <td align="center"><a href="assets/oval_badge_inkscape.svg">SVG</a></td>

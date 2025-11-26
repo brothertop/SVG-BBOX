@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>SvgVisualBBox</h1>
+  <img src="assets/SvgVisualBBox_logo_portrait.svg" alt="SvgVisualBBox" width="200" />
   <h3>A JavaScript library for accurate SVG bounding box computation</h3>
   <p><em>Finally, bounding boxes you can trust.</em></p>
 </div>
@@ -50,7 +50,7 @@ methods:
   <tr>
     <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/inkscape-logo.svg" alt="Inkscape" style="width: 80%; height: auto;" /></th>
     <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/chrome-logo.svg" alt="Chrome" style="width: 80%; height: auto;" /></th>
-    <th style="background-color: white; color: black; border: 1px solid black; width: 33.34%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/svgvisualbbox-logo.svg" alt="SvgVisualBBox" style="width: 80%; height: auto;" /></th>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.34%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/SvgVisualBBox_logo_landscape.svg" alt="SvgVisualBBox" style="width: 80%; height: auto;" /></th>
   </tr>
   <tr>
     <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; text-align: left; padding: 8px;">Inkscape BBox</th>

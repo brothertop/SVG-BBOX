@@ -68,9 +68,9 @@ methods:
     <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 12px; font-size: 48px; line-height: 1.2;">✅<br/><span style="font-size: 48px; font-weight: bold; color: #00C851;">CORRECT</span></td>
   </tr>
   <tr>
-    <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 8px;"><a href="assets/oval_badge_inkscape.svg">SVG</a></td>
-    <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 8px;"><a href="assets/oval_badge_getbbox.svg">SVG</a></td>
-    <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 8px;"><a href="assets/oval_badge_svgvisualbbox.svg">SVG</a></td>
+    <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 8px;"><a href="assets/oval_badge_inkscape.svg"><em>(svg file here)</em></a></td>
+    <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 8px;"><a href="assets/oval_badge_getbbox.svg"><em>(svg file here)</em></a></td>
+    <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 8px;"><a href="assets/oval_badge_svgvisualbbox.svg"><em>(svg file here)</em></a></td>
   </tr>
   <tr>
     <td style="background-color: white; color: black; border: 1px solid black; text-align: left; padding: 8px;">Width: 554px<br/>Height: 379px<br/><em>Undersized by ~48%</em></td>
@@ -80,6 +80,9 @@ methods:
 </table>
 
 **Source:** [test_oval_badge.svg](assets/test_oval_badge.svg)
+
+**Generate this comparison yourself:**
+[examples/bbox-comparison.js](examples/bbox-comparison.js) - Run `node examples/bbox-comparison.js assets/test_oval_badge.svg oval_badge` to create your own comparison with timestamped output directory.
 
 **Why the differences?**
 

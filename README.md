@@ -29,16 +29,17 @@
 
 The native SVG `.getBBox()` method is fundamentally broken:
 
-| Feature | `.getBBox()` | **SvgVisualBBox** |
-|---------|:------------:|:-----------------:|
-| Filters (blur, shadows, glows) | :x: Ignored | :white_check_mark: Measured |
-| Stroke width | :x: Ignored | :white_check_mark: Included |
-| Complex text (ligatures, RTL, textPath) | :x: Wrong | :white_check_mark: Accurate |
-| `<use>`, masks, clipping paths | :x: Fails | :white_check_mark: Works |
-| Transformed elements | :x: Garbage | :white_check_mark: Correct |
-| Cross-browser consistency | :x: Varies | :white_check_mark: Consistent |
+| Feature                                 | `.getBBox()` |       **SvgVisualBBox**       |
+| --------------------------------------- | :----------: | :---------------------------: |
+| Filters (blur, shadows, glows)          | :x: Ignored  |  :white_check_mark: Measured  |
+| Stroke width                            | :x: Ignored  |  :white_check_mark: Included  |
+| Complex text (ligatures, RTL, textPath) |  :x: Wrong   |  :white_check_mark: Accurate  |
+| `<use>`, masks, clipping paths          |  :x: Fails   |   :white_check_mark: Works    |
+| Transformed elements                    | :x: Garbage  |  :white_check_mark: Correct   |
+| Cross-browser consistency               |  :x: Varies  | :white_check_mark: Consistent |
 
-**Our approach:** Measure what the browser actually paints, pixel by pixel. No geometry guesswork, no lies.
+**Our approach:** Measure what the browser actually paints, pixel by pixel. No
+geometry guesswork, no lies.
 
 ---
 
@@ -51,7 +52,10 @@ The native SVG `.getBBox()` method is fundamentally broken:
 <script>
   (async () => {
     // Get accurate bounding box for any SVG element
-    const bbox = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive('#myElement');
+    const bbox =
+      await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
+        '#myElement'
+      );
     console.log(bbox); // {x: 10, y: 20, width: 100, height: 50}
 
     // Visual debugging - show border around true bounds
@@ -87,10 +91,13 @@ const bbox = await page.evaluate(async () => {
 
 ### 1. The Core Library: `SvgVisualBBox.js`
 
-The heart of this package - a browser-side JavaScript library that computes accurate visual bounding boxes using canvas rasterization.
+The heart of this package - a browser-side JavaScript library that computes
+accurate visual bounding boxes using canvas rasterization.
 
 **Key Functions:**
-- `getSvgElementVisualBBoxTwoPassAggressive()` - High-accuracy bbox for any element
+
+- `getSvgElementVisualBBoxTwoPassAggressive()` - High-accuracy bbox for any
+  element
 - `getSvgElementsUnionVisualBBox()` - Union bbox for multiple elements
 - `getSvgElementVisibleAndFullBBoxes()` - Both clipped and unclipped bounds
 - `showTrueBBoxBorder()` - Visual debugging helper
@@ -100,26 +107,27 @@ The heart of this package - a browser-side JavaScript library that computes accu
 
 Command-line utilities that leverage the library for common SVG tasks:
 
-| Tool | Purpose |
-|------|---------|
-| `svg-bbox` | Main entry point - shows all available commands |
-| `sbb-getbbox` | Compute bounding boxes from command line |
-| `sbb-extractor` | Extract/export SVG objects with correct viewBox |
-| `sbb-render` | Render SVG to PNG with accurate bounds |
-| `sbb-fix-viewbox` | Repair missing/broken viewBox attributes |
-| `sbb-comparer` | Visual diff between SVGs (pixel-by-pixel) |
+| Tool              | Purpose                                         |
+| ----------------- | ----------------------------------------------- |
+| `svg-bbox`        | Main entry point - shows all available commands |
+| `sbb-getbbox`     | Compute bounding boxes from command line        |
+| `sbb-extractor`   | Extract/export SVG objects with correct viewBox |
+| `sbb-render`      | Render SVG to PNG with accurate bounds          |
+| `sbb-fix-viewbox` | Repair missing/broken viewBox attributes        |
+| `sbb-comparer`    | Visual diff between SVGs (pixel-by-pixel)       |
 
 ### 3. Inkscape Comparison Tools
 
 Tools to compare our library's results against Inkscape's bbox algorithm:
 
-| Tool | Purpose |
-|------|---------|
+| Tool                     | Purpose                          |
+| ------------------------ | -------------------------------- |
 | `sbb-inkscape-text2path` | Convert text to paths (Inkscape) |
-| `sbb-inkscape-extract` | Extract by ID (Inkscape) |
-| `sbb-inkscape-svg2png` | SVG to PNG (Inkscape) |
+| `sbb-inkscape-extract`   | Extract by ID (Inkscape)         |
+| `sbb-inkscape-svg2png`   | SVG to PNG (Inkscape)            |
 
-> **Note:** Inkscape tools are for **comparison only**. They have known font bbox issues. Use core tools for production.
+> **Note:** Inkscape tools are for **comparison only**. They have known font
+> bbox issues. Use core tools for production.
 
 ---
 
@@ -151,11 +159,11 @@ Compute a high-accuracy visual bounding box for any SVG element.
 
 ```javascript
 const bbox = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
-  '#myElement',  // CSS selector, ID string, or DOM element
+  '#myElement', // CSS selector, ID string, or DOM element
   {
-    mode: 'unclipped',  // 'clipped' (respect viewBox) or 'unclipped' (full drawing)
-    coarseFactor: 3,    // Coarse sampling resolution
-    fineFactor: 24      // Fine sampling resolution
+    mode: 'unclipped', // 'clipped' (respect viewBox) or 'unclipped' (full drawing)
+    coarseFactor: 3, // Coarse sampling resolution
+    fineFactor: 24 // Fine sampling resolution
   }
 );
 // Returns: { x, y, width, height } in SVG user units
@@ -166,9 +174,11 @@ const bbox = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
 Compute the union bounding box of multiple elements.
 
 ```javascript
-const union = await SvgVisualBBox.getSvgElementsUnionVisualBBox(
-  ['#text1', '#text2', document.getElementById('path3')]
-);
+const union = await SvgVisualBBox.getSvgElementsUnionVisualBBox([
+  '#text1',
+  '#text2',
+  document.getElementById('path3')
+]);
 ```
 
 ### `getSvgElementVisibleAndFullBBoxes(target, options?)`
@@ -176,7 +186,8 @@ const union = await SvgVisualBBox.getSvgElementsUnionVisualBBox(
 Get both the visible (clipped to viewBox) and full (entire drawing) bounds.
 
 ```javascript
-const { visible, full } = await SvgVisualBBox.getSvgElementVisibleAndFullBBoxes('svg');
+const { visible, full } =
+  await SvgVisualBBox.getSvgElementVisibleAndFullBBoxes('svg');
 ```
 
 ### `showTrueBBoxBorder(target, options?)`
@@ -185,7 +196,7 @@ Visual debugging helper - displays a border around the true visual bounds.
 
 ```javascript
 const result = await SvgVisualBBox.showTrueBBoxBorder('#myText', {
-  theme: 'dark',       // 'light', 'dark', or 'auto'
+  theme: 'dark', // 'light', 'dark', or 'auto'
   borderColor: 'red',
   borderWidth: '2px',
   padding: 5
@@ -539,6 +550,7 @@ node sbb-getbbox.cjs myfile.svg
 ```
 
 > **Note:** In the documentation below, you'll see two command styles:
+>
 > - `npx sbb-getbbox` - Use this when installed via npm (recommended)
 > - `node sbb-getbbox.cjs` - Use this when running from cloned source
 >

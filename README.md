@@ -144,47 +144,48 @@ const bbox = await page.evaluate(async () => {
 
 ## What This Package Provides
 
-### 1. The Core Library: `SvgVisualBBox.js`
+### 1. Core Library: `SvgVisualBBox.js`
 
-The heart of this package - a browser-side JavaScript library that computes
-accurate visual bounding boxes using canvas rasterization.
+JavaScript library for accurate visual bounding box computation. Works in
+browsers and Node.js (via Puppeteer).
 
-**Key Functions:**
+**Available Functions:**
 
-- `getSvgElementVisualBBoxTwoPassAggressive()` - High-accuracy bbox for any
-  element
-- `getSvgElementsUnionVisualBBox()` - Union bbox for multiple elements
-- `getSvgElementVisibleAndFullBBoxes()` - Both clipped and unclipped bounds
-- `showTrueBBoxBorder()` - Visual debugging helper
-- `waitForDocumentFonts()` - Font loading synchronization
+- `getSvgElementVisualBBoxTwoPassAggressive(target, options)` - Compute accurate
+  visual bbox for any element
+- `getSvgElementsUnionVisualBBox(targets[], options)` - Union bbox for multiple
+  elements
+- `getSvgElementVisibleAndFullBBoxes(target, options)` - Get both clipped
+  (viewBox-respecting) and unclipped bounds
+- `showTrueBBoxBorder(target, options)` - Visual debugging overlay
+- `waitForDocumentFonts(document, timeoutMs)` - Wait for fonts before measuring
 
-### 2. CLI Tools (Built on the Library)
+**Capabilities:**
 
-Command-line utilities that leverage the library for common SVG tasks:
+- Font-aware: Arabic, CJK, ligatures, RTL, textPath, custom fonts
+- Filter-safe: Blur, shadows, masks, clipping
+- Stroke-aware: Width, caps, joins, markers, patterns
 
-| Tool                   | Purpose                                                          |
-| ---------------------- | ---------------------------------------------------------------- |
-| `svg-bbox`             | Main entry point - shows all available commands                  |
-| `sbb-getbbox`          | Compute bounding boxes from command line                         |
-| `sbb-getbbox-extract`  | Extract using native .getBBox() method (for comparison)          |
-| `sbb-extractor`        | Extract/export SVG objects with correct viewBox                  |
-| `sbb-render`           | Render SVG to PNG with accurate bounds                           |
-| `sbb-fix-viewbox`      | Repair missing/broken viewBox attributes                         |
-| `sbb-comparer`         | Visual diff between SVGs (pixel-by-pixel)                        |
-| `sbb-test`             | Test SVG visual bounding box computation accuracy                |
+### 2. CLI Tools
 
-### 3. Inkscape Comparison Tools
+**Core Tools:**
 
-Tools to compare our library's results against Inkscape's bbox algorithm:
+- `sbb-getbbox` - Compute bounding boxes, batch process directories, detect
+  sprite sheets
+- `sbb-extractor` - List/rename/extract/export SVG objects with visual catalog
+- `sbb-render` - Render SVG to PNG
+- `sbb-fix-viewbox` - Repair missing/broken viewBox
+- `sbb-comparer` - Visual diff between SVGs (pixel comparison)
+- `sbb-test` - Test bbox accuracy
 
-| Tool                     | Purpose                          |
-| ------------------------ | -------------------------------- |
-| `sbb-inkscape-text2path` | Convert text to paths (Inkscape) |
-| `sbb-inkscape-extract`   | Extract by ID (Inkscape)         |
-| `sbb-inkscape-svg2png`   | SVG to PNG (Inkscape)            |
+**Comparison Tools:**
 
-> **Note:** Inkscape tools are for **comparison only**. They have known font
-> bbox issues. Use core tools for production.
+- `sbb-getbbox-extract` - Extract using Chrome .getBBox() (for comparison)
+- `sbb-inkscape-text2path` - Convert text to paths (Inkscape)
+- `sbb-inkscape-extract` - Extract by ID (Inkscape)
+- `sbb-inkscape-svg2png` - SVG to PNG (Inkscape)
+
+Run `npx svg-bbox` or any tool with `--help` for detailed usage.
 
 ---
 
@@ -208,83 +209,49 @@ Tools to compare our library's results against Inkscape's bbox algorithm:
 
 ## 📖 Library API Reference
 
-The `SvgVisualBBox` library exposes these functions:
+### `getSvgElementVisualBBoxTwoPassAggressive(target, options)`
 
-### `getSvgElementVisualBBoxTwoPassAggressive(target, options?)`
+Compute accurate visual bounding box for any SVG element.
 
-Compute a high-accuracy visual bounding box for any SVG element.
+**Parameters:**
 
-```javascript
-const bbox = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
-  '#myElement', // CSS selector, ID string, or DOM element
-  {
-    mode: 'unclipped', // 'clipped' (respect viewBox) or 'unclipped' (full drawing)
-    coarseFactor: 3, // Coarse sampling resolution
-    fineFactor: 24 // Fine sampling resolution
-  }
-);
-// Returns: { x, y, width, height } in SVG user units
-```
+- `target` - CSS selector, ID string, or DOM element
+- `options.mode` - `'clipped'` (respect viewBox) or `'unclipped'` (full drawing)
+- `options.coarseFactor` - Coarse sampling resolution (default: 3)
+- `options.fineFactor` - Fine sampling resolution (default: 24)
 
-### `getSvgElementsUnionVisualBBox(targets[], options?)`
+**Returns:** `{x, y, width, height}` in SVG user units
 
-Compute the union bounding box of multiple elements.
+### `getSvgElementsUnionVisualBBox(targets[], options)`
 
-```javascript
-const union = await SvgVisualBBox.getSvgElementsUnionVisualBBox([
-  '#text1',
-  '#text2',
-  document.getElementById('path3')
-]);
-```
+Compute union bounding box of multiple elements.
 
-### `getSvgElementVisibleAndFullBBoxes(target, options?)`
+**Parameters:**
 
-Get both the visible (clipped to viewBox) and full (entire drawing) bounds.
+- `targets[]` - Array of CSS selectors, ID strings, or DOM elements
+- `options` - Same as above
 
-```javascript
-const { visible, full } =
-  await SvgVisualBBox.getSvgElementVisibleAndFullBBoxes('svg');
-```
+**Returns:** `{x, y, width, height}`
 
-### `showTrueBBoxBorder(target, options?)`
+### `getSvgElementVisibleAndFullBBoxes(target, options)`
 
-Visual debugging helper - displays a border around the true visual bounds.
+Get both clipped (viewBox-respecting) and unclipped bounds.
 
-```javascript
-const result = await SvgVisualBBox.showTrueBBoxBorder('#myText', {
-  theme: 'dark', // 'light', 'dark', or 'auto'
-  borderColor: 'red',
-  borderWidth: '2px',
-  padding: 5
-});
+**Returns:** `{visible: {x,y,width,height}, full: {x,y,width,height}}`
 
-// Later: remove the border
-result.remove();
-```
+### `showTrueBBoxBorder(target, options)`
 
-### `waitForDocumentFonts(document?, timeoutMs?)`
+Visual debugging overlay showing true bounds.
+
+**Options:** `theme`, `borderColor`, `borderWidth`, `padding`
+
+**Returns:** Object with `remove()` method
+
+### `waitForDocumentFonts(document, timeoutMs)`
 
 Wait for fonts to load before measuring text.
 
-```javascript
-await SvgVisualBBox.waitForDocumentFonts(document, 5000);
-```
-
-### Core Capabilities
-
-**Font-aware text bounds**
-Works with complex scripts (Arabic, CJK, Tamil), ligatures, RTL/LTR, `textPath`,
-`tspan`, and custom fonts. Automatically waits for fonts to load before
-measuring.
-
-**Filter-safe bounds**
-Includes blur, shadows, masks, clipping, symbols, and bitmap images in bounding
-box calculations.
-
-**Stroke-aware bounds**
-Takes into account stroke width, caps, joins, markers, and patterns when
-computing visual bounds.
+**Default timeout:** 8000ms
 
 ---
 

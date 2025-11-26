@@ -393,10 +393,6 @@ test.beforeAll(async () => {
   console.log(`Total tests: ${baseScenarios.length * Object.keys(edgeCases).length}`);
 });
 
-test.afterAll(async () => {
-  // Don't delete - let OS clean up /tmp
-});
-
 test.describe('showTrueBBoxBorder() - Comprehensive Edge Case Tests', () => {
   test.describe.configure({ mode: 'serial' });
 

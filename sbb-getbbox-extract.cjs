@@ -48,8 +48,10 @@ async function extractWithGetBBox(options) {
     // Get bbox using standard .getBBox()
     const result = await page.evaluate(
       (id, marginValue) => {
-        /* eslint-disable-next-line no-undef */
-        const element = document.getElementById(id);
+        const element = /** @type {SVGGraphicsElement} */ (
+          /* eslint-disable-next-line no-undef */
+          /** @type {unknown} */ (document.getElementById(id))
+        );
         if (!element) {
           throw new Error(`Element with id "${id}" not found`);
         }
@@ -97,8 +99,10 @@ async function extractWithGetBBox(options) {
     // Create a new SVG with just this element and the getBBox dimensions
     const extractedSvg = await page.evaluate(
       (id, bbox) => {
-        /* eslint-disable-next-line no-undef */
-        const element = document.getElementById(id);
+        const element = /** @type {SVGGraphicsElement} */ (
+          /* eslint-disable-next-line no-undef */
+          /** @type {unknown} */ (document.getElementById(id))
+        );
         const svg = element.ownerSVGElement;
 
         // Clone the element
@@ -108,7 +112,7 @@ async function extractWithGetBBox(options) {
         const defs = svg.querySelectorAll('defs');
         let defsContent = '';
         defs.forEach((def) => {
-          defsContent += def.outerHTML + '\n';
+          defsContent += /** @type {Element} */ (def).outerHTML + '\n';
         });
 
         // Create new SVG with viewBox set to getBBox result
@@ -116,7 +120,7 @@ async function extractWithGetBBox(options) {
 
         return `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg id="getbbox_extraction" version="1.1" x="0px" y="0px" width="${bbox.width}" height="${bbox.height}" viewBox="${newViewBox}" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg">
-${defsContent}${clone.outerHTML}
+${defsContent}${/** @type {Element} */ (clone).outerHTML}
 </svg>`;
       },
       elementId,

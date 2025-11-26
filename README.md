@@ -29,83 +29,59 @@
 
 The native SVG `.getBBox()` method is fundamentally broken:
 
-| Feature                                 | `.getBBox()` |       **SvgVisualBBox**       |
-| --------------------------------------- | :----------: | :---------------------------: |
-| Filters (blur, shadows, glows)          | :x: Ignored  |  :white_check_mark: Measured  |
-| Stroke width                            | :x: Ignored  |  :white_check_mark: Included  |
-| Complex text (ligatures, RTL, textPath) |  :x: Wrong   |  :white_check_mark: Accurate  |
-| `<use>`, masks, clipping paths          |  :x: Fails   |   :white_check_mark: Works    |
-| Transformed elements                    | :x: Garbage  |  :white_check_mark: Correct   |
-| Cross-browser consistency               |  :x: Varies  | :white_check_mark: Consistent |
+| Feature                                 | `.getBBox()` | **SvgVisualBBox**             |
+| --------------------------------------- | ------------ | ----------------------------- |
+| Filters (blur, shadows, glows)          | :x: Ignored  | :white_check_mark: Measured   |
+| Stroke width                            | :x: Ignored  | :white_check_mark: Included   |
+| Complex text (ligatures, RTL, textPath) | :x: Wrong    | :white_check_mark: Accurate   |
+| `<use>`, masks, clipping paths          | :x: Fails    | :white_check_mark: Works      |
+| Transformed elements                    | :x: Garbage  | :white_check_mark: Correct    |
+| Cross-browser consistency               | :x: Varies   | :white_check_mark: Consistent |
 
 **Our approach:** Measure what the browser actually paints, pixel by pixel. No
 geometry guesswork, no lies.
 
-### Visual Comparison: Real-World Examples
+### Visual Comparison: Oval Badge with Dashed Stroke
 
-Here's what happens when extracting different SVG elements using three different
-methods. Both examples demonstrate the same fundamental issues.
+Here's what happens when extracting an SVG element using three different bbox
+methods:
 
 <table style="background-color: white; color: black; border: 1px solid black; table-layout: fixed; width: 100%;">
   <tr>
-    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; vertical-align: middle; text-align: center;"><img src="assets/inkscape-logo.svg" alt="Inkscape" style="height: 20px; width: auto; max-width: 100%;" /></th>
-    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; vertical-align: middle; text-align: center;"><img src="assets/chrome-logo.svg" alt="Chrome" style="height: 20px; width: auto; max-width: 100%;" /></th>
-    <th style="background-color: white; color: black; border: 1px solid black; width: 33.34%; vertical-align: middle; text-align: center;"><img src="assets/svgvisualbbox-logo.svg" alt="SvgVisualBBox" style="height: 20px; width: auto; max-width: 100%;" /></th>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/inkscape-logo.svg" alt="Inkscape" style="width: 80%; height: auto;" /></th>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/chrome-logo.svg" alt="Chrome" style="width: 80%; height: auto;" /></th>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.34%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/svgvisualbbox-logo.svg" alt="SvgVisualBBox" style="width: 80%; height: auto;" /></th>
   </tr>
   <tr>
-    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%;">Inkscape BBox</th>
-    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%;">Chrome <code style="background-color: white; color: black;">.getBBox()</code></th>
-    <th style="background-color: white; color: black; border: 1px solid black; width: 33.34%;"><strong>SvgVisualBBox</strong></th>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; text-align: left; padding: 8px;">Inkscape BBox</th>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; text-align: left; padding: 8px;">Chrome <code style="background-color: white; color: black;">.getBBox()</code></th>
+    <th style="background-color: white; color: black; border: 1px solid black; width: 33.34%; text-align: left; padding: 8px;"><strong>SvgVisualBBox</strong></th>
   </tr>
   <tr>
-    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center;"><img src="assets/text39_inkscape.png" alt="Inkscape extraction - undersized by 55%" style="height: 26px; width: auto;" /></td>
-    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center;"><img src="assets/text39_getbbox.png" alt="Chrome getBBox - oversized vertically" style="height: 26px; width: auto;" /></td>
-    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center;"><img src="assets/text39_svgvisualbbox.png" alt="SvgVisualBBox - pixel-perfect accuracy" style="height: 26px; width: auto;" /></td>
+    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/oval_badge_inkscape.png" alt="Inkscape - undersized width" style="height: 100px; width: auto;" /></td>
+    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/oval_badge_getbbox.png" alt="getBBox - missing stroke width" style="height: 100px; width: auto;" /></td>
+    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/oval_badge_svgvisualbbox.png" alt="SvgVisualBBox - includes full stroke" style="height: 100px; width: auto;" /></td>
   </tr>
   <tr>
-    <td align="center" style="background-color: white; color: black; border: 1px solid black;"><a href="assets/text39_inkscape.svg">SVG</a></td>
-    <td align="center" style="background-color: white; color: black; border: 1px solid black;"><a href="assets/text39_getbbox.svg">SVG</a></td>
-    <td align="center" style="background-color: white; color: black; border: 1px solid black;"><a href="assets/text39_svgvisualbbox.svg">SVG</a></td>
+    <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 8px;"><a href="assets/oval_badge_inkscape.svg">SVG</a></td>
+    <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 8px;"><a href="assets/oval_badge_getbbox.svg">SVG</a></td>
+    <td style="background-color: white; color: black; border: 1px solid black; text-align: center; padding: 8px;"><a href="assets/oval_badge_svgvisualbbox.svg">SVG</a></td>
   </tr>
   <tr>
-    <td style="background-color: white; color: black; border: 1px solid black; padding: 8px;">❌ Width: 324px<br/><em>Undersized by ~55%</em><br/>Lost coordinate context</td>
-    <td style="background-color: white; color: black; border: 1px solid black; padding: 8px;">⚠️ Width: 730px<br/>Height: 74px<br/><em>Oversized vertically by 30%</em></td>
-    <td style="background-color: white; color: black; border: 1px solid black; padding: 8px;">✅ Width: 729px<br/>Height: 57px<br/><em>Pixel-perfect accuracy</em></td>
-  </tr>
-  <tr>
-    <td colspan="3" style="background-color: white; color: black; border: 1px solid black;"><hr/><strong>Example 2: Oval Badge with Dashed Stroke</strong> (<a href="assets/test_oval_badge.svg">source SVG</a>)</td>
-  </tr>
-  <tr>
-    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center;"><img src="assets/oval_badge_inkscape.png" alt="Inkscape - undersized width" style="height: 100px; width: auto;" /></td>
-    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center;"><img src="assets/oval_badge_getbbox.png" alt="getBBox - missing stroke width" style="height: 100px; width: auto;" /></td>
-    <td style="background-color: white; color: black; border: 1px solid black; vertical-align: middle; text-align: center;"><img src="assets/oval_badge_svgvisualbbox.png" alt="SvgVisualBBox - includes full stroke" style="height: 100px; width: auto;" /></td>
-  </tr>
-  <tr>
-    <td align="center" style="background-color: white; color: black; border: 1px solid black;"><a href="assets/oval_badge_inkscape.svg">SVG</a></td>
-    <td align="center" style="background-color: white; color: black; border: 1px solid black;"><a href="assets/oval_badge_getbbox.svg">SVG</a></td>
-    <td align="center" style="background-color: white; color: black; border: 1px solid black;"><a href="assets/oval_badge_svgvisualbbox.svg">SVG</a></td>
-  </tr>
-  <tr>
-    <td style="background-color: white; color: black; border: 1px solid black; padding: 8px;">❌ Width: 554px<br/>Height: 379px<br/><em>Undersized by ~48%</em></td>
-    <td style="background-color: white; color: black; border: 1px solid black; padding: 8px;">❌ Width: 999px<br/>Height: 301px<br/><em>Missing ~78px of stroke</em></td>
-    <td style="background-color: white; color: black; border: 1px solid black; padding: 8px;">✅ Width: 1077px<br/>Height: 379px<br/><em>Includes full visual bounds</em></td>
+    <td style="background-color: white; color: black; border: 1px solid black; text-align: left; padding: 8px;">❌ Width: 554px<br/>Height: 379px<br/><em>Undersized by ~48%</em></td>
+    <td style="background-color: white; color: black; border: 1px solid black; text-align: left; padding: 8px;">❌ Width: 999px<br/>Height: 301px<br/><em>Missing ~78px of stroke</em></td>
+    <td style="background-color: white; color: black; border: 1px solid black; text-align: left; padding: 8px;">✅ Width: 1077px<br/>Height: 379px<br/><em>Includes full visual bounds</em></td>
   </tr>
 </table>
 
-> **Note:** Example 1 uses the `.New York` font which may not be installed on
-> your system. PNGs are provided so you can see the true rendering for both
-> examples.
+**Source:** [test_oval_badge.svg](assets/test_oval_badge.svg)
 
 **Why the differences?**
 
-- **Inkscape:** Uses font metrics that don't account for italic overflow,
-  ligatures, and actual glyph rendering (Example 1). Also significantly
-  undersizes elements with text, missing ~48% of width in Example 2. Recenters
-  coordinates, losing the original document context.
+- **Inkscape:** Significantly undersizes elements with text, missing ~48% of
+  width. Recenters coordinates, losing the original document context.
 - **`.getBBox()`:** Uses geometric calculations that completely ignore stroke
-  width (Example 2: missing 78px) and approximate text bounds using font metrics
-  (Example 1: wrong vertical bounds). Both demonstrate geometric vs visual
-  measurement.
+  width (missing 78px in this example).
 - **SvgVisualBBox:** Rasterizes and measures actual pixel data. Captures
   complete visual bounds including strokes, filters, and text overflow. What you
   see is exactly what you get.

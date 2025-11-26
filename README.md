@@ -108,7 +108,45 @@ paths with spaces** correctly.
 
 ## ⚡ Simple Examples (Quick Start)
 
-### Get Bounding Box of an SVG Element
+### See All Available Commands
+
+```bash
+npx svg-bbox
+# or after global install:
+svg-bbox
+```
+
+Output:
+```
+svg-bbox v1.0.3
+A toolkit for computing and using SVG bounding boxes you can trust
+
+USAGE:
+  npx <command> [options]
+
+AVAILABLE COMMANDS:
+  sbb-getbbox      - Compute visual bounding boxes for SVG files and elements
+  sbb-extractor    - Extract individual objects from SVG files
+  sbb-render       - Render SVG files or elements to PNG images
+  sbb-comparer     - Compare SVG rendering across different methods
+  sbb-fix-viewbox  - Fix or add viewBox attribute to SVG files
+  sbb-test         - Test SVG visual bounding box computation accuracy
+```
+
+### Get Bounding Box (CLI)
+
+```bash
+# Get bbox for entire SVG
+npx sbb-getbbox drawing.svg
+
+# Get bbox for specific elements
+npx sbb-getbbox sprites.svg icon_save icon_load --json output.json
+
+# Get full drawing bbox (ignore viewBox clipping)
+npx sbb-getbbox drawing.svg --ignore-vbox
+```
+
+### Get Bounding Box (Browser)
 
 ```javascript
 // In Browser (with CDN)
@@ -120,22 +158,25 @@ console.log(bbox); // {x: 10, y: 20, width: 100, height: 50}
 ### Fix Missing ViewBox
 
 ```bash
-# CLI
-sbb-fix-viewbox input.svg output.svg
+npx sbb-fix-viewbox input.svg output.svg
 ```
 
 ### Render SVG to PNG
 
 ```bash
-# CLI
-sbb-render input.svg output.png
+npx sbb-render input.svg output.png --scale 2
 ```
 
 ### Extract Object from SVG
 
 ```bash
-# CLI
-sbb-extractor sprites.svg --extract icon_home icon_home.svg
+npx sbb-extractor sprites.svg --extract icon_home icon_home.svg --margin 5
+```
+
+### Export All Objects
+
+```bash
+npx sbb-extractor sprites.svg --export-all ./exported --export-groups
 ```
 
 ---
@@ -384,6 +425,54 @@ compareSVGs('v1.svg', 'v2.svg').then((result) =>
 
 ## 📦 Installation
 
+### Quick Install (npx - No Installation Required!)
+
+You can run any svg-bbox tool directly without installing:
+
+```bash
+# See all available commands
+npx svg-bbox
+
+# Run specific tools
+npx sbb-getbbox myfile.svg
+npx sbb-render myfile.svg output.png
+npx sbb-extractor myfile.svg --list
+```
+
+### Global Install (Recommended for Frequent Use)
+
+```bash
+# npm
+npm install -g svg-bbox
+
+# pnpm
+pnpm add -g svg-bbox
+
+# yarn
+yarn global add svg-bbox
+
+# After global install, run commands directly:
+svg-bbox              # Show all available commands
+sbb-getbbox file.svg  # Compute bounding box
+sbb-render file.svg output.png
+```
+
+### Local Install (For Projects)
+
+```bash
+# npm
+npm install svg-bbox
+
+# pnpm
+pnpm add svg-bbox
+
+# yarn
+yarn add svg-bbox
+
+# Then use via npx or package.json scripts:
+npx sbb-getbbox file.svg
+```
+
 ### Via CDN (Browser - No Build Tools Required!)
 
 For direct browser usage, use the minified UMD build from a CDN:
@@ -411,26 +500,31 @@ For direct browser usage, use the minified UMD build from a CDN:
 
 **File sizes:**
 
-- Original: 73.5 KB
-- Minified (CDN): 23.5 KB _(68.1% reduction)_
+- Original: ~90 KB
+- Minified (CDN): ~25 KB _(72% reduction)_
 
-### Via npm (Recommended for Node.js/Build Tools)
+### Clone from GitHub
 
 ```bash
-# Install globally for CLI commands
-npm install -g svg-bbox
+git clone https://github.com/Emasoft/SVG-BBOX.git
+cd SVG-BBOX
+pnpm install
 
-# Or install locally in your project
-npm install svg-bbox
-
-# Using pnpm
-pnpm add svg-bbox
-
-# Using yarn
-yarn add svg-bbox
+# Run tools directly from source
+node sbb-getbbox.cjs myfile.svg
 ```
 
+> **Note:** In the documentation below, you'll see two command styles:
+> - `npx sbb-getbbox` - Use this when installed via npm (recommended)
+> - `node sbb-getbbox.cjs` - Use this when running from cloned source
+>
+> Both are equivalent. The npx style works after `npm install svg-bbox`.
+
 After installation, the following CLI commands are available:
+
+**Main Entry Point:**
+
+- `svg-bbox` - **Start here!** Shows help and lists all available commands
 
 **Core Tools (Recommended):**
 
@@ -537,10 +631,20 @@ sbb-getbbox /home/user/drawings/test.svg
 
 ## 🚀 Quickstart
 
-### Render an SVG to PNG at the correct size
+### 1. See All Available Commands
 
 ```bash
-node sbb-render.cjs input.svg output.png --mode full --scale 4
+npx svg-bbox
+```
+
+This displays help with all available tools and usage examples.
+
+---
+
+### 2. Render an SVG to PNG at the correct size
+
+```bash
+npx sbb-render input.svg output.png --mode full --scale 4
 ```
 
 - Detects the **full drawing extents**.
@@ -549,10 +653,10 @@ node sbb-render.cjs input.svg output.png --mode full --scale 4
 
 ---
 
-### Fix an SVG that has no `viewBox` / `width` / `height`
+### 3. Fix an SVG that has no `viewBox` / `width` / `height`
 
 ```bash
-node sbb-fix-viewbox.cjs broken.svg fixed/broken.fixed.svg
+npx sbb-fix-viewbox broken.svg fixed/broken.fixed.svg
 ```
 
 - Computes the **full visual drawing box**.
@@ -562,10 +666,10 @@ node sbb-fix-viewbox.cjs broken.svg fixed/broken.fixed.svg
 
 ---
 
-### List all objects visually & generate a rename JSON
+### 4. List all objects visually & generate a rename JSON
 
 ```bash
-node sbb-extractor.cjs sprites.svg --list --assign-ids --out-fixed sprites.ids.svg
+npx sbb-extractor sprites.svg --list --assign-ids --out-fixed sprites.ids.svg
 ```
 
 This produces:
@@ -579,10 +683,10 @@ names.
 
 ---
 
-### Extract one object as its own SVG
+### 5. Extract one object as its own SVG
 
 ```bash
-node sbb-extractor.cjs sprites.renamed.svg \
+npx sbb-extractor sprites.renamed.svg \
   --extract icon_save icon_save.svg \
   --margin 5
 ```
@@ -592,16 +696,16 @@ This creates `icon_save.svg` sized exactly to the **visual bounds** of
 
 ---
 
-### Export all objects as individual SVGs
+### 6. Export all objects as individual SVGs
 
 ```bash
-node sbb-extractor.cjs sprites.renamed.svg \
+npx sbb-extractor sprites.renamed.svg \
   --export-all exported \
   --export-groups \
   --margin 2
 ```
 
-Each object `/ group` becomes its own SVG, with:
+Each object / group becomes its own SVG, with:
 
 - Correct viewBox
 - Includes `<defs>` for filters, patterns, markers

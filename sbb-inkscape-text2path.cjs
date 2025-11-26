@@ -20,6 +20,7 @@ const execFilePromise = promisify(execFile);
 const {
   validateFilePath,
   validateOutputPath,
+  SHELL_METACHARACTERS,
   SVGBBoxError,
   ValidationError,
   FileSystemError
@@ -394,6 +395,22 @@ function readBatchFile(batchFilePath) {
   if (lines.length === 0) {
     throw new ValidationError(`Batch file is empty: ${safeBatchPath}`);
   }
+
+  // SECURITY: Validate each file path in batch for shell metacharacters
+  // This prevents command injection attacks via malicious batch file contents
+  lines.forEach((line, index) => {
+    try {
+      // Check for shell metacharacters without full path validation
+      // (full validation happens later during processing)
+      if (SHELL_METACHARACTERS.test(line)) {
+        throw new Error('contains shell metacharacters');
+      }
+    } catch (err) {
+      throw new ValidationError(
+        `Invalid file path at line ${index + 1} in batch file: ${err.message}`
+      );
+    }
+  });
 
   return lines;
 }

@@ -1,6 +1,7 @@
 /**
  * Playwright configuration for E2E testing of HTML interactive features
  * Compatible with Playwright 1.x in ESM mode
+ * @type {import('@playwright/test').PlaywrightTestConfig}
  */
 export default {
   testDir: './tests/e2e',

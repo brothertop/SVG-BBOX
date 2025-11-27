@@ -1,22 +1,34 @@
 import { defineConfig } from 'vitest/config';
 
+// Centralized timeout configuration (milliseconds)
+// Why these values:
+// - TEST_TIMEOUT_MS: 60s is sufficient for I/O-bound Puppeteer tests (reduced from 30min)
+// - HOOK_TIMEOUT_MS: 60s allows browser launch + font discovery (critical path operations)
+const TEST_TIMEOUT_MS = 60000; // 60 seconds
+const HOOK_TIMEOUT_MS = 60000; // 60 seconds
+
+// Parallel execution configuration
+// Why 10: Puppeteer tests are I/O-bound (waiting for browser), not CPU-bound.
+// Higher concurrency (vs default 5) maximizes throughput without CPU saturation.
+const MAX_CONCURRENT_TESTS = 10;
+
 export default defineConfig({
   test: {
     // Test environment
     environment: 'node',
 
-    // Global test timeout (60 seconds - reduced from excessive 30 minutes)
-    testTimeout: 60000,
+    // Global test timeout
+    testTimeout: TEST_TIMEOUT_MS,
 
-    // Hook timeout (60 seconds for browser launch + font discovery)
-    hookTimeout: 60000,
+    // Hook timeout (browser launch + font discovery)
+    hookTimeout: HOOK_TIMEOUT_MS,
 
     // Globals
     globals: true,
 
     // Coverage configuration
-    // NOTE: SvgVisualBBox.js runs in browser context (via Puppeteer) - V8 coverage can't measure it.
-    // Coverage is collected from server-side code (CLI tools, security utils, etc.) only.
+    // Browser-only code (SvgVisualBBox.js) runs via Puppeteer and cannot be measured by V8.
+    // Only server-side code (CLI tools, security utils) is covered.
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
@@ -68,8 +80,8 @@ export default defineConfig({
     // Pool options for parallel execution
     pool: 'forks',
 
-    // Max concurrent tests (increased from 5 to 10 for I/O-bound Puppeteer tests)
-    maxConcurrency: 10,
+    // Max concurrent tests
+    maxConcurrency: MAX_CONCURRENT_TESTS,
 
     // Retry failed tests once
     retry: 1,

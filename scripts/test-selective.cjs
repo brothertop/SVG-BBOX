@@ -9,12 +9,17 @@
  * TESTING RULE 2: If a tool changed → run only that tool's tests
  *
  * Usage:
- *   node scripts/test-selective.cjs [base-ref]
+ *   node scripts/test-selective.cjs [base-ref] [options]
+ *
+ * Options:
+ *   --dry-run, -d    Show what tests would run without executing them
+ *   --debug          Enable detailed debug logging
  *
  * Examples:
  *   node scripts/test-selective.cjs           # Compare against HEAD (uncommitted changes)
  *   node scripts/test-selective.cjs HEAD~1    # Compare against previous commit
  *   node scripts/test-selective.cjs main      # Compare against main branch
+ *   node scripts/test-selective.cjs --debug   # Run with debug logging
  */
 
 const { execFile } = require('child_process');
@@ -23,8 +28,60 @@ const path = require('path');
 
 const execFileAsync = promisify(execFile);
 
-// Constant for "run all tests" pattern to avoid duplication
-const RUN_ALL_TESTS_PATTERN = 'tests/**/*.test.js';
+// ============================================================================
+// Configuration Constants - Single Source of Truth
+// ============================================================================
+
+// Git configuration
+const DEFAULT_GIT_BASE_REF = 'HEAD'; // Default comparison point for git diff
+
+// Test execution configuration
+const MAX_EXEC_BUFFER_BYTES = 10 * 1024 * 1024; // 10MB buffer for vitest output
+const RUN_ALL_TESTS_PATTERN = 'tests/**/*.test.js'; // Glob pattern to run all tests
+
+// Logging configuration
+const ENABLE_DEBUG = process.argv.includes('--debug');
+const ENABLE_EMOJI = true; // Set to false if terminal doesn't support emoji
+
+// UI symbols (configurable for non-emoji terminals)
+const SYMBOLS = ENABLE_EMOJI
+  ? {
+      WARNING: '⚠️',
+      TESTING: '🧪',
+      SEARCH: '🔍',
+      SUCCESS: '✅',
+      INFO: 'ℹ️'
+    }
+  : {
+      WARNING: '[!]',
+      TESTING: '[TEST]',
+      SEARCH: '[...]',
+      SUCCESS: '[OK]',
+      INFO: '[i]'
+    };
+
+// ============================================================================
+// Logging Utilities
+// ============================================================================
+
+/**
+ * Debug logging helper - only logs when --debug flag is enabled
+ * @param {string} message - The debug message to log
+ * @param {any} data - Optional data to log (will be JSON-stringified)
+ */
+function debug(message, data) {
+  if (ENABLE_DEBUG) {
+    const timestamp = new Date().toISOString();
+    console.debug(`[DEBUG ${timestamp}] ${message}`);
+    if (data !== undefined) {
+      console.debug('  Data:', JSON.stringify(data, null, 2));
+    }
+  }
+}
+
+// ============================================================================
+// Dependency Mapping
+// ============================================================================
 
 /**
  * Dependency Mapping: File → Test Files
@@ -112,31 +169,38 @@ const TEST_DEPENDENCIES = {
 };
 
 /**
- * Get list of changed files
- * @param {string} baseRef - Git reference to compare against (default: HEAD)
+ * Get list of changed files from git
+ * @param {string} baseRef - Git reference to compare against
  * @returns {Promise<string[]>} List of changed file paths
  * @throws {Error} If git commands fail (FAIL-FAST: don't hide git configuration errors)
  */
-async function getChangedFiles(baseRef = 'HEAD') {
+async function getChangedFiles(baseRef) {
+  debug(`Getting changed files against base ref: ${baseRef}`);
+
   // FAIL-FAST: Let git errors propagate - don't hide configuration problems
-  // Try to get diff against base ref
   const { stdout } = await execFileAsync('git', ['diff', '--name-only', baseRef]);
   const files = stdout
     .trim()
     .split('\n')
     .filter((f) => f.length > 0);
 
+  debug(`Found ${files.length} changed files from working directory diff`);
+
   if (files.length === 0) {
-    // No changes - check staged files
+    // No working directory changes - check staged files
+    debug('No working directory changes, checking staged files...');
     const { stdout: stagedStdout } = await execFileAsync('git', [
       'diff',
       '--cached',
       '--name-only'
     ]);
-    return stagedStdout
+    const stagedFiles = stagedStdout
       .trim()
       .split('\n')
       .filter((f) => f.length > 0);
+
+    debug(`Found ${stagedFiles.length} staged files`);
+    return stagedFiles;
   }
 
   return files;
@@ -156,25 +220,31 @@ function isUnknownSourceFile(normalizedPath) {
 }
 
 /**
- * Map changed files to required test files
- * Implements Single Responsibility Principle by delegating to helper functions
+ * Determine which tests are required based on changed files
  * @param {string[]} changedFiles - List of changed file paths
- * @returns {{ testsToRun: Set<string>, runAll: boolean }} Object with test patterns and runAll flag
+ * @returns {{ testsToRun: Set<string>, runAll: boolean }} Test scope determination
  */
-function mapFilesToTests(changedFiles) {
+function determineRequiredTests(changedFiles) {
   const testsToRun = new Set();
   let hasUnknownDependencies = false;
 
+  debug('Determining required tests for changed files', { count: changedFiles.length });
+
   // If no changes detected, run all tests
   if (changedFiles.length === 0) {
+    debug('No changed files detected - will run all tests');
     return { testsToRun, runAll: true };
   }
 
   for (const file of changedFiles) {
+    // Normalize path separators (Windows backslashes → forward slashes)
+    // Note: This assumes all paths use forward slashes in TEST_DEPENDENCIES mapping
     const normalizedPath = file.replace(/\\/g, '/');
+    debug(`Processing file: ${normalizedPath}`);
 
-    // If the changed file is a test file itself, run it
+    // If the changed file is a test file itself, run it directly
     if (normalizedPath.startsWith('tests/') && normalizedPath.endsWith('.test.js')) {
+      debug(`  → Test file itself, adding: ${normalizedPath}`);
       testsToRun.add(normalizedPath);
       continue;
     }
@@ -182,22 +252,31 @@ function mapFilesToTests(changedFiles) {
     // Check dependency mapping
     if (normalizedPath in TEST_DEPENDENCIES) {
       const tests = TEST_DEPENDENCIES[normalizedPath];
+      debug(`  → Found in dependency map, adding ${tests.length} test(s)`);
       tests.forEach((pattern) => {
-        if (pattern) testsToRun.add(pattern);
+        if (pattern) {
+          debug(`     Adding test pattern: ${pattern}`);
+          testsToRun.add(pattern);
+        }
       });
     } else if (isUnknownSourceFile(normalizedPath)) {
       // Unknown source file changed - run all tests to be safe
-      console.warn(`⚠️  Unknown dependency for: ${normalizedPath}`);
+      console.warn(`${SYMBOLS.WARNING}  Unknown dependency for: ${normalizedPath}`);
       console.warn('   Running all tests to be safe...');
+      debug(`  → Unknown source file, triggering full test suite`);
       hasUnknownDependencies = true;
+    } else {
+      debug(`  → Non-source file, skipping (no tests needed)`);
     }
   }
 
   // If unknown dependencies found, run all tests
   if (hasUnknownDependencies) {
+    debug('Unknown dependencies found - returning runAll=true');
     return { testsToRun: new Set(), runAll: true };
   }
 
+  debug(`Determined ${testsToRun.size} unique test pattern(s)`);
   return { testsToRun, runAll: false };
 }
 
@@ -207,21 +286,31 @@ function mapFilesToTests(changedFiles) {
  * @returns {Promise<void>}
  */
 async function runTests(patterns) {
+  // Validate input
+  if (!(patterns instanceof Set) || patterns.size === 0) {
+    throw new Error('runTests requires a non-empty Set of test patterns');
+  }
+
   // Check if we're running all tests (glob pattern or no specific tests)
   const patternsArray = Array.from(patterns);
   const isRunningAllTests = patternsArray.some((p) => p.includes('**'));
 
+  debug(`Running tests with ${patterns.size} pattern(s)`, {
+    patterns: patternsArray,
+    isRunningAllTests
+  });
+
   const args = isRunningAllTests ? ['run'] : ['run', ...patternsArray];
 
   console.log(
-    `\n🧪 Running vitest: vitest ${args.join(' ')}${isRunningAllTests ? ' (all tests)' : ''}\n`
+    `\n${SYMBOLS.TESTING} Running vitest: vitest ${args.join(' ')}${isRunningAllTests ? ' (all tests)' : ''}\n`
   );
 
   try {
     const { stdout, stderr } = await execFileAsync('npx', ['vitest', ...args], {
       cwd: path.join(__dirname, '..'),
       env: { ...process.env, FORCE_COLOR: '1' },
-      maxBuffer: 10 * 1024 * 1024 // 10MB buffer for test output
+      maxBuffer: MAX_EXEC_BUFFER_BYTES
     });
 
     // Print test output
@@ -229,6 +318,7 @@ async function runTests(patterns) {
     if (stderr) process.stderr.write(stderr);
   } catch (error) {
     // Vitest failed (tests failed or error occurred)
+    debug('Vitest execution failed', { code: error.code, signal: error.signal });
     if (error.stdout) process.stdout.write(error.stdout);
     if (error.stderr) process.stderr.write(error.stderr);
     throw error;
@@ -239,28 +329,32 @@ async function runTests(patterns) {
  * Main execution
  */
 async function main() {
-  const baseRef = process.argv[2] || 'HEAD';
+  // Parse arguments - filter out flags to get positional args
+  const args = process.argv.slice(2).filter((arg) => !arg.startsWith('--') && !arg.startsWith('-'));
+  const baseRef = args[0] || DEFAULT_GIT_BASE_REF;
   const dryRun = process.argv.includes('--dry-run') || process.argv.includes('-d');
 
-  console.log('🔍 Detecting changed files...');
+  debug(`Main execution started`, { baseRef, dryRun, enableDebug: ENABLE_DEBUG });
+
+  console.log(`${SYMBOLS.SEARCH} Detecting changed files...`);
   const changedFiles = await getChangedFiles(baseRef);
 
   if (changedFiles.length === 0) {
-    console.log('✅ No changes detected - running all tests');
+    console.log(`${SYMBOLS.SUCCESS} No changes detected - running all tests`);
     if (!dryRun) {
       await runTests(new Set([RUN_ALL_TESTS_PATTERN]));
     }
     return;
   }
 
-  console.log(`📝 Changed files (${changedFiles.length}):`);
+  console.log(`${SYMBOLS.INFO} Changed files (${changedFiles.length}):`);
   changedFiles.forEach((f) => console.log(`   - ${f}`));
   console.log('');
 
-  const { testsToRun, runAll } = mapFilesToTests(changedFiles);
+  const { testsToRun, runAll } = determineRequiredTests(changedFiles);
 
   if (runAll || testsToRun.size === 0) {
-    console.log('✅ Running all tests');
+    console.log(`${SYMBOLS.SUCCESS} Running all tests`);
     if (!dryRun) {
       await runTests(new Set([RUN_ALL_TESTS_PATTERN]));
     }
@@ -272,7 +366,7 @@ async function main() {
   console.log('');
 
   if (dryRun) {
-    console.log('ℹ️  Dry run mode - not executing tests');
+    console.log(`${SYMBOLS.INFO} Dry run mode - not executing tests`);
     return;
   }
 

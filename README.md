@@ -29,17 +29,18 @@
 
 - [The Problem with .getBBox()](#the-problem-with-getbbox)
   - [Visual Comparison: Oval Badge with Dashed Stroke](#visual-comparison-oval-badge-with-dashed-stroke)
-- [Quick Start](#quick-start)
-  - [Browser (CDN)](#browser-cdn)
-  - [Node.js / npm](#nodejs--npm)
+- [Installation](#-installation)
+- [Platform Compatibility](#platform-compatibility)
 - [What This Package Provides](#what-this-package-provides)
   - [1. Core Library: SvgVisualBBox.js](#1-core-library-svgvisualbboxjs)
   - [2. CLI Tools](#2-cli-tools)
+- [Quickstart](#-quickstart)
+  - [Browser (CDN)](#browser-cdn)
+  - [Node.js / npm](#nodejs--npm)
+- [More Usage Examples](#-more-usage-examples)
 - [Library API Reference](#-library-api-reference)
-- [Programmatic Usage](#-programmatic-usage)
-- [Installation](#-installation)
-- [Platform Compatibility](#platform-compatibility)
-- [How It Works](#-how-it-works)
+- [Tools CLI Commands Usage](#tools-cli-commands-usage)
+- [Renaming Workflow with the HTML Viewer](#-renaming-workflow-with-the-html-viewer)
 - [Troubleshooting](#-troubleshooting)
 - [Contributing](#-contributing)
 - [License](#-license)
@@ -90,47 +91,216 @@ create your own comparison with timestamped output directory.
 
 ---
 
-## Quick Start
+## 📦 Installation
 
-### Browser (CDN)
+### Quick Install (npx - No Installation Required!)
+
+You can run any svg-bbox tool directly without installing:
+
+```bash
+# See all available commands
+npx svg-bbox
+
+# Run specific tools
+npx sbb-getbbox myfile.svg
+npx sbb-render myfile.svg output.png
+npx sbb-extract myfile.svg --list
+```
+
+### Global Install (Recommended for Frequent Use)
+
+```bash
+# npm
+npm install -g svg-bbox
+
+# pnpm
+pnpm add -g svg-bbox
+
+# yarn
+yarn global add svg-bbox
+
+# After global install, run commands directly:
+svg-bbox              # Show all available commands
+sbb-getbbox file.svg  # Compute bounding box
+sbb-render file.svg output.png
+```
+
+### Local Install (For Projects)
+
+```bash
+# npm
+npm install svg-bbox
+
+# pnpm
+pnpm add svg-bbox
+
+# yarn
+yarn add svg-bbox
+
+# Then use via npx or package.json scripts:
+npx sbb-getbbox file.svg
+```
+
+### Via CDN (Browser - No Build Tools Required!)
+
+For direct browser usage, use the minified UMD build from a CDN:
 
 ```html
+<!-- Via unpkg (Recommended) -->
 <script src="https://unpkg.com/svg-bbox@latest/SvgVisualBBox.min.js"></script>
+
+<!-- Via jsdelivr -->
+<script src="https://cdn.jsdelivr.net/npm/svg-bbox@latest/SvgVisualBBox.min.js"></script>
+
+<!-- Then use the global SvgVisualBBox object -->
 <script>
   (async () => {
-    // Get accurate bounding box for any SVG element
-    const bbox =
-      await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
-        '#myElement'
-      );
-    console.log(bbox); // {x: 10, y: 20, width: 100, height: 50}
+    // Wait for fonts to load
+    await SvgVisualBBox.waitForDocumentFonts(document, 5000);
 
-    // Visual debugging - show border around true bounds
-    const result = await SvgVisualBBox.showTrueBBoxBorder('#myElement');
-    setTimeout(() => result.remove(), 3000);
+    // Get bbox for an SVG element
+    const bbox =
+      await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive('my-svg-id');
+    console.log('BBox:', bbox);
   })();
 </script>
 ```
 
-### Node.js / npm
+**File sizes:**
+
+- Original: ~90 KB
+- Minified (CDN): ~25 KB _(72% reduction)_
+
+### Clone from GitHub
 
 ```bash
-npm install svg-bbox
+git clone https://github.com/Emasoft/SVG-BBOX.git
+cd SVG-BBOX
+pnpm install
+
+# Run tools directly from source
+node sbb-getbbox.cjs myfile.svg
 ```
 
-```javascript
-// Use with Puppeteer for server-side SVG processing
-const puppeteer = require('puppeteer');
+> **Note:** In the documentation below, you'll see two command styles:
+>
+> - `npx sbb-getbbox` - Use this when installed via npm (recommended)
+> - `node sbb-getbbox.cjs` - Use this when running from cloned source
+>
+> Both are equivalent. The npx style works after `npm install svg-bbox`.
 
-const browser = await puppeteer.launch();
-const page = await browser.newPage();
-await page.setContent(`<html><body>${svgContent}</body></html>`);
-await page.addScriptTag({ path: 'node_modules/svg-bbox/SvgVisualBBox.js' });
+After installation, the following CLI commands are available:
 
-const bbox = await page.evaluate(async () => {
-  return await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive('svg');
-});
+**Main Entry Point:**
+
+- `svg-bbox` - **Start here!** Shows help and lists all available commands
+
+**Core Tools (Recommended):**
+
+- `sbb-getbbox` - Compute visual bounding boxes
+- `sbb-chrome-getbbox` - Get bbox using Chrome's native .getBBox() (for
+  comparison)
+- `sbb-chrome-extract` - Extract using Chrome's native .getBBox() (for
+  comparison)
+- `sbb-extract` - List, extract, and export SVG objects
+- `sbb-fix-viewbox` - Fix missing viewBox/dimensions
+- `sbb-render` - Render SVG to PNG
+- `sbb-comparer` - Compare two SVGs visually (pixel-by-pixel)
+- `sbb-test` - Test library functions
+
+**Inkscape Integration Tools** ⚠️ _(For comparison only - see warnings below)_:
+
+- `sbb-inkscape-text2path` - Convert text to paths using Inkscape
+- `sbb-inkscape-extract` - Extract objects by ID using Inkscape
+- `sbb-inkscape-svg2png` - SVG to PNG export using Inkscape
+
+> **⚠️ Accuracy Warning:** Inkscape tools have known issues with font bounding
+> boxes. Use core tools for production. Inkscape tools are for comparison
+> purposes only.
+
+### From Source
+
+```bash
+git clone https://github.com/Emasoft/SVG-BBOX.git
+cd svg-bbox
+pnpm install
 ```
+
+### Requirements
+
+> **IMPORTANT**: You need **Node.js ≥ 18** and **Chrome or Chromium** installed.
+>
+> **⚠️ ONLY Chrome/Chromium are supported** — other browsers have poor SVG
+> support. This library uses headless Chrome via Puppeteer for measurements, and
+> visual verification must use the same browser engine to match results.
+
+After installing, Puppeteer will automatically download a compatible Chromium
+browser. Alternatively, you can use your system Chrome by setting the
+`PUPPETEER_EXECUTABLE_PATH` environment variable.
+
+---
+
+## Platform Compatibility
+
+✅ **Fully cross-platform compatible:**
+
+- **Windows** 10/11 - All CLI tools work natively (PowerShell, CMD, Git Bash)
+- **macOS** - All versions supported (Intel and Apple Silicon)
+- **Linux** - All major distributions (Ubuntu, Debian, Fedora, etc.)
+
+**Key features:**
+
+- All file paths use Node.js `path` module (no hardcoded `/` or `\` separators)
+- Platform-specific commands handled automatically (Chrome detection, file
+  opening)
+- Works with file paths containing spaces on all platforms
+- Pure Node.js CLI tools (no bash scripts required)
+
+**Platform-specific notes:**
+
+<details>
+<summary><strong>Windows</strong></summary>
+
+- Chrome/Chromium auto-detection works with default install locations
+- File paths with spaces are properly handled
+- Use PowerShell or CMD (no WSL required)
+- Git Bash also supported
+
+```powershell
+# PowerShell example
+sbb-getbbox "C:\My Files\drawing.svg"
+```
+
+</details>
+
+<details>
+<summary><strong>macOS</strong></summary>
+
+- Detects Chrome in `/Applications/`
+- Uses native `open` command for file viewing
+- Works on both Intel and Apple Silicon Macs
+
+```bash
+# macOS example
+chmod +x node_modules/.bin/sbb-*  # Make executable (first time only)
+sbb-getbbox ~/Documents/drawing.svg
+```
+
+</details>
+
+<details>
+<summary><strong>Linux</strong></summary>
+
+- Auto-detects `google-chrome`, `chromium`, `chromium-browser`
+- All standard Linux file paths supported
+
+```bash
+# Linux example
+chmod +x node_modules/.bin/sbb-*  # Make executable (first time only)
+sbb-getbbox /home/user/drawings/test.svg
+```
+
+</details>
 
 ---
 
@@ -188,55 +358,274 @@ Run `npx svg-bbox` or any tool with `--help` for detailed usage.
 
 ---
 
-## 📖 Library API Reference
+## 🚀 Quickstart
 
-### `getSvgElementVisualBBoxTwoPassAggressive(target, options)`
+### 1. See All Available Commands
 
-Compute accurate visual bounding box for any SVG element.
+```bash
+npx svg-bbox
+```
 
-**Parameters:**
-
-- `target` - CSS selector, ID string, or DOM element
-- `options.mode` - `'clipped'` (respect viewBox) or `'unclipped'` (full drawing)
-- `options.coarseFactor` - Coarse sampling resolution (default: 3)
-- `options.fineFactor` - Fine sampling resolution (default: 24)
-
-**Returns:** `{x, y, width, height}` in SVG user units
-
-### `getSvgElementsUnionVisualBBox(targets[], options)`
-
-Compute union bounding box of multiple elements.
-
-**Parameters:**
-
-- `targets[]` - Array of CSS selectors, ID strings, or DOM elements
-- `options` - Same as above
-
-**Returns:** `{x, y, width, height}`
-
-### `getSvgElementVisibleAndFullBBoxes(target, options)`
-
-Get both clipped (viewBox-respecting) and unclipped bounds.
-
-**Returns:** `{visible: {x,y,width,height}, full: {x,y,width,height}}`
-
-### `showTrueBBoxBorder(target, options)`
-
-Visual debugging overlay showing true bounds.
-
-**Options:** `theme`, `borderColor`, `borderWidth`, `padding`
-
-**Returns:** Object with `remove()` method
-
-### `waitForDocumentFonts(document, timeoutMs)`
-
-Wait for fonts to load before measuring text.
-
-**Default timeout:** 8000ms
+This displays help with all available tools and usage examples.
 
 ---
 
-## 🔧 Programmatic Usage
+### 2. Render an SVG to PNG at the correct size
+
+```bash
+npx sbb-render input.svg output.png --mode full --scale 4
+```
+
+- Detects the **full drawing extents**.
+- Sets an appropriate `viewBox`.
+- Renders to PNG at 4 px per SVG unit.
+
+---
+
+### 3. Fix an SVG that has no `viewBox` / `width` / `height`
+
+```bash
+npx sbb-fix-viewbox broken.svg fixed/broken.fixed.svg
+```
+
+- Computes the **full visual drawing box**.
+- Writes a new SVG with:
+  - `viewBox="x y width height"`
+  - Consistent `width` / `height`.
+
+---
+
+### 4. List all objects visually & generate a rename JSON
+
+```bash
+npx sbb-extract sprites.svg --list --assign-ids --out-fixed sprites.ids.svg
+```
+
+This produces:
+
+- `sprites.objects.html` — a visual catalog.
+- `sprites.ids.svg` — a version where all objects have IDs like
+  `auto_id_path_3`.
+
+Open `sprites.objects.html` in a browser to see previews and define new ID
+names.
+
+---
+
+### 5. Extract one object as its own SVG
+
+```bash
+npx sbb-extract sprites.renamed.svg \
+  --extract icon_save icon_save.svg \
+  --margin 5
+```
+
+This creates `icon_save.svg` sized exactly to the **visual bounds** of
+`#icon_save` (with 5 units of padding).
+
+---
+
+### 6. Export all objects as individual SVGs
+
+```bash
+npx sbb-extract sprites.renamed.svg \
+  --export-all exported \
+  --export-groups \
+  --margin 2
+```
+
+Each object / group becomes its own SVG, with:
+
+- Correct viewBox
+- Includes `<defs>` for filters, patterns, markers
+- Ancestor transforms preserved
+
+---
+
+### 7. Library: `SvgVisualBBox.js`
+
+#### Installation
+
+```html
+<!-- CDN -->
+<script src="https://unpkg.com/svg-bbox@latest/SvgVisualBBox.js"></script>
+
+<!-- Or via npm -->
+<script src="./node_modules/svg-bbox/SvgVisualBBox.js"></script>
+```
+
+This library can be used in two ways:
+
+1. **Node.js/CLI Tools** - Injected by Puppeteer in headless Chrome (used by all
+   CLI tools)
+2. **Browser/Web Applications** - Loaded directly in webpages via `<script>` tag
+   or npm import
+
+### 🌐 Browser (embed vis CDN mirrors)
+
+You can use `SvgVisualBBox.js` directly in webpages for accurate bounding box
+computation and visual debugging.
+
+```html
+<script src="https://unpkg.com/svg-bbox@latest/SvgVisualBBox.min.js"></script>
+<script>
+  (async () => {
+    // Get accurate bounding box for any SVG element
+    const bbox =
+      await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
+        '#myElement'
+      );
+    console.log(bbox); // {x: 10, y: 20, width: 100, height: 50}
+
+    // Visual debugging - show border around true bounds
+    const result = await SvgVisualBBox.showTrueBBoxBorder('#myElement');
+    setTimeout(() => result.remove(), 3000);
+  })();
+</script>
+```
+
+#### Advanced Example with the showTrueBBoxBorder() function
+
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="https://unpkg.com/svg-bbox@latest/SvgVisualBBox.js"></script>
+  </head>
+  <body>
+    <svg viewBox="0 0 200 100" width="400">
+      <text id="greeting" x="100" y="50" text-anchor="middle" font-size="24">
+        Hello SVG!
+      </text>
+    </svg>
+
+    <script>
+      (async () => {
+        // Wait for fonts
+        await SvgVisualBBox.waitForDocumentFonts();
+
+        // Get accurate bounding box
+        const bbox =
+          await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
+            '#greeting'
+          );
+        console.log('BBox:', bbox); // {x, y, width, height}
+
+        // Show visual border for debugging
+        const result = await SvgVisualBBox.showTrueBBoxBorder('#greeting');
+
+        // Reframe viewBox to focus on element
+        await SvgVisualBBox.setViewBoxOnObjects('svg', 'greeting', {
+          aspect: 'stretch',
+          margin: '10px'
+        });
+
+        // Remove border after 3 seconds
+        setTimeout(() => result.remove(), 3000);
+      })();
+    </script>
+  </body>
+</html>
+```
+
+### 8 Node.js (install vis npm)
+
+```bash
+npm install svg-bbox
+```
+
+```javascript
+// Use with Puppeteer for server-side SVG processing
+const puppeteer = require('puppeteer');
+
+const browser = await puppeteer.launch();
+const page = await browser.newPage();
+await page.setContent(`<html><body>${svgContent}</body></html>`);
+await page.addScriptTag({ path: 'node_modules/svg-bbox/SvgVisualBBox.js' });
+
+const bbox = await page.evaluate(async () => {
+  return await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive('svg');
+});
+```
+
+### Functions of the SvgVisualBBox library
+
+The library exposes all functions through the `SvgVisualBBox` namespace.
+
+#### `waitForDocumentFonts(document, timeoutMs)`
+
+Waits for fonts to be ready (or a timeout) before measuring text.
+
+```js
+await SvgVisualBBox.waitForDocumentFonts(document, 8000);
+```
+
+#### `getSvgElementVisualBBoxTwoPassAggressive(element, options)`
+
+Compute a **visual** bounding box for an element (including stroke, filters,
+etc.):
+
+```js
+const bbox = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
+  element,
+  {
+    mode: 'unclipped', // ignore viewBox clipping when measuring
+    coarseFactor: 3, // coarse sampling
+    fineFactor: 24, // fine sampling
+    useLayoutScale: true // scale based on layout size
+  }
+);
+
+// bbox: { x, y, width, height } in SVG user units
+```
+
+#### `getSvgElementVisibleAndFullBBoxes(svgElement, options)`
+
+Compute both:
+
+- **visible** – what’s inside the current viewBox.
+- **full** – the entire drawing, ignoring viewBox clipping.
+
+Used by the fixer and renderer to choose between "full drawing" and "visible
+area inside the viewBox".
+
+#### `showTrueBBoxBorder(target, options)` ⭐ NEW
+
+**Visual debug helper** - Displays a dotted border overlay around any SVG
+element's true visual bounding box.
+
+```js
+// Show border with auto-detected theme
+const result = await SvgVisualBBox.showTrueBBoxBorder('#myText');
+
+// Force dark theme for light backgrounds
+const result = await SvgVisualBBox.showTrueBBoxBorder('#myPath', {
+  theme: 'dark'
+});
+
+// Custom styling
+const result = await SvgVisualBBox.showTrueBBoxBorder('#myElement', {
+  borderColor: 'red',
+  borderWidth: '3px',
+  padding: 10
+});
+
+// Remove border
+result.remove();
+```
+
+**Features of showTrueBBoxBorder():**
+
+- ✅ Auto-detects system dark/light theme
+- ✅ Force theme with `theme: 'light'` or `'dark'` option
+- ✅ Works with all SVG types (inline, `<object>`, `<iframe>`, sprites, dynamic)
+- ✅ Non-intrusive overlay (doesn't modify SVG)
+- ✅ Follows SVG on scroll/resize
+- ✅ Easy cleanup with `remove()`
+
+---
+
+## 🔧 More Usage Examples
 
 ### In HTML Page
 
@@ -448,472 +837,51 @@ compareSVGs('v1.svg', 'v2.svg').then((result) =>
 
 ---
 
-## 📦 Installation
+## 📖 Library API Reference
 
-### Quick Install (npx - No Installation Required!)
+### `getSvgElementVisualBBoxTwoPassAggressive(target, options)`
 
-You can run any svg-bbox tool directly without installing:
+Compute accurate visual bounding box for any SVG element.
 
-```bash
-# See all available commands
-npx svg-bbox
+**Parameters:**
 
-# Run specific tools
-npx sbb-getbbox myfile.svg
-npx sbb-render myfile.svg output.png
-npx sbb-extract myfile.svg --list
-```
+- `target` - CSS selector, ID string, or DOM element
+- `options.mode` - `'clipped'` (respect viewBox) or `'unclipped'` (full drawing)
+- `options.coarseFactor` - Coarse sampling resolution (default: 3)
+- `options.fineFactor` - Fine sampling resolution (default: 24)
 
-### Global Install (Recommended for Frequent Use)
+**Returns:** `{x, y, width, height}` in SVG user units
 
-```bash
-# npm
-npm install -g svg-bbox
+### `getSvgElementsUnionVisualBBox(targets[], options)`
 
-# pnpm
-pnpm add -g svg-bbox
+Compute union bounding box of multiple elements.
 
-# yarn
-yarn global add svg-bbox
+**Parameters:**
 
-# After global install, run commands directly:
-svg-bbox              # Show all available commands
-sbb-getbbox file.svg  # Compute bounding box
-sbb-render file.svg output.png
-```
+- `targets[]` - Array of CSS selectors, ID strings, or DOM elements
+- `options` - Same as above
 
-### Local Install (For Projects)
+**Returns:** `{x, y, width, height}`
 
-```bash
-# npm
-npm install svg-bbox
+### `getSvgElementVisibleAndFullBBoxes(target, options)`
 
-# pnpm
-pnpm add svg-bbox
+Get both clipped (viewBox-respecting) and unclipped bounds.
 
-# yarn
-yarn add svg-bbox
+**Returns:** `{visible: {x,y,width,height}, full: {x,y,width,height}}`
 
-# Then use via npx or package.json scripts:
-npx sbb-getbbox file.svg
-```
+### `showTrueBBoxBorder(target, options)`
 
-### Via CDN (Browser - No Build Tools Required!)
+Visual debugging overlay showing true bounds.
 
-For direct browser usage, use the minified UMD build from a CDN:
+**Options:** `theme`, `borderColor`, `borderWidth`, `padding`
 
-```html
-<!-- Via unpkg (Recommended) -->
-<script src="https://unpkg.com/svg-bbox@latest/SvgVisualBBox.min.js"></script>
+**Returns:** Object with `remove()` method
 
-<!-- Via jsdelivr -->
-<script src="https://cdn.jsdelivr.net/npm/svg-bbox@latest/SvgVisualBBox.min.js"></script>
+### `waitForDocumentFonts(document, timeoutMs)`
 
-<!-- Then use the global SvgVisualBBox object -->
-<script>
-  (async () => {
-    // Wait for fonts to load
-    await SvgVisualBBox.waitForDocumentFonts(document, 5000);
+Wait for fonts to load before measuring text.
 
-    // Get bbox for an SVG element
-    const bbox =
-      await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive('my-svg-id');
-    console.log('BBox:', bbox);
-  })();
-</script>
-```
-
-**File sizes:**
-
-- Original: ~90 KB
-- Minified (CDN): ~25 KB _(72% reduction)_
-
-### Clone from GitHub
-
-```bash
-git clone https://github.com/Emasoft/SVG-BBOX.git
-cd SVG-BBOX
-pnpm install
-
-# Run tools directly from source
-node sbb-getbbox.cjs myfile.svg
-```
-
-> **Note:** In the documentation below, you'll see two command styles:
->
-> - `npx sbb-getbbox` - Use this when installed via npm (recommended)
-> - `node sbb-getbbox.cjs` - Use this when running from cloned source
->
-> Both are equivalent. The npx style works after `npm install svg-bbox`.
-
-After installation, the following CLI commands are available:
-
-**Main Entry Point:**
-
-- `svg-bbox` - **Start here!** Shows help and lists all available commands
-
-**Core Tools (Recommended):**
-
-- `sbb-getbbox` - Compute visual bounding boxes
-- `sbb-chrome-getbbox` - Get bbox using Chrome's native .getBBox() (for
-  comparison)
-- `sbb-chrome-extract` - Extract using Chrome's native .getBBox() (for
-  comparison)
-- `sbb-extract` - List, extract, and export SVG objects
-- `sbb-fix-viewbox` - Fix missing viewBox/dimensions
-- `sbb-render` - Render SVG to PNG
-- `sbb-comparer` - Compare two SVGs visually (pixel-by-pixel)
-- `sbb-test` - Test library functions
-
-**Inkscape Integration Tools** ⚠️ _(For comparison only - see warnings below)_:
-
-- `sbb-inkscape-text2path` - Convert text to paths using Inkscape
-- `sbb-inkscape-extract` - Extract objects by ID using Inkscape
-- `sbb-inkscape-svg2png` - SVG to PNG export using Inkscape
-
-> **⚠️ Accuracy Warning:** Inkscape tools have known issues with font bounding
-> boxes. Use core tools for production. Inkscape tools are for comparison
-> purposes only.
-
-### From Source
-
-```bash
-git clone https://github.com/Emasoft/SVG-BBOX.git
-cd svg-bbox
-pnpm install
-```
-
-### Requirements
-
-> **CRITICAL**: You need **Node.js ≥ 18** and **Chrome or Chromium** installed.
->
-> **⚠️ ONLY Chrome/Chromium are supported** — other browsers have poor SVG
-> support. This library uses headless Chrome via Puppeteer for measurements, and
-> visual verification must use the same browser engine to match results.
-
-After installing, Puppeteer will automatically download a compatible Chromium
-browser. Alternatively, you can use your system Chrome by setting the
-`PUPPETEER_EXECUTABLE_PATH` environment variable.
-
-### Platform Compatibility
-
-✅ **Fully cross-platform compatible:**
-
-- **Windows** 10/11 - All CLI tools work natively (PowerShell, CMD, Git Bash)
-- **macOS** - All versions supported (Intel and Apple Silicon)
-- **Linux** - All major distributions (Ubuntu, Debian, Fedora, etc.)
-
-**Key features:**
-
-- All file paths use Node.js `path` module (no hardcoded `/` or `\` separators)
-- Platform-specific commands handled automatically (Chrome detection, file
-  opening)
-- Works with file paths containing spaces on all platforms
-- Pure Node.js CLI tools (no bash scripts required)
-
-**Platform-specific notes:**
-
-<details>
-<summary><strong>Windows</strong></summary>
-
-- Chrome/Chromium auto-detection works with default install locations
-- File paths with spaces are properly handled
-- Use PowerShell or CMD (no WSL required)
-- Git Bash also supported
-
-```powershell
-# PowerShell example
-sbb-getbbox "C:\My Files\drawing.svg"
-```
-
-</details>
-
-<details>
-<summary><strong>macOS</strong></summary>
-
-- Detects Chrome in `/Applications/`
-- Uses native `open` command for file viewing
-- Works on both Intel and Apple Silicon Macs
-
-```bash
-# macOS example
-chmod +x node_modules/.bin/sbb-*  # Make executable (first time only)
-sbb-getbbox ~/Documents/drawing.svg
-```
-
-</details>
-
-<details>
-<summary><strong>Linux</strong></summary>
-
-- Auto-detects `google-chrome`, `chromium`, `chromium-browser`
-- All standard Linux file paths supported
-
-```bash
-# Linux example
-chmod +x node_modules/.bin/sbb-*  # Make executable (first time only)
-sbb-getbbox /home/user/drawings/test.svg
-```
-
-</details>
-
----
-
-## 🚀 Quickstart
-
-### 1. See All Available Commands
-
-```bash
-npx svg-bbox
-```
-
-This displays help with all available tools and usage examples.
-
----
-
-### 2. Render an SVG to PNG at the correct size
-
-```bash
-npx sbb-render input.svg output.png --mode full --scale 4
-```
-
-- Detects the **full drawing extents**.
-- Sets an appropriate `viewBox`.
-- Renders to PNG at 4 px per SVG unit.
-
----
-
-### 3. Fix an SVG that has no `viewBox` / `width` / `height`
-
-```bash
-npx sbb-fix-viewbox broken.svg fixed/broken.fixed.svg
-```
-
-- Computes the **full visual drawing box**.
-- Writes a new SVG with:
-  - `viewBox="x y width height"`
-  - Consistent `width` / `height`.
-
----
-
-### 4. List all objects visually & generate a rename JSON
-
-```bash
-npx sbb-extract sprites.svg --list --assign-ids --out-fixed sprites.ids.svg
-```
-
-This produces:
-
-- `sprites.objects.html` — a visual catalog.
-- `sprites.ids.svg` — a version where all objects have IDs like
-  `auto_id_path_3`.
-
-Open `sprites.objects.html` in a browser to see previews and define new ID
-names.
-
----
-
-### 5. Extract one object as its own SVG
-
-```bash
-npx sbb-extract sprites.renamed.svg \
-  --extract icon_save icon_save.svg \
-  --margin 5
-```
-
-This creates `icon_save.svg` sized exactly to the **visual bounds** of
-`#icon_save` (with 5 units of padding).
-
----
-
-### 6. Export all objects as individual SVGs
-
-```bash
-npx sbb-extract sprites.renamed.svg \
-  --export-all exported \
-  --export-groups \
-  --margin 2
-```
-
-Each object / group becomes its own SVG, with:
-
-- Correct viewBox
-- Includes `<defs>` for filters, patterns, markers
-- Ancestor transforms preserved
-
----
-
-## 🧬 How it works (diagram)
-
-At a high level:
-
-```mermaid
-flowchart LR
-  A[SVG file] --> B[Headless Chrome<br/>+ Puppeteer]
-  B --> C[Inject SvgVisualBBox.js]
-  C --> D[Raster sampling<br/>of SVG fragments]
-  D --> E[Visual bounding boxes<br/>(in SVG units)]
-  E --> F[Tools: render / fix / extract / export]
-```
-
-The **key idea** is to let the browser do all layout and rendering, then sample
-the output to deduce where pixels actually appear. This makes bounding boxes
-robust to:
-
-- Fonts
-- Filters
-- Transforms
-- `<use>` shadow DOM
-- Mixed units and crazy coordinate systems
-
----
-
-## 🛠 Tools
-
-### Library: `SvgVisualBBox.js`
-
-This library can be used in two ways:
-
-1. **Node.js/CLI Tools** - Injected by Puppeteer in headless Chrome (used by all
-   CLI tools)
-2. **Browser/Web Applications** - Loaded directly in webpages via `<script>` tag
-   or npm import
-
-The library exposes all functions through the `SvgVisualBBox` namespace.
-
-#### `waitForDocumentFonts(document, timeoutMs)`
-
-Waits for fonts to be ready (or a timeout) before measuring text.
-
-```js
-await SvgVisualBBox.waitForDocumentFonts(document, 8000);
-```
-
-#### `getSvgElementVisualBBoxTwoPassAggressive(element, options)`
-
-Compute a **visual** bounding box for an element (including stroke, filters,
-etc.):
-
-```js
-const bbox = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
-  element,
-  {
-    mode: 'unclipped', // ignore viewBox clipping when measuring
-    coarseFactor: 3, // coarse sampling
-    fineFactor: 24, // fine sampling
-    useLayoutScale: true // scale based on layout size
-  }
-);
-
-// bbox: { x, y, width, height } in SVG user units
-```
-
-#### `getSvgElementVisibleAndFullBBoxes(svgElement, options)`
-
-Compute both:
-
-- **visible** – what’s inside the current viewBox.
-- **full** – the entire drawing, ignoring viewBox clipping.
-
-Used by the fixer and renderer to choose between "full drawing" and "visible
-area inside the viewBox".
-
-#### `showTrueBBoxBorder(target, options)` ⭐ NEW
-
-**Visual debug helper** - Displays a dotted border overlay around any SVG
-element's true visual bounding box.
-
-```js
-// Show border with auto-detected theme
-const result = await SvgVisualBBox.showTrueBBoxBorder('#myText');
-
-// Force dark theme for light backgrounds
-const result = await SvgVisualBBox.showTrueBBoxBorder('#myPath', {
-  theme: 'dark'
-});
-
-// Custom styling
-const result = await SvgVisualBBox.showTrueBBoxBorder('#myElement', {
-  borderColor: 'red',
-  borderWidth: '3px',
-  padding: 10
-});
-
-// Remove border
-result.remove();
-```
-
-**Features:**
-
-- ✅ Auto-detects system dark/light theme
-- ✅ Force theme with `theme: 'light'` or `'dark'` option
-- ✅ Works with all SVG types (inline, `<object>`, `<iframe>`, sprites, dynamic)
-- ✅ Non-intrusive overlay (doesn't modify SVG)
-- ✅ Follows SVG on scroll/resize
-- ✅ Easy cleanup with `remove()`
-
----
-
-### 🌐 Browser Usage
-
-You can use `SvgVisualBBox.js` directly in webpages for accurate bounding box
-computation and visual debugging.
-
-#### Installation
-
-```html
-<!-- CDN -->
-<script src="https://unpkg.com/svg-bbox@latest/SvgVisualBBox.js"></script>
-
-<!-- Or via npm -->
-<script src="./node_modules/svg-bbox/SvgVisualBBox.js"></script>
-```
-
-#### Quick Example
-
-```html
-<!DOCTYPE html>
-<html>
-  <head>
-    <script src="https://unpkg.com/svg-bbox@latest/SvgVisualBBox.js"></script>
-  </head>
-  <body>
-    <svg viewBox="0 0 200 100" width="400">
-      <text id="greeting" x="100" y="50" text-anchor="middle" font-size="24">
-        Hello SVG!
-      </text>
-    </svg>
-
-    <script>
-      (async () => {
-        // Wait for fonts
-        await SvgVisualBBox.waitForDocumentFonts();
-
-        // Get accurate bounding box
-        const bbox =
-          await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(
-            '#greeting'
-          );
-        console.log('BBox:', bbox); // {x, y, width, height}
-
-        // Show visual border for debugging
-        const result = await SvgVisualBBox.showTrueBBoxBorder('#greeting');
-
-        // Reframe viewBox to focus on element
-        await SvgVisualBBox.setViewBoxOnObjects('svg', 'greeting', {
-          aspect: 'stretch',
-          margin: '10px'
-        });
-
-        // Remove border after 3 seconds
-        setTimeout(() => result.remove(), 3000);
-      })();
-    </script>
-  </body>
-</html>
-```
-
-#### Complete API Documentation
+**Default timeout:** 8000ms
 
 See [API.md](./API.md) for comprehensive browser API documentation with examples
 for:
@@ -928,6 +896,8 @@ for:
 - Performance tips
 
 ---
+
+## Tools CLI commands usage
 
 ### Renderer: `sbb-render.cjs`
 
@@ -1132,7 +1102,7 @@ node sbb-getbbox.cjs --dir ./icons --filter "^btn_" --json buttons.json
 node sbb-getbbox.cjs --list process-list.txt --json output.json
 ```
 
-#### List File Format
+#### Objects List File Format
 
 Each line: `<svg-path> [object-ids...] [--ignore-vbox]`
 
@@ -1204,7 +1174,7 @@ SVG: path/to/file.svg
 
 ---
 
-### Multi-tool: `sbb-extract.cjs`
+### SVG Objects Extractor `sbb-extract.cjs`
 
 A versatile tool for **listing, renaming, extracting, and exporting** SVG
 objects.
@@ -1538,6 +1508,13 @@ bounding boxes, **always use the native `sbb-*` tools**.
 
 ## 🧭 Renaming workflow with the HTML viewer
 
+When the Extractor Tool shows the list of svg elements inside the svg file you
+can not only select the objects you want to extract, but also choose new object
+id names to rename them. Your choices will be saved in a json file from a button
+at the bottom of the html page, and you can exit the page and pass the json to
+the extractor at any time to extract the elements and also to rename the objects
+id of all elements inside the svg file.
+
 A typical end‑to‑end workflow:
 
 1. **Analyze the SVG & give everything an ID**
@@ -1698,7 +1675,7 @@ PRs, issues, and ideas are welcome!
 - Want a new CLI mode or integration?
 
 Open an issue with a **minimal test SVG** and a short description of what you
-expected vs what you saw.
+expected vs what you saw. Read the CONTRIBUTING file in the repo to know more.
 
 ---
 

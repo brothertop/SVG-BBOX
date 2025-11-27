@@ -67,11 +67,6 @@ export default defineConfig({
 
     // Pool options for parallel execution
     pool: 'forks',
-    poolOptions: {
-      forks: {
-        singleFork: false
-      }
-    },
 
     // Max concurrent tests
     maxConcurrency: 5,

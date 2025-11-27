@@ -461,7 +461,7 @@ This library can be used in two ways:
 2. **Browser/Web Applications** - Loaded directly in webpages via `<script>` tag
    or npm import
 
-### 🌐 Browser (embed vis CDN mirrors)
+### 🌐 Browser (embed via CDN mirrors)
 
 You can use `SvgVisualBBox.js` directly in webpages for accurate bounding box
 computation and visual debugging.
@@ -528,7 +528,7 @@ computation and visual debugging.
 </html>
 ```
 
-### 8 Node.js (install vis npm)
+### 8 Node.js (install via npm)
 
 ```bash
 npm install svg-bbox
@@ -1560,11 +1560,11 @@ A typical end‑to‑end workflow:
 
    ```bash
    # One object
-   node sbb-extractor.cjs sprites.renamed.svg \
+   node sbb-extract.cjs sprites.renamed.svg \
      --extract icon_save icon_save.svg --margin 5
 
    # All objects
-   node sbb-extractor.cjs sprites.renamed.svg \
+   node sbb-extract.cjs sprites.renamed.svg \
      --export-all exported --export-groups --margin 2
    ```
 

@@ -1502,9 +1502,15 @@ async function performSingleComparison(svg1Path, svg2Path, args, browser) {
   const svgAnalysis2 = await analyzeSvg(safeSvg2Path, browser);
 
   // Render SVGs to PNG
+  // BUGFIX: Ensure temp directory exists before rendering
+  // Windows CI had race condition where directory creation wasn't complete before file writes
   const tempDir = path.join(process.cwd(), '.tmp-compare');
   if (!fs.existsSync(tempDir)) {
     fs.mkdirSync(tempDir, { recursive: true });
+  }
+  // Verify directory was created successfully
+  if (!fs.existsSync(tempDir)) {
+    throw new Error(`Failed to create temporary directory: ${tempDir}`);
   }
 
   const png1Path = path.join(

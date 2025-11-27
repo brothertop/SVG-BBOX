@@ -24,12 +24,26 @@ async function runComparer(svg1, svg2, args = []) {
   const svg1Path = path.join(FIXTURES_DIR, svg1);
   const svg2Path = path.join(FIXTURES_DIR, svg2);
 
+  // BUGFIX: Always specify --out-diff to prevent diff files polluting project root
+  // Only add default if --out-diff is not already in args
+  const hasOutDiff = args.some((arg, i) => arg === '--out-diff' && i < args.length - 1);
+  const extraArgs = hasOutDiff
+    ? []
+    : [
+        '--out-diff',
+        path.join(
+          TEMP_DIR,
+          `${path.basename(svg1, '.svg')}_vs_${path.basename(svg2, '.svg')}_diff.png`
+        )
+      ];
+
   const { stdout, stderr: _stderr } = await execFilePromise('node', [
     COMPARER_PATH,
     svg1Path,
     svg2Path,
     '--json',
-    ...args
+    ...args,
+    ...extraArgs
   ]);
 
   return JSON.parse(stdout);

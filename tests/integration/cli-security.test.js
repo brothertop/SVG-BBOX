@@ -429,14 +429,15 @@ describe('CLI Security Integration Tests', () => {
       /**Test that sbb-comparer JSON output is valid and safe*/
       const svg1Path = path.join(testDir, 'svg1.svg');
       const svg2Path = path.join(testDir, 'svg2.svg');
-      testFiles.push(svg1Path, svg2Path);
+      const diffPath = path.join(testDir, 'diff.png');
+      testFiles.push(svg1Path, svg2Path, diffPath);
 
       fs.writeFileSync(svg1Path, VALID_TEST_SVG);
       fs.writeFileSync(svg2Path, VALID_TEST_SVG);
 
       const { stdout } = await execFilePromise(
         'node',
-        [CLI_TOOLS.comparer, svg1Path, svg2Path, '--json'],
+        [CLI_TOOLS.comparer, svg1Path, svg2Path, '--out-diff', diffPath, '--json'],
         {
           timeout: CLI_TIMEOUT
         }
@@ -676,16 +677,17 @@ describe('CLI Security Integration Tests', () => {
       /**Test that sbb-comparer works correctly with valid inputs*/
       const svg1Path = path.join(testDir, 'cmp1.svg');
       const svg2Path = path.join(testDir, 'cmp2.svg');
-      testFiles.push(svg1Path, svg2Path);
+      const diffPath = path.join(testDir, 'cmp_diff.png');
+      testFiles.push(svg1Path, svg2Path, diffPath);
 
       fs.writeFileSync(svg1Path, VALID_TEST_SVG);
       fs.writeFileSync(svg2Path, VALID_TEST_SVG);
 
       const { stdout } = await execFilePromise(
         'node',
-        [CLI_TOOLS.comparer, svg1Path, svg2Path, '--json'],
+        [CLI_TOOLS.comparer, svg1Path, svg2Path, '--out-diff', diffPath, '--json'],
         {
-          timeout: CLI_TIMEOUT
+          timeout: 120000 // 120 seconds - Windows CI is slower, needs more time for browser operations
         }
       );
 
@@ -693,6 +695,6 @@ describe('CLI Security Integration Tests', () => {
       assert.ok(result);
       assert.strictEqual(typeof result.diffPercentage, 'number');
       assert.strictEqual(result.diffPercentage, 0); // Identical SVGs
-    });
+    }, 120000); // Vitest timeout - must match or exceed execFilePromise timeout
   });
 });

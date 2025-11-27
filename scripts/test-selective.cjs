@@ -23,6 +23,9 @@ const path = require('path');
 
 const execFileAsync = promisify(execFile);
 
+// Constant for "run all tests" pattern to avoid duplication
+const RUN_ALL_TESTS_PATTERN = 'tests/**/*.test.js';
+
 /**
  * Dependency Mapping: File → Test Files
  *
@@ -94,11 +97,11 @@ const TEST_DEPENDENCIES = {
     'tests/integration/html-preview-rendering.test.js'
   ],
 
-  'vitest.config.js': ['tests/**/*.test.js'],
+  'vitest.config.js': [RUN_ALL_TESTS_PATTERN],
 
-  'package.json': ['tests/**/*.test.js'],
+  'package.json': [RUN_ALL_TESTS_PATTERN],
 
-  'package-lock.json': ['tests/**/*.test.js'],
+  'package-lock.json': [RUN_ALL_TESTS_PATTERN],
 
   // Build and utility scripts
   // Empty arrays = these files don't require any specific tests to run
@@ -140,7 +143,21 @@ async function getChangedFiles(baseRef = 'HEAD') {
 }
 
 /**
+ * Check if a file is an unknown source file that requires running all tests
+ * @param {string} normalizedPath - Normalized file path (with / separators)
+ * @returns {boolean} True if file is unknown source code
+ */
+function isUnknownSourceFile(normalizedPath) {
+  return (
+    normalizedPath.startsWith('lib/') ||
+    (normalizedPath.startsWith('scripts/') && normalizedPath.endsWith('.cjs')) ||
+    (normalizedPath.endsWith('.cjs') && !normalizedPath.startsWith('tests/'))
+  );
+}
+
+/**
  * Map changed files to required test files
+ * Implements Single Responsibility Principle by delegating to helper functions
  * @param {string[]} changedFiles - List of changed file paths
  * @returns {{ testsToRun: Set<string>, runAll: boolean }} Object with test patterns and runAll flag
  */
@@ -168,14 +185,10 @@ function mapFilesToTests(changedFiles) {
       tests.forEach((pattern) => {
         if (pattern) testsToRun.add(pattern);
       });
-    } else if (
-      normalizedPath.startsWith('lib/') ||
-      (normalizedPath.startsWith('scripts/') && normalizedPath.endsWith('.cjs')) ||
-      (normalizedPath.endsWith('.cjs') && !normalizedPath.startsWith('tests/'))
-    ) {
+    } else if (isUnknownSourceFile(normalizedPath)) {
       // Unknown source file changed - run all tests to be safe
-      console.log(`⚠️  Unknown dependency for: ${normalizedPath}`);
-      console.log('   Running all tests to be safe...');
+      console.warn(`⚠️  Unknown dependency for: ${normalizedPath}`);
+      console.warn('   Running all tests to be safe...');
       hasUnknownDependencies = true;
     }
   }
@@ -235,7 +248,7 @@ async function main() {
   if (changedFiles.length === 0) {
     console.log('✅ No changes detected - running all tests');
     if (!dryRun) {
-      await runTests(new Set(['tests/**/*.test.js']));
+      await runTests(new Set([RUN_ALL_TESTS_PATTERN]));
     }
     return;
   }
@@ -249,7 +262,7 @@ async function main() {
   if (runAll || testsToRun.size === 0) {
     console.log('✅ Running all tests');
     if (!dryRun) {
-      await runTests(new Set(['tests/**/*.test.js']));
+      await runTests(new Set([RUN_ALL_TESTS_PATTERN]));
     }
     return;
   }

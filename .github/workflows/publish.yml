@@ -24,6 +24,9 @@ jobs:
         with:
           node-version: '24'
 
+      - name: Install dependencies (for prepublishOnly script)
+        run: npm install --production=false
+
       - name: Verify npm version (should be >= 11.5.1)
         run: npm --version
 

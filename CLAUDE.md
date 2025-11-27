@@ -1,5 +1,14 @@
 # SVG-BBOX Claude Code Project Instructions
 
+## Publishing Policy
+
+**NEVER push to GitHub or publish to npm without explicit user approval.**
+
+- Always commit changes locally
+- Wait for user review before pushing commits
+- Wait for user approval before running `npm publish`
+- Add this to the todo list: "Wait for user review before pushing"
+
 ## Critical Discovery: npm Trusted Publishing with OIDC
 
 ### Problem Context

@@ -24,38 +24,20 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Run linter
-        run: pnpm run lint
+        run: npm run lint
 
       - name: Run type checker
-        run: pnpm run typecheck
+        run: npm run typecheck
 
       - name: Install browser dependencies
-        run: pnpm run install-browsers
+        run: npm run install-browsers
 
       - name: Run tests
-        run: pnpm run test:unit && pnpm run test:integration
+        run: npm run test:unit && npm run test:integration
 
       - name: Publish to npm with provenance
         run: npm publish --provenance --access public

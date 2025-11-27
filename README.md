@@ -46,7 +46,8 @@ geometry guesswork, no lies.
 Here's what happens when extracting an SVG element using three different bbox
 methods:
 
-<table style="background-color: white; color: black; border: 1px solid black; table-layout: fixed; width: 100%;">
+<div style="background-color: #ffffff !important; padding: 20px; border-radius: 8px;">
+<table style="background-color: #ffffff !important; color: #000000 !important; border: 1px solid #000000; table-layout: fixed; width: 100%;">
   <tr>
     <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/inkscape-logo.svg" alt="Inkscape" style="height: 100px; width: auto;" /></th>
     <th style="background-color: white; color: black; border: 1px solid black; width: 33.33%; vertical-align: middle; text-align: center; padding: 10px;"><img src="assets/chrome-logo.svg" alt="Chrome" style="height: 100px; width: auto;" /></th>
@@ -78,6 +79,7 @@ methods:
     <td style="background-color: white; color: black; border: 1px solid black; text-align: left; padding: 8px;">Width: 1077px<br/>Height: 379px<br/><em>Includes full visual bounds</em></td>
   </tr>
 </table>
+</div>
 
 **Source:** [test_oval_badge.svg](assets/test_oval_badge.svg)
 

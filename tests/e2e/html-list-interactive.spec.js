@@ -37,7 +37,7 @@ test.beforeAll(async () => {
 
   console.log('Generating HTML catalog for interactive testing...');
   await execFilePromise('node', [
-    'sbb-extractor.cjs',
+    'sbb-extract.cjs',
     'samples/test_text_to_path_advanced.svg',
     '--list',
     '--out-html',

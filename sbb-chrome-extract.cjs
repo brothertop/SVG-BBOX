@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * sbb-getbbox-extract.cjs - Extract SVG elements using Chrome's native .getBBox()
+ * sbb-chrome-extract.cjs - Extract SVG elements using Chrome's native .getBBox()
  *
  * This tool demonstrates the standard SVG .getBBox() method's behavior for comparison
  * with SvgVisualBBox and Inkscape extraction methods.
@@ -227,7 +227,7 @@ function printHelp() {
   const version = getVersion();
   console.log(`
 ╔════════════════════════════════════════════════════════════════════════════╗
-║ sbb-getbbox-extract.cjs - Extract using Chrome .getBBox()          ║
+║ sbb-chrome-extract - Extract using Chrome .getBBox()                      ║
 ╚════════════════════════════════════════════════════════════════════════════╝
 
 ℹ Version ${version}
@@ -237,7 +237,7 @@ DESCRIPTION:
   This tool is for comparison with SvgVisualBBox and Inkscape extraction.
 
 USAGE:
-  node sbb-getbbox-extract.cjs input.svg --id <element-id> --output <output.svg> [options]
+  sbb-chrome-extract input.svg --id <element-id> --output <output.svg> [options]
 
 REQUIRED ARGUMENTS:
   input.svg               Input SVG file path
@@ -275,24 +275,24 @@ GENERAL OPTIONS:
 EXAMPLES:
 
   # Extract element with default margin
-  node sbb-getbbox-extract.cjs drawing.svg --id text39 --output text39.svg
+  sbb-chrome-extract drawing.svg --id text39 --output text39.svg
 
   # Extract and render PNG with transparent background
-  node sbb-getbbox-extract.cjs drawing.svg --id text39 \\
+  sbb-chrome-extract drawing.svg --id text39 \\
     --output text39.svg --png text39.png
 
   # Extract with custom margin and white background PNG
-  node sbb-getbbox-extract.cjs drawing.svg --id logo \\
+  sbb-chrome-extract drawing.svg --id logo \\
     --output logo.svg --png logo.png \\
     --margin 10 --background white
 
   # Extract with exact PNG dimensions at high resolution
-  node sbb-getbbox-extract.cjs chart.svg --id graph \\
+  sbb-chrome-extract chart.svg --id graph \\
     --output graph.svg --png graph.png \\
     --width 1920 --height 1080 --background "#f0f0f0"
 
   # Extract with custom scale and colored background
-  node sbb-getbbox-extract.cjs icon.svg --id main_icon \\
+  sbb-chrome-extract icon.svg --id main_icon \\
     --output icon.svg --png icon.png \\
     --scale 8 --background "rgba(255, 255, 255, 0.9)"
 
@@ -307,7 +307,7 @@ COMPARISON NOTES:
   • May not accurately reflect actual rendered pixels
 
   Compare with:
-  • sbb-extractor: Uses SvgVisualBBox (pixel-accurate canvas rasterization)
+  • sbb-extract: Uses SvgVisualBBox (pixel-accurate canvas rasterization)
   • sbb-inkscape-extract: Uses Inkscape (often UNDERSIZES due to font issues)
 
 USE CASES:
@@ -414,9 +414,7 @@ function parseArgs(argv) {
   // Validate required arguments
   if (positional.length < 1) {
     printError('Missing required argument: input.svg');
-    console.log(
-      '\nUsage: node sbb-getbbox-extract.cjs input.svg --id <element-id> --output <output.svg>'
-    );
+    console.log('\nUsage: sbb-chrome-extract input.svg --id <element-id> --output <output.svg>');
     process.exit(1);
   }
 
@@ -445,7 +443,7 @@ function parseArgs(argv) {
  * Main CLI entry point
  */
 async function main() {
-  printInfo(`sbb-getbbox-extract v${getVersion()} | svg-bbox toolkit\n`);
+  printInfo(`sbb-chrome-extract v${getVersion()} | svg-bbox toolkit\n`);
 
   const options = parseArgs(process.argv);
 

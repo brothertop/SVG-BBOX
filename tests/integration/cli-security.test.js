@@ -18,7 +18,7 @@ const CLI_TIMEOUT = 30000;
 
 // Paths to CLI tools
 const CLI_TOOLS = {
-  extractor: path.join(__dirname, '../../sbb-extractor.cjs'),
+  extractor: path.join(__dirname, '../../sbb-extract.cjs'),
   comparer: path.join(__dirname, '../../sbb-comparer.cjs'),
   textToPath: path.join(__dirname, '../../sbb-inkscape-text2path.cjs')
 };
@@ -59,8 +59,8 @@ describe('CLI Security Integration Tests', () => {
   // ============================================================================
 
   describe('Command Injection Prevention', () => {
-    it('sbb-extractor should reject paths with shell metacharacters', async () => {
-      /**Test that sbb-extractor rejects command injection attempts*/
+    it('sbb-extract should reject paths with shell metacharacters', async () => {
+      /**Test that sbb-extract rejects command injection attempts*/
       const maliciousPath = path.join(testDir, 'file;rm -rf /.svg');
 
       try {
@@ -124,8 +124,8 @@ describe('CLI Security Integration Tests', () => {
   // ============================================================================
 
   describe('Path Traversal Prevention', () => {
-    it('sbb-extractor should reject path traversal attempts', async () => {
-      /**Test that sbb-extractor blocks path traversal*/
+    it('sbb-extract should reject path traversal attempts', async () => {
+      /**Test that sbb-extract blocks path traversal*/
       const traversalPath = '../../../etc/passwd';
 
       try {
@@ -173,8 +173,8 @@ describe('CLI Security Integration Tests', () => {
   // ============================================================================
 
   describe('File Size Limit Enforcement', () => {
-    it('sbb-extractor should reject oversized SVG files', async () => {
-      /**Test that sbb-extractor enforces file size limits*/
+    it('sbb-extract should reject oversized SVG files', async () => {
+      /**Test that sbb-extract enforces file size limits*/
       const largePath = path.join(testDir, 'large.svg');
       testFiles.push(largePath);
 
@@ -206,14 +206,14 @@ describe('CLI Security Integration Tests', () => {
     it('should process SVG with removed script tags', async () => {
       /**Test that script tags are sanitized from SVG input*/
       const maliciousPath = path.join(testDir, 'malicious.svg');
-      // Add id to rect so sbb-extractor can process it
+      // Add id to rect so sbb-extract can process it
       const maliciousSVG =
         '<svg xmlns="http://www.w3.org/2000/svg"><script>alert("XSS")</script><rect id="r1" x="10" y="10" width="50" height="50"/></svg>';
       testFiles.push(maliciousPath);
 
       fs.writeFileSync(maliciousPath, maliciousSVG);
 
-      // sbb-extractor should process it (sanitization happens internally)
+      // sbb-extract should process it (sanitization happens internally)
       const { stdout } = await execFilePromise(
         'node',
         [CLI_TOOLS.extractor, maliciousPath, '--list', '--json'],
@@ -236,7 +236,7 @@ describe('CLI Security Integration Tests', () => {
     it('should process SVG with removed event handlers', async () => {
       /**Test that event handlers are sanitized from SVG input*/
       const maliciousPath = path.join(testDir, 'handlers.svg');
-      // Add id to rect so sbb-extractor can process it
+      // Add id to rect so sbb-extract can process it
       const maliciousSVG =
         '<svg xmlns="http://www.w3.org/2000/svg"><rect id="r2" onclick="alert(1)" onload="doEvil()" x="10" y="10" width="50" height="50"/></svg>';
       testFiles.push(maliciousPath);
@@ -291,8 +291,8 @@ describe('CLI Security Integration Tests', () => {
   // ============================================================================
 
   describe('File Extension Validation', () => {
-    it('sbb-extractor should reject non-SVG files', async () => {
-      /**Test that sbb-extractor rejects non-SVG extensions*/
+    it('sbb-extract should reject non-SVG files', async () => {
+      /**Test that sbb-extract rejects non-SVG extensions*/
       const txtPath = path.join(testDir, 'notsvg.txt');
       testFiles.push(txtPath);
       fs.writeFileSync(txtPath, '<svg></svg>');
@@ -395,10 +395,10 @@ describe('CLI Security Integration Tests', () => {
   // ============================================================================
 
   describe('JSON Output Security', () => {
-    it('sbb-extractor JSON output should not include sensitive paths', async () => {
+    it('sbb-extract JSON output should not include sensitive paths', async () => {
       /**Test that JSON output doesn't leak sensitive system paths*/
       const testPath = path.join(testDir, 'test.svg');
-      // Add id to rect so sbb-extractor can find objects
+      // Add id to rect so sbb-extract can find objects
       const testSVG =
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect id="r1" x="10" y="10" width="80" height="80" fill="blue"/></svg>';
       testFiles.push(testPath);
@@ -460,7 +460,7 @@ describe('CLI Security Integration Tests', () => {
 
   describe('Browser Timeout Protection', () => {
     it(
-      'sbb-extractor should timeout on extremely complex SVG',
+      'sbb-extract should timeout on extremely complex SVG',
       async () => {
         /**Test that browser operations timeout on malicious SVG*/
         const complexPath = path.join(testDir, 'complex.svg');
@@ -544,7 +544,7 @@ describe('CLI Security Integration Tests', () => {
   });
 
   // ============================================================================
-  // RENAME MAPPING SECURITY TESTS (sbb-extractor)
+  // RENAME MAPPING SECURITY TESTS (sbb-extract)
   // ============================================================================
 
   describe('Rename Mapping Security', () => {
@@ -645,10 +645,10 @@ describe('CLI Security Integration Tests', () => {
   // ============================================================================
 
   describe('Baseline Functional Tests', () => {
-    it('sbb-extractor should successfully process valid SVG', async () => {
-      /**Test that sbb-extractor works correctly with valid input*/
+    it('sbb-extract should successfully process valid SVG', async () => {
+      /**Test that sbb-extract works correctly with valid input*/
       const validPath = path.join(testDir, 'valid.svg');
-      // Add id to rect so sbb-extractor can find objects
+      // Add id to rect so sbb-extract can find objects
       const testSVG =
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect id="rect" x="10" y="10" width="80" height="80" fill="blue"/></svg>';
       testFiles.push(validPath);

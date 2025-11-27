@@ -143,7 +143,7 @@ browsers and Node.js (via Puppeteer).
 
 - `sbb-getbbox` - Compute bounding boxes, batch process directories, detect
   sprite sheets
-- `sbb-extractor` - List/rename/extract/export SVG objects with visual catalog
+- `sbb-extract` - List/rename/extract/export SVG objects with visual catalog
 - `sbb-render` - Render SVG to PNG
 - `sbb-fix-viewbox` - Repair missing/broken viewBox
 - `sbb-comparer` - Visual diff between SVGs (pixel comparison)
@@ -151,7 +151,8 @@ browsers and Node.js (via Puppeteer).
 
 **Comparison Tools:**
 
-- `sbb-getbbox-extract` - Extract using Chrome .getBBox() (for comparison)
+- `sbb-chrome-getbbox` - Get bbox using Chrome .getBBox() (for comparison)
+- `sbb-chrome-extract` - Extract using Chrome .getBBox() (for comparison)
 - `sbb-inkscape-text2path` - Convert text to paths (Inkscape)
 - `sbb-inkscape-extract` - Extract by ID (Inkscape)
 - `sbb-inkscape-svg2png` - SVG to PNG (Inkscape)
@@ -405,7 +406,7 @@ const execFilePromise = promisify(execFile);
 
 // Example: Extract object
 async function extractObject(inputSvg, objectId, outputSvg) {
-  const { stdout, stderr } = await execFilePromise('sbb-extractor', [
+  const { stdout, stderr } = await execFilePromise('sbb-extract', [
     inputSvg,
     '--extract',
     objectId,
@@ -451,7 +452,7 @@ npx svg-bbox
 # Run specific tools
 npx sbb-getbbox myfile.svg
 npx sbb-render myfile.svg output.png
-npx sbb-extractor myfile.svg --list
+npx sbb-extract myfile.svg --list
 ```
 
 ### Global Install (Recommended for Frequent Use)
@@ -545,9 +546,11 @@ After installation, the following CLI commands are available:
 **Core Tools (Recommended):**
 
 - `sbb-getbbox` - Compute visual bounding boxes
-- `sbb-getbbox-extract` - Extract using Chrome's native .getBBox() (for
+- `sbb-chrome-getbbox` - Get bbox using Chrome's native .getBBox() (for
   comparison)
-- `sbb-extractor` - List, extract, and export SVG objects
+- `sbb-chrome-extract` - Extract using Chrome's native .getBBox() (for
+  comparison)
+- `sbb-extract` - List, extract, and export SVG objects
 - `sbb-fix-viewbox` - Fix missing viewBox/dimensions
 - `sbb-render` - Render SVG to PNG
 - `sbb-comparer` - Compare two SVGs visually (pixel-by-pixel)
@@ -687,7 +690,7 @@ npx sbb-fix-viewbox broken.svg fixed/broken.fixed.svg
 ### 4. List all objects visually & generate a rename JSON
 
 ```bash
-npx sbb-extractor sprites.svg --list --assign-ids --out-fixed sprites.ids.svg
+npx sbb-extract sprites.svg --list --assign-ids --out-fixed sprites.ids.svg
 ```
 
 This produces:
@@ -704,7 +707,7 @@ names.
 ### 5. Extract one object as its own SVG
 
 ```bash
-npx sbb-extractor sprites.renamed.svg \
+npx sbb-extract sprites.renamed.svg \
   --extract icon_save icon_save.svg \
   --margin 5
 ```
@@ -717,7 +720,7 @@ This creates `icon_save.svg` sized exactly to the **visual bounds** of
 ### 6. Export all objects as individual SVGs
 
 ```bash
-npx sbb-extractor sprites.renamed.svg \
+npx sbb-extract sprites.renamed.svg \
   --export-all exported \
   --export-groups \
   --margin 2
@@ -1192,7 +1195,7 @@ SVG: path/to/file.svg
 
 ---
 
-### Multi-tool: `sbb-extractor.cjs`
+### Multi-tool: `sbb-extract.cjs`
 
 A versatile tool for **listing, renaming, extracting, and exporting** SVG
 objects.
@@ -1200,7 +1203,7 @@ objects.
 #### 1️⃣ List mode — `--list`
 
 ```bash
-node sbb-extractor.cjs input.svg --list \
+node sbb-extract.cjs input.svg --list \
   [--assign-ids --out-fixed fixed.svg] \
   [--out-html list.html] \
   [--json]
@@ -1262,7 +1265,7 @@ node sbb-extractor.cjs input.svg --list \
 Apply renaming rules from a JSON mapping.
 
 ```bash
-node sbb-extractor.cjs input.svg --rename mapping.json output.svg [--json]
+node sbb-extract.cjs input.svg --rename mapping.json output.svg [--json]
 ```
 
 Accepted JSON forms:
@@ -1287,7 +1290,7 @@ Accepted JSON forms:
 Extract a **single object** into its own SVG.
 
 ```bash
-node sbb-extractor.cjs input.svg --extract someId output.svg \
+node sbb-extract.cjs input.svg --extract someId output.svg \
   [--margin N] \
   [--include-context] \
   [--json]
@@ -1313,7 +1316,7 @@ Two modes:
 Export every object (and optionally groups) as separate SVGs.
 
 ```bash
-node sbb-extractor.cjs input.svg --export-all out-dir \
+node sbb-extract.cjs input.svg --export-all out-dir \
   [--margin N] \
   [--export-groups] \
   [--json]
@@ -1351,7 +1354,7 @@ native svg-bbox tools:**
 
 - `sbb-render.cjs` - Native SVG rendering with accurate bbox
 - `sbb-getbbox.cjs` - Precise bounding box calculation
-- `sbb-extractor.cjs` - Multi-tool with accurate visual bbox
+- `sbb-extract.cjs` - Multi-tool with accurate visual bbox
 
 These native tools use our custom algorithms that correctly handle font metrics
 and provide reliable, cross-platform results.
@@ -1427,7 +1430,7 @@ node sbb-inkscape-extract.cjs sprite.svg --id icon_home --margin 10
 ```
 
 ⚠️ **Note:** For more reliable object extraction with accurate bounding boxes,
-use `sbb-extractor.cjs --extract` instead.
+use `sbb-extract.cjs --extract` instead.
 
 ##### 3. `sbb-inkscape-svg2png.cjs` - SVG to PNG Export
 
@@ -1531,7 +1534,7 @@ A typical end‑to‑end workflow:
 1. **Analyze the SVG & give everything an ID**
 
    ```bash
-   node sbb-extractor.cjs sprites.svg \
+   node sbb-extract.cjs sprites.svg \
      --list \
      --assign-ids \
      --out-fixed sprites.ids.svg
@@ -1562,7 +1565,7 @@ A typical end‑to‑end workflow:
 5. **Apply renaming to an SVG**
 
    ```bash
-   node sbb-extractor.cjs sprites.ids.svg \
+   node sbb-extract.cjs sprites.ids.svg \
      --rename sprites.rename.json \
      sprites.renamed.svg
    ```

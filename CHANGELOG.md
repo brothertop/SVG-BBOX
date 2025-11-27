@@ -6,15 +6,60 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.7] - 2025-11-26
+## [1.0.9] - 2025-11-27
+
+### Bug Fixes
+
+- _(ci)_ Strip publish.yml to minimal OIDC-only workflow
+- _(ci)_ Add npm install for prepublishOnly script dependencies
+
+### Miscellaneous Tasks
+
+- _(ci)_ Add comprehensive npm OIDC diagnostics per GitHub Copilot
+- _(release)_ Prepare for v1.0.8 release
+
+## [1.0.8] - 2025-11-27
+
+### Bug Fixes
+
+- _(docs)_ Force white background on comparison table for dark mode
+- _(docs)_ Use theme-aware images for dark mode compatibility
+- Multiple CI/CD and test infrastructure improvements
+- _(docs)_ Increase logo sizes in comparison table for better visibility
+- _(docs)_ Use width instead of height for logo consistency
+- Update vitest config for v4 compatibility
+- _(ci)_ Properly configure OIDC trusted publishing for npm
+- _(ci)_ Use Node.js 24 with npm 11.6.0 for OIDC trusted publishing
+- _(ci)_ Add required registry-url to setup-node for OIDC
+- _(ci)_ Apply GitHub Copilot recommendations for OIDC publishing
+
+### Documentation
+
+- Add comprehensive npm trusted publishing discovery documentation
+
+### Miscellaneous Tasks
+
+- _(ci)_ Remove explicit --provenance flag from npm publish
+- Update vitest to 4.0.14 to fix esbuild vulnerability
+
+## [1.0.7] - 2025-11-27
 
 ### Bug Fixes
 
 - _(ci)_ Create .npmrc with auth token for pnpm publish
+- _(ci)_ Use npm publish with provenance instead of pnpm
+- _(ci)_ Remove all pnpm dependencies, use npm only
+- _(tests)_ Increase font rendering tolerance from 3px to 4px
+- _(ci)_ Restore pnpm for CI, use npm only for publish
 
 ### Features
 
 - Add git-cliff for automatic changelog generation
+
+### Miscellaneous Tasks
+
+- Bump version to 1.0.7
+- Fix Prettier formatting in CHANGELOG.md
 
 ## [1.0.6] - 2025-11-26
 

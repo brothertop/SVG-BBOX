@@ -19,6 +19,11 @@ Complete API reference for using `SvgVisualBBox.js` in web browsers.
 - [Error Handling](#error-handling)
 - [Performance Tips](#performance-tips)
 - [Examples](#examples)
+- [Coordinate Systems](#coordinate-systems)
+  - [Global vs Local Coordinates](#global-vs-local-coordinates)
+  - [The Double-Transform Bug](#the-double-transform-bug)
+  - [Workaround](#workaround-convert-global--local)
+  - [Future API](#future-api)
 
 ---
 
@@ -484,12 +489,24 @@ await SvgVisualBBox.setViewBoxOnObjects('#mySvg', 'targetElement', {
 
 ```typescript
 interface BBox {
-  x: number; // Left edge in SVG user units
-  y: number; // Top edge in SVG user units
+  x: number; // Left edge in SVG user units (GLOBAL coordinates)
+  y: number; // Top edge in SVG user units (GLOBAL coordinates)
   width: number; // Width in SVG user units
   height: number; // Height in SVG user units
 }
 ```
+
+**⚠️ CRITICAL: All coordinates are in GLOBAL (root SVG) space**
+
+All bounding box functions return coordinates in the **root SVG coordinate
+system** after all transforms have been applied. If an element has transforms
+(translate, rotate, scale, etc.), the returned coordinates reflect the
+**transformed position**.
+
+This is correct for visual rendering but causes issues when you need
+**untransformed local coordinates** (e.g., for text-to-path conversion).
+
+See [Coordinate Systems](#coordinate-systems) below for details and workarounds.
 
 ### BorderResult
 
@@ -736,6 +753,173 @@ const heightDiff = Math.abs(visualBBox.height - standardBBox.height);
 console.log(`Width difference: ${widthDiff.toFixed(2)} units`);
 console.log(`Height difference: ${heightDiff.toFixed(2)} units`);
 ```
+
+---
+
+## Coordinate Systems
+
+### Global vs Local Coordinates
+
+**⚠️ IMPORTANT:** Understanding the difference between global and local
+coordinates is critical for certain use cases (e.g., text-to-path conversion).
+
+#### What Are Global Coordinates?
+
+**Global coordinates** are measured in the **root SVG coordinate system** after
+all parent transforms have been applied.
+
+```html
+<svg viewBox="0 0 200 200">
+  <g transform="translate(50, 30) rotate(45)">
+    <text id="myText" x="10" y="20">Hello</text>
+  </g>
+</svg>
+```
+
+For the text element above:
+
+- **Local coordinates:** `x="10" y="20"` (before transforms)
+- **Global coordinates:** After applying `translate(50, 30)` and `rotate(45)`,
+  the text appears at a different position in the root SVG space
+
+#### What This Library Returns
+
+**All bbox functions return GLOBAL coordinates:**
+
+```javascript
+const bbox =
+  await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive('#myText');
+// bbox.x and bbox.y are in GLOBAL coordinates (after transforms)
+```
+
+This is **correct** for:
+
+- ✅ Visual rendering
+- ✅ Positioning overlays
+- ✅ Measuring screen space
+- ✅ Layout calculations
+
+This is **WRONG** for:
+
+- ❌ Text-to-path conversion (causes double-transform bug)
+- ❌ Operations requiring untransformed coordinates
+- ❌ Extracting element's original position/size
+
+#### The Double-Transform Bug
+
+When converting text to paths, you typically:
+
+1. Get text bbox
+2. Create path at bbox position
+3. Apply same transforms as original text
+
+**Problem:** If you use global bbox coordinates, transforms apply **twice**:
+
+```javascript
+// ❌ WRONG - Transforms apply twice!
+const globalBBox =
+  await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive('#text');
+// globalBBox.x/y already include parent transforms
+
+const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+path.setAttribute('d', pathData);
+path.setAttribute('transform', textElement.getAttribute('transform'));
+// BUG: transform applies on top of already-transformed coordinates
+```
+
+See [GitHub Issue #1](https://github.com/Emasoft/SVG-BBOX/issues/1) for details.
+
+#### Workaround: Convert Global → Local
+
+Until a native `getLocalBBox()` function is added, use **inverse matrix
+transformation**:
+
+```javascript
+// Get Current Transformation Matrix (CTM)
+const ctm = element.getCTM();
+
+// Invert the matrix
+function invertMatrix(m) {
+  const det = m.a * m.d - m.b * m.c;
+  if (Math.abs(det) < 1e-10) {
+    throw new Error('Matrix is not invertible');
+  }
+  return {
+    a: m.d / det,
+    b: -m.b / det,
+    c: -m.c / det,
+    d: m.a / det,
+    e: (m.c * m.f - m.d * m.e) / det,
+    f: (m.b * m.e - m.a * m.f) / det
+  };
+}
+
+// Get global bbox
+const globalBBox =
+  await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(element);
+
+// Convert to local coordinates
+const inv = invertMatrix(ctm);
+const corners = [
+  { x: globalBBox.x, y: globalBBox.y },
+  { x: globalBBox.x + globalBBox.width, y: globalBBox.y },
+  { x: globalBBox.x, y: globalBBox.y + globalBBox.height },
+  {
+    x: globalBBox.x + globalBBox.width,
+    y: globalBBox.y + globalBBox.height
+  }
+];
+
+const localCorners = corners.map((c) => ({
+  x: inv.a * c.x + inv.c * c.y + inv.e,
+  y: inv.b * c.x + inv.d * c.y + inv.f
+}));
+
+const xs = localCorners.map((c) => c.x);
+const ys = localCorners.map((c) => c.y);
+
+const localBBox = {
+  x: Math.min(...xs),
+  y: Math.min(...ys),
+  width: Math.max(...xs) - Math.min(...xs),
+  height: Math.max(...ys) - Math.min(...ys)
+};
+
+console.log('Local bbox (untransformed):', localBBox);
+```
+
+#### Complete Example
+
+See
+[`examples/local-vs-global-coordinates.cjs`](https://github.com/Emasoft/SVG-BBOX/blob/main/examples/local-vs-global-coordinates.cjs)
+for a complete working demonstration with:
+
+- Multiple transform scenarios (translate, rotate, complex)
+- Matrix inversion implementation
+- Visualization with colored rectangles
+- Side-by-side comparison of global vs local
+
+#### Future API
+
+A native `getLocalBBox()` function is under consideration that would return
+coordinates in the element's **local coordinate system** (before transforms):
+
+```javascript
+// Proposed future API (not yet implemented)
+const localBBox = await SvgVisualBBox.getSvgElementLocalBBox(
+  '#transformedElement'
+);
+// Returns coordinates BEFORE parent transforms
+```
+
+Until this is implemented, use the matrix inversion workaround above.
+
+#### Summary
+
+| Coordinate System | When to Use                       | Current API   | Future API             |
+| ----------------- | --------------------------------- | ------------- | ---------------------- |
+| **Global**        | Visual rendering, overlays        | ✅ Available  | (same functions)       |
+| **Local**         | Text-to-path, untransformed state | ⚠️ Workaround | `getLocalBBox()` (TBD) |
 
 ---
 

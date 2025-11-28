@@ -35,7 +35,7 @@ const {
   printSuccess,
   printError: _printError,
   printInfo,
-  printWarning: _printWarning
+  printWarning
 } = require('./lib/cli-utils.cjs');
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -89,6 +89,13 @@ OPTIONS:
   --batch <file>            Batch comparison mode using tab-separated file
                             Format: svg1_path.svg<TAB>svg2_path.svg (one pair per line)
                             Output will be in JSON format with results array
+
+  --add-missing-viewbox     Force regenerate viewBox for SVGs that lack one
+                            Uses sbb-fix-viewbox --force to generate accurate viewBox
+
+  --aspect-ratio-threshold <n>  Maximum allowed difference in aspect ratios (default: 0.001)
+                            SVGs with aspect ratios differing beyond this threshold
+                            will be rejected with 100% difference
 
   --json                    Output results as JSON
   --verbose                 Show detailed progress information
@@ -155,7 +162,9 @@ function parseArgs(argv) {
     sliceRule: 'xMidYMid',
     json: false,
     verbose: false,
-    batch: null // Path to batch comparison file
+    batch: null, // Path to batch comparison file
+    addMissingViewbox: false, // Force regenerate viewBox for SVGs without one
+    aspectRatioThreshold: 0.001 // Maximum allowed difference in aspect ratios
   };
 
   for (let i = 2; i < argv.length; i++) {
@@ -203,6 +212,14 @@ function parseArgs(argv) {
       args.sliceRule = argv[++i];
     } else if (arg === '--batch' && i + 1 < argv.length) {
       args.batch = argv[++i];
+    } else if (arg === '--add-missing-viewbox') {
+      args.addMissingViewbox = true;
+    } else if (arg === '--aspect-ratio-threshold' && i + 1 < argv.length) {
+      args.aspectRatioThreshold = parseFloat(argv[++i]);
+      if (args.aspectRatioThreshold < 0 || args.aspectRatioThreshold > 1) {
+        console.error('Error: --aspect-ratio-threshold must be between 0 and 1');
+        process.exit(2);
+      }
     } else if (!arg.startsWith('-')) {
       if (!args.svg1) {
         args.svg1 = arg;
@@ -334,7 +351,8 @@ async function analyzeSvg(svgPath, browser) {
       viewBox: null,
       width: null,
       height: null,
-      origin: { x: 0, y: 0 }
+      origin: { x: 0, y: 0 },
+      preserveAspectRatio: null
     };
 
     // Get viewBox
@@ -360,6 +378,12 @@ async function analyzeSvg(svgPath, browser) {
     }
     if (heightAttr && !heightAttr.includes('%')) {
       result.height = parseFloat(heightAttr);
+    }
+
+    // Get preserveAspectRatio attribute
+    const preserveAspectRatioAttr = svg.getAttribute('preserveAspectRatio');
+    if (preserveAspectRatioAttr) {
+      result.preserveAspectRatio = preserveAspectRatioAttr;
     }
 
     return result;
@@ -1463,6 +1487,81 @@ async function generateHtmlReport(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// VIEWBOX REGENERATION & ASPECT RATIO VALIDATION
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Regenerate viewBox for an SVG file using sbb-fix-viewbox with --force
+ * Returns path to the fixed SVG file
+ */
+async function regenerateViewBox(svgPath) {
+  const { execFile } = require('child_process');
+  const { promisify } = require('util');
+  const execFilePromise = promisify(execFile);
+
+  // Create output path with _viewbox_fixed suffix
+  const outputPath = svgPath.replace(/\.svg$/i, '_viewbox_fixed.svg');
+
+  // Run sbb-fix-viewbox with --force flag
+  const fixViewboxScript = path.join(__dirname, 'sbb-fix-viewbox.cjs');
+
+  try {
+    await execFilePromise('node', [fixViewboxScript, svgPath, outputPath, '--force'], {
+      timeout: BROWSER_TIMEOUT_MS
+    });
+    return outputPath;
+  } catch (error) {
+    throw new SVGBBoxError(`Failed to regenerate viewBox for ${svgPath}: ${error.message}`, error);
+  }
+}
+
+/**
+ * Get aspect ratio for an SVG analysis
+ * Returns { ratio, source, needsRegeneration }
+ * - ratio: the calculated aspect ratio (width/height)
+ * - source: where the ratio came from ('viewBox', 'attributes', or 'regenerated')
+ * - needsRegeneration: true if viewBox needs to be regenerated
+ */
+function getAspectRatioInfo(analysis, addMissingViewbox) {
+  // Priority 1: Use viewBox if it exists
+  if (analysis.viewBox && analysis.viewBox.width && analysis.viewBox.height) {
+    return {
+      ratio: analysis.viewBox.width / analysis.viewBox.height,
+      source: 'viewBox',
+      needsRegeneration: false
+    };
+  }
+
+  // Priority 2: Use width/height attributes if they exist
+  if (analysis.width && analysis.height) {
+    return {
+      ratio: analysis.width / analysis.height,
+      source: 'attributes',
+      needsRegeneration: false
+    };
+  }
+
+  // Priority 3: Regenerate viewBox if:
+  // - --add-missing-viewbox flag is set, OR
+  // - No viewBox AND no width/height (mandatory regeneration)
+  const mandatoryRegeneration = !analysis.viewBox && !analysis.width && !analysis.height;
+
+  if (addMissingViewbox || mandatoryRegeneration) {
+    return {
+      ratio: null, // Will be calculated after regeneration
+      source: 'regenerated',
+      needsRegeneration: true,
+      reason: mandatoryRegeneration ? 'mandatory' : 'flag'
+    };
+  }
+
+  // If we get here, something is wrong - should not happen
+  throw new ValidationError(
+    'Cannot determine aspect ratio: no viewBox, no width/height attributes, and regeneration not enabled'
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // SINGLE COMPARISON
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1493,12 +1592,151 @@ async function performSingleComparison(svg1Path, svg2Path, args, browser) {
     console.log(`Comparing: ${safeSvg1Path} vs ${safeSvg2Path}`);
   }
 
-  // Calculate render parameters
-  const params = await calculateRenderParams(safeSvg1Path, safeSvg2Path, args, browser);
+  // ═══════════════════════════════════════════════════════════════════════
+  // PHASE 1: Analyze SVGs and validate aspect ratios
+  // ═══════════════════════════════════════════════════════════════════════
 
-  // Store SVG analysis for HTML report
-  const svgAnalysis1 = await analyzeSvg(safeSvg1Path, browser);
-  const svgAnalysis2 = await analyzeSvg(safeSvg2Path, browser);
+  // Analyze both SVGs
+  let svgAnalysis1 = await analyzeSvg(safeSvg1Path, browser);
+  let svgAnalysis2 = await analyzeSvg(safeSvg2Path, browser);
+
+  // Get aspect ratio info for both SVGs
+  const ratioInfo1 = getAspectRatioInfo(svgAnalysis1, args.addMissingViewbox);
+  const ratioInfo2 = getAspectRatioInfo(svgAnalysis2, args.addMissingViewbox);
+
+  // Track which SVGs got regenerated (for cleanup later)
+  let svg1PathToUse = safeSvg1Path;
+  let svg2PathToUse = safeSvg2Path;
+  const regeneratedFiles = [];
+
+  // Regenerate viewBox if needed for SVG1
+  if (ratioInfo1.needsRegeneration) {
+    if (args.verbose && !args.json) {
+      const reason =
+        ratioInfo1.reason === 'mandatory'
+          ? 'no viewBox and no width/height attributes'
+          : '--add-missing-viewbox flag';
+      printWarning(`SVG1 requires viewBox regeneration (${reason})`);
+    }
+    svg1PathToUse = await regenerateViewBox(safeSvg1Path);
+    regeneratedFiles.push(svg1PathToUse);
+    svgAnalysis1 = await analyzeSvg(svg1PathToUse, browser);
+    ratioInfo1.ratio = getAspectRatioInfo(svgAnalysis1, false).ratio;
+    if (args.verbose && !args.json) {
+      printInfo(`SVG1 viewBox regenerated: ${svg1PathToUse}`);
+    }
+  }
+
+  // Regenerate viewBox if needed for SVG2
+  if (ratioInfo2.needsRegeneration) {
+    if (args.verbose && !args.json) {
+      const reason =
+        ratioInfo2.reason === 'mandatory'
+          ? 'no viewBox and no width/height attributes'
+          : '--add-missing-viewbox flag';
+      printWarning(`SVG2 requires viewBox regeneration (${reason})`);
+    }
+    svg2PathToUse = await regenerateViewBox(safeSvg2Path);
+    regeneratedFiles.push(svg2PathToUse);
+    svgAnalysis2 = await analyzeSvg(svg2PathToUse, browser);
+    ratioInfo2.ratio = getAspectRatioInfo(svgAnalysis2, false).ratio;
+    if (args.verbose && !args.json) {
+      printInfo(`SVG2 viewBox regenerated: ${svg2PathToUse}`);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // PHASE 2: Validate aspect ratios
+  // ═══════════════════════════════════════════════════════════════════════
+
+  const aspectRatioDiff = Math.abs(ratioInfo1.ratio - ratioInfo2.ratio);
+
+  if (aspectRatioDiff > args.aspectRatioThreshold) {
+    // CRITICAL: Aspect ratios differ beyond threshold
+    // Comparison is meaningless - exit with 100% difference
+
+    // Clean up regenerated files
+    for (const file of regeneratedFiles) {
+      try {
+        fs.unlinkSync(file);
+        // eslint-disable-next-line no-unused-vars
+      } catch (_err) {
+        // Ignore cleanup errors
+      }
+    }
+
+    const ratio1 = ratioInfo1.ratio.toFixed(6);
+    const ratio2 = ratioInfo2.ratio.toFixed(6);
+
+    const message = `Images have different aspect ratios (${ratio1} vs ${ratio2}, difference: ${aspectRatioDiff.toFixed(6)} > threshold: ${args.aspectRatioThreshold}). Pixel-by-pixel comparison is meaningless. Returning 100% difference.`;
+
+    if (args.json) {
+      console.log(
+        JSON.stringify(
+          {
+            svg1: svg1Path,
+            svg2: svg2Path,
+            aspectRatioMismatch: true,
+            aspectRatio1: parseFloat(ratio1),
+            aspectRatio2: parseFloat(ratio2),
+            aspectRatioDiff,
+            threshold: args.aspectRatioThreshold,
+            diffPercentage: 100,
+            message
+          },
+          null,
+          2
+        )
+      );
+      return {
+        svg1: svg1Path,
+        svg2: svg2Path,
+        aspectRatioMismatch: true,
+        diffPercentage: 100
+      };
+    } else {
+      console.log('\n╔════════════════════════════════════════════════════════════════════════╗');
+      console.log('║ ASPECT RATIO MISMATCH - COMPARISON ABORTED                             ║');
+      console.log('╚════════════════════════════════════════════════════════════════════════╝\n');
+      console.log(`  SVG 1:              ${svg1Path}`);
+      console.log(`  Aspect ratio 1:     ${ratio1} (from ${ratioInfo1.source})`);
+      console.log(`  SVG 2:              ${svg2Path}`);
+      console.log(`  Aspect ratio 2:     ${ratio2} (from ${ratioInfo2.source})`);
+      console.log(`  Difference:         ${aspectRatioDiff.toFixed(6)}`);
+      console.log(`  Threshold:          ${args.aspectRatioThreshold}`);
+      console.log(`\n  ${message}\n`);
+
+      return {
+        svg1: svg1Path,
+        svg2: svg2Path,
+        aspectRatioMismatch: true,
+        diffPercentage: 100
+      };
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // PHASE 3: Check preserveAspectRatio (warning only, not blocking)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  if (
+    svgAnalysis1.preserveAspectRatio &&
+    svgAnalysis2.preserveAspectRatio &&
+    svgAnalysis1.preserveAspectRatio !== svgAnalysis2.preserveAspectRatio
+  ) {
+    if (!args.json) {
+      printWarning(
+        `SVGs have different preserveAspectRatio attributes: "${svgAnalysis1.preserveAspectRatio}" vs "${svgAnalysis2.preserveAspectRatio}". This may affect rendering.`
+      );
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // PHASE 4: Continue with normal comparison
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // Calculate render parameters
+  const params = await calculateRenderParams(svg1PathToUse, svg2PathToUse, args, browser);
 
   // Render SVGs to PNG
   // BUGFIX: Ensure temp directory exists before rendering
@@ -1522,15 +1760,25 @@ async function performSingleComparison(svg1Path, svg2Path, args, browser) {
   );
 
   try {
-    await renderSvgToPng(safeSvg1Path, png1Path, params.svg1.width, params.svg1.height, browser);
-    await renderSvgToPng(safeSvg2Path, png2Path, params.svg2.width, params.svg2.height, browser);
+    await renderSvgToPng(svg1PathToUse, png1Path, params.svg1.width, params.svg1.height, browser);
+    await renderSvgToPng(svg2PathToUse, png2Path, params.svg2.width, params.svg2.height, browser);
 
     // Compare images
     const result = await compareImages(png1Path, png2Path, outDiff, args.threshold);
 
-    // Clean up temp files
+    // Clean up temp PNG files
     fs.unlinkSync(png1Path);
     fs.unlinkSync(png2Path);
+
+    // Clean up regenerated SVG files
+    for (const file of regeneratedFiles) {
+      try {
+        fs.unlinkSync(file);
+        // eslint-disable-next-line no-unused-vars
+      } catch (_err) {
+        // Ignore cleanup errors
+      }
+    }
 
     return {
       svg1: svg1Path,
@@ -1551,6 +1799,17 @@ async function performSingleComparison(svg1Path, svg2Path, args, browser) {
       }
       if (fs.existsSync(png2Path)) {
         fs.unlinkSync(png2Path);
+      }
+      // Clean up regenerated SVG files
+      for (const file of regeneratedFiles) {
+        try {
+          if (fs.existsSync(file)) {
+            fs.unlinkSync(file);
+          }
+          // eslint-disable-next-line no-unused-vars
+        } catch (_err) {
+          // Ignore cleanup errors
+        }
       }
       // eslint-disable-next-line no-unused-vars
     } catch (_cleanupErr) {

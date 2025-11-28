@@ -174,6 +174,7 @@ const TEST_DEPENDENCIES = {
   // Empty arrays = these files don't require any specific tests to run
   // Changes to these files don't affect runtime behavior, only build/version/test-selection
   'scripts/build-min.cjs': [], // Build script - doesn't affect tests
+  'scripts/validate-build.cjs': [], // Build validation - doesn't affect tests
   'scripts/bump-version.cjs': [], // Version bumping - doesn't affect tests
   'scripts/test-selective.cjs': [] // Test selection logic - doesn't affect test outcomes
 };

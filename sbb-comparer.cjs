@@ -16,7 +16,7 @@ const puppeteer = require('puppeteer');
 const { getVersion } = require('./version.cjs');
 const { BROWSER_TIMEOUT_MS, FONT_TIMEOUT_MS } = require('./config/timeouts.cjs');
 
-const _execFilePromise = promisify(execFile);
+const execFilePromise = promisify(execFile);
 
 // SECURITY: Import security utilities
 const {
@@ -1495,10 +1495,6 @@ async function generateHtmlReport(
  * Returns path to the fixed SVG file
  */
 async function regenerateViewBox(svgPath) {
-  const { execFile } = require('child_process');
-  const { promisify } = require('util');
-  const execFilePromise = promisify(execFile);
-
   // Create output path with _viewbox_fixed suffix
   const outputPath = svgPath.replace(/\.svg$/i, '_viewbox_fixed.svg');
 

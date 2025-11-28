@@ -39,6 +39,7 @@
     "sbb-*.cjs",
     "browser-utils.cjs",
     "version.cjs",
+    "config/",
     "lib/",
     "assets/",
     "README.md",

@@ -280,6 +280,49 @@ const TEST_DEPENDENCIES = {
   'config/timeouts.js': [RUN_ALL_TESTS_PATTERN] // Timeout config affects all tools
 };
 
+// ============================================================================
+// Runtime Dependency Detection
+// ============================================================================
+
+/**
+ * Find all source files (.cjs) that import/reference a given file
+ * @param {string} changedFile - The file that changed (e.g., 'SvgVisualBBox.js')
+ * @returns {string[]} List of files that import the changed file
+ */
+function findFilesImporting(changedFile) {
+  debug(`Finding files that import: ${changedFile}`);
+
+  const importers = [];
+  const fileName = path.basename(changedFile, path.extname(changedFile)); // 'SvgVisualBBox'
+
+  // Scan all .cjs files in the project root
+  const sourceFiles = fs.readdirSync('.').filter((f) => f.endsWith('.cjs'));
+
+  for (const sourceFile of sourceFiles) {
+    try {
+      const content = fs.readFileSync(sourceFile, 'utf8');
+
+      // Remove single-line comments
+      const noSingleComments = content.replace(/\/\/.*$/gm, '');
+
+      // Remove multi-line comments
+      const noComments = noSingleComments.replace(/\/\*[\s\S]*?\*\//g, '');
+
+      // Check if the file is referenced in non-comment code
+      // Matches: require('SvgVisualBBox'), addScriptTag({path: 'SvgVisualBBox.js'}), etc.
+      if (noComments.includes(fileName) || noComments.includes(changedFile)) {
+        importers.push(sourceFile);
+        debug(`  → ${sourceFile} imports ${changedFile}`);
+      }
+    } catch (err) {
+      // Skip files that can't be read
+      debug(`  → Skipping ${sourceFile}: ${err.message}`);
+    }
+  }
+
+  return importers;
+}
+
 /**
  * Validate git reference to prevent command injection attacks
  * @param {string} ref - Git reference to validate (e.g., "HEAD", "main", "origin/develop")
@@ -402,6 +445,11 @@ function isUnknownSourceFile(normalizedPath) {
 
 /**
  * Determine which tests are required based on changed files
+ * Uses RUNTIME DEPENDENCY DETECTION:
+ * 1. For each changed file, find all files that import it
+ * 2. For each importing file, add its tests to the list
+ * 3. Deduplicate the final test list
+ *
  * @param {string[]} changedFiles - List of changed file paths
  * @returns {{ testsToRun: Set<string>, runAll: boolean }} Test scope determination
  */
@@ -411,17 +459,10 @@ function determineRequiredTests(changedFiles) {
 
   debug('Determining required tests for changed files', { count: changedFiles.length });
 
-  // If no changes detected, run all tests
-  if (changedFiles.length === 0) {
-    debug('No changed files detected - will run all tests');
-    return { testsToRun, runAll: true };
-  }
-
+  // STEP 1: Process each changed file
   for (const file of changedFiles) {
-    // Normalize path separators (Windows backslashes → forward slashes)
-    // Note: This assumes all paths use forward slashes in TEST_DEPENDENCIES mapping
     const normalizedPath = file.replace(/\\/g, '/');
-    debug(`Processing file: ${normalizedPath}`);
+    debug(`\nProcessing changed file: ${normalizedPath}`);
 
     // If the changed file is a test file itself, run it directly
     if (normalizedPath.startsWith('tests/') && normalizedPath.endsWith('.test.js')) {
@@ -430,24 +471,62 @@ function determineRequiredTests(changedFiles) {
       continue;
     }
 
-    // Check dependency mapping
+    // STEP 2: Check if this file has explicit test mapping
     if (normalizedPath in TEST_DEPENDENCIES) {
       const tests = TEST_DEPENDENCIES[normalizedPath];
-      debug(`  → Found in dependency map, adding ${tests.length} test(s)`);
+      debug(`  → Found in TEST_DEPENDENCIES map, has ${tests.length} test(s)`);
+
+      // If empty array [], it means no tests needed (doc/config file)
+      if (tests.length === 0) {
+        debug(`  → Empty test array - no tests needed for this file`);
+        continue;
+      }
+
+      // Add the tests for this file
       tests.forEach((pattern) => {
         if (pattern) {
           debug(`     Adding test pattern: ${pattern}`);
           testsToRun.add(pattern);
         }
       });
-    } else if (isUnknownSourceFile(normalizedPath)) {
-      // Unknown source file changed - run all tests to be safe
-      console.warn(`${SYMBOLS.WARNING}  Unknown dependency for: ${normalizedPath}`);
-      console.warn('   Running all tests to be safe...');
-      debug(`  → Unknown source file, triggering full test suite`);
-      hasUnknownDependencies = true;
     } else {
-      debug(`  → Non-source file, skipping (no tests needed)`);
+      // STEP 3: File NOT in TEST_DEPENDENCIES - use runtime dependency detection
+      debug(`  → NOT in TEST_DEPENDENCIES - checking if it's a source file`);
+
+      if (isUnknownSourceFile(normalizedPath)) {
+        // This is a source file without explicit mapping
+        console.warn(`${SYMBOLS.WARNING}  Source file not in dependency map: ${normalizedPath}`);
+        console.warn('   Running all tests to be safe...');
+        hasUnknownDependencies = true;
+        continue;
+      }
+
+      // Not a source file (probably documentation) - skip
+      debug(`  → Non-source file (documentation/config), skipping`);
+      continue;
+    }
+
+    // STEP 4: Find files that IMPORT this changed file
+    debug(`  → Scanning for files that import: ${normalizedPath}`);
+    const importers = findFilesImporting(normalizedPath);
+
+    if (importers.length > 0) {
+      debug(`  → Found ${importers.length} file(s) that import this file`);
+
+      // For each importer, add ITS tests
+      for (const importer of importers) {
+        if (importer in TEST_DEPENDENCIES) {
+          const importerTests = TEST_DEPENDENCIES[importer];
+          debug(`     ${importer} has ${importerTests.length} test(s)`);
+
+          importerTests.forEach((pattern) => {
+            if (pattern) {
+              debug(`       Adding test: ${pattern}`);
+              testsToRun.add(pattern);
+            }
+          });
+        }
+      }
     }
   }
 
@@ -457,7 +536,8 @@ function determineRequiredTests(changedFiles) {
     return { testsToRun: new Set(), runAll: true };
   }
 
-  debug(`Determined ${testsToRun.size} unique test pattern(s)`);
+  // STEP 5: Deduplication happens automatically via Set
+  debug(`\nFinal deduplicated test count: ${testsToRun.size} unique test pattern(s)`);
   return { testsToRun, runAll: false };
 }
 

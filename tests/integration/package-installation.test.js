@@ -42,7 +42,7 @@ describe('Package Installation Verification', () => {
     console.log('  Creating package tarball...');
     const packResult = spawnSync('npm', ['pack'], {
       cwd: process.cwd(),
-      encoding: 'utf8',
+      encoding: 'utf8'
     });
 
     if (packResult.status !== 0) {
@@ -59,7 +59,7 @@ describe('Package Installation Verification', () => {
     console.log('  Installing package from tarball...');
     const installResult = spawnSync('npm', ['install', '--no-save', tarballPath], {
       cwd: tempDir,
-      encoding: 'utf8',
+      encoding: 'utf8'
     });
 
     if (installResult.status !== 0) {
@@ -161,7 +161,7 @@ describe('Package Installation Verification', () => {
     'sbb-inkscape-getbbox.cjs',
     'sbb-inkscape-svg2png.cjs',
     'sbb-inkscape-text2path.cjs',
-    'svg-bbox.cjs',
+    'svg-bbox.cjs'
   ];
 
   cliTools.forEach((tool) => {
@@ -186,7 +186,7 @@ describe('Package Installation Verification', () => {
     // Run the tool with --help flag - using spawnSync for safety
     const result = spawnSync('node', [toolPath, '--help'], {
       cwd: tempDir,
-      encoding: 'utf8',
+      encoding: 'utf8'
     });
 
     expect(result.status).toBe(0);
@@ -199,7 +199,7 @@ describe('Package Installation Verification', () => {
 
     const result = spawnSync('node', [toolPath, '--help'], {
       cwd: tempDir,
-      encoding: 'utf8',
+      encoding: 'utf8'
     });
 
     expect(result.status).toBe(0);

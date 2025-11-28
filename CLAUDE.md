@@ -27,26 +27,31 @@
 
 ### What the Release Script Does (Proper Sequence)
 
-The script follows the **correct order** to avoid common errors:
+The script follows the **correct order** to avoid race conditions:
 
-1. **Validates prerequisites** - gh CLI, npm, pnpm, jq, authentication
+1. **Validates prerequisites** - gh CLI, npm, pnpm, jq, git-cliff, authentication
 2. **Checks working directory** - Must be clean, on main branch
 3. **Runs quality checks** - Linting, type checking, all tests
 4. **Bumps version** - Updates package.json and pnpm-lock.yaml
-5. **Generates release notes** - From git commits since last release
+5. **Generates release notes** - Uses git-cliff to generate formatted changelog from commits
 6. **Commits version bump** - Creates commit for version change
-7. **Creates git tag** - Annotated tag with release info
-8. **Pushes to GitHub** - Pushes commits and tag
-9. **Creates GitHub Release** - 🔑 **THIS TRIGGERS THE WORKFLOW**
-10. **Waits for GitHub Actions** - Monitors "Publish to npm" workflow
-11. **Verifies npm publication** - Confirms package is live
+7. **Creates git tag locally** - Tag not pushed yet (avoids race condition)
+8. **Pushes commits to GitHub** - Triggers CI workflow
+9. **Waits for CI workflow** - Monitors lint, typecheck, test, e2e, coverage (3-10 min)
+10. **Creates GitHub Release** - 🔑 **Pushes tag + creates release atomically**
+11. **Waits for Publish workflow** - Monitors npm publish workflow (up to 5 min)
+12. **Verifies npm publication** - Confirms package is live on npm
 
 ### Why This Order Matters
 
-**CRITICAL: GitHub Release must be created BEFORE npm publish!**
+**CRITICAL: Proper sequence prevents race conditions and failed releases**
 
-- ❌ **WRONG:** Push tag → npm publish → GitHub Release (causes sync issues)
-- ✅ **CORRECT:** Push tag → GitHub Release → GitHub Actions publishes to npm
+- ✅ **Create tag locally first** - Prevents workflow triggering too early
+- ✅ **Push commits only** - Triggers CI to verify tests pass
+- ✅ **Wait for CI** - Don't release if tests fail
+- ✅ **GitHub Release pushes tag atomically** - No race condition
+- ✅ **Release exists before workflow runs** - Proper provenance
+- ❌ **WRONG:** Push tag → workflow starts → create release (race condition)
 
 The GitHub Actions workflow is triggered by the tag push, but creating the
 GitHub Release first ensures:

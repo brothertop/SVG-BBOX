@@ -43,14 +43,14 @@ importers:
         specifier: ^0.5.4
         version: 0.5.4(eslint@9.39.1)(typescript@5.9.3)(vitest@4.0.14)
       happy-dom:
-        specifier: ^20.0.10
-        version: 20.0.10
+        specifier: ^20.0.11
+        version: 20.0.11
       jsdom:
         specifier: ^27.2.0
         version: 27.2.0
       prettier:
-        specifier: ^3.3.0
-        version: 3.6.2
+        specifier: ^3.7.1
+        version: 3.7.1
       terser:
         specifier: ^5.44.1
         version: 5.44.1
@@ -59,7 +59,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.14
-        version: 4.0.14(@types/node@20.19.25)(@vitest/ui@4.0.14)(happy-dom@20.0.10)(jsdom@27.2.0)(terser@5.44.1)
+        version: 4.0.14(@types/node@20.19.25)(@vitest/ui@4.0.14)(happy-dom@20.0.11)(jsdom@27.2.0)(terser@5.44.1)
 
 packages:
 
@@ -1009,8 +1009,8 @@ packages:
     resolution: {integrity: sha512-jhIXaOzy1sb8IyocaruWSn1TjmnBVs8Ayhcy83rmxNJ8q2uWKCAj3CnJY+KpGSXCueAPc0i05kVvVKtP1t9S3g==}
     engines: {node: '>=10'}
 
-  happy-dom@20.0.10:
-    resolution: {integrity: sha512-6umCCHcjQrhP5oXhrHQQvLB0bwb1UzHAHdsXy+FjtKoYjUhmNZsQL8NivwM1vDvNEChJabVrUYxUnp/ZdYmy2g==}
+  happy-dom@20.0.11:
+    resolution: {integrity: sha512-QsCdAUHAmiDeKeaNojb1OHOPF7NjcWPBR7obdu3NwH2a/oyQaLg5d0aaCy/9My6CdPChYF07dvz5chaXBGaD4g==}
     engines: {node: '>=20.0.0'}
 
   has-flag@4.0.0:
@@ -1302,8 +1302,8 @@ packages:
     resolution: {integrity: sha512-vkcDPrRZo1QZLbn5RLGPpg/WmIQ65qoWWhcGKf/b5eplkkarX0m9z8ppCat4mlOqUsWpyNuYgO3VRyrYHSzX5g==}
     engines: {node: '>= 0.8.0'}
 
-  prettier@3.6.2:
-    resolution: {integrity: sha512-I7AIg5boAr5R0FFtJ6rCfD+LFsWHp81dolrFD8S79U9tb8Az2nGrJncnMSnys+bpQJfRUzqs9hnA81OAA3hCuQ==}
+  prettier@3.7.1:
+    resolution: {integrity: sha512-RWKXE4qB3u5Z6yz7omJkjWwmTfLdcbv44jUVHC5NpfXwFGzvpQM798FGv/6WNK879tc+Cn0AAyherCl1KjbyZQ==}
     engines: {node: '>=14'}
     hasBin: true
 
@@ -2079,7 +2079,7 @@ snapshots:
       obug: 2.1.1
       std-env: 3.10.0
       tinyrainbow: 3.0.3
-      vitest: 4.0.14(@types/node@20.19.25)(@vitest/ui@4.0.14)(happy-dom@20.0.10)(jsdom@27.2.0)(terser@5.44.1)
+      vitest: 4.0.14(@types/node@20.19.25)(@vitest/ui@4.0.14)(happy-dom@20.0.11)(jsdom@27.2.0)(terser@5.44.1)
     transitivePeerDependencies:
       - supports-color
 
@@ -2126,7 +2126,7 @@ snapshots:
       sirv: 3.0.2
       tinyglobby: 0.2.15
       tinyrainbow: 3.0.3
-      vitest: 4.0.14(@types/node@20.19.25)(@vitest/ui@4.0.14)(happy-dom@20.0.10)(jsdom@27.2.0)(terser@5.44.1)
+      vitest: 4.0.14(@types/node@20.19.25)(@vitest/ui@4.0.14)(happy-dom@20.0.11)(jsdom@27.2.0)(terser@5.44.1)
 
   '@vitest/utils@4.0.14':
     dependencies:
@@ -2393,7 +2393,7 @@ snapshots:
       '@typescript-eslint/utils': 7.18.0(eslint@9.39.1)(typescript@5.9.3)
       eslint: 9.39.1
     optionalDependencies:
-      vitest: 4.0.14(@types/node@20.19.25)(@vitest/ui@4.0.14)(happy-dom@20.0.10)(jsdom@27.2.0)(terser@5.44.1)
+      vitest: 4.0.14(@types/node@20.19.25)(@vitest/ui@4.0.14)(happy-dom@20.0.11)(jsdom@27.2.0)(terser@5.44.1)
     transitivePeerDependencies:
       - supports-color
       - typescript
@@ -2577,7 +2577,7 @@ snapshots:
       merge2: 1.4.1
       slash: 3.0.0
 
-  happy-dom@20.0.10:
+  happy-dom@20.0.11:
     dependencies:
       '@types/node': 20.19.25
       '@types/whatwg-mimetype': 3.0.2
@@ -2869,7 +2869,7 @@ snapshots:
 
   prelude-ls@1.2.1: {}
 
-  prettier@3.6.2: {}
+  prettier@3.7.1: {}
 
   progress@2.0.3: {}
 
@@ -3148,7 +3148,7 @@ snapshots:
       fsevents: 2.3.3
       terser: 5.44.1
 
-  vitest@4.0.14(@types/node@20.19.25)(@vitest/ui@4.0.14)(happy-dom@20.0.10)(jsdom@27.2.0)(terser@5.44.1):
+  vitest@4.0.14(@types/node@20.19.25)(@vitest/ui@4.0.14)(happy-dom@20.0.11)(jsdom@27.2.0)(terser@5.44.1):
     dependencies:
       '@vitest/expect': 4.0.14
       '@vitest/mocker': 4.0.14(vite@7.2.4(@types/node@20.19.25)(terser@5.44.1))
@@ -3173,7 +3173,7 @@ snapshots:
     optionalDependencies:
       '@types/node': 20.19.25
       '@vitest/ui': 4.0.14(vitest@4.0.14)
-      happy-dom: 20.0.10
+      happy-dom: 20.0.11
       jsdom: 27.2.0
     transitivePeerDependencies:
       - jiti

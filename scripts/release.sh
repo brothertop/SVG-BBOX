@@ -84,6 +84,43 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Strip ANSI color codes from string
+# SECURITY: Prevents color codes from contaminating version strings used in git tags
+strip_ansi() {
+    # Remove all ANSI escape sequences: \x1b[...m or \033[...m
+    echo "$1" | sed 's/\x1b\[[0-9;]*m//g' | sed 's/\o033\[[0-9;]*m//g' | tr -d '\033' | tr -d '\000-\037'
+}
+
+# Validate semver version format (X.Y.Z only, no prefixes or suffixes)
+# SECURITY: Prevents malformed version strings from breaking git tag creation
+validate_version() {
+    local VERSION=$1
+
+    # Check if VERSION is empty or contains only whitespace
+    if [ -z "$VERSION" ] || [ -z "${VERSION// /}" ]; then
+        log_error "Version is empty or contains only whitespace"
+        log_error "This indicates npm version command output was not captured correctly"
+        return 1
+    fi
+
+    # Check for ANSI codes (shouldn't happen after strip_ansi, but double-check)
+    if echo "$VERSION" | grep -q $'\033'; then
+        log_error "Version contains ANSI color codes: '$VERSION'"
+        log_error "This indicates color output contamination - check npm/log output"
+        return 1
+    fi
+
+    # Validate semver format: must be exactly X.Y.Z where X,Y,Z are numbers
+    if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+        log_error "Invalid version format: '$VERSION'"
+        log_error "Expected semver format (e.g., 1.0.12)"
+        log_error "Got: $(echo "$VERSION" | od -c | head -5)"  # Show actual bytes for debugging
+        return 1
+    fi
+
+    return 0
+}
+
 # Retry wrapper for network operations
 retry_with_backoff() {
     local MAX_RETRIES=3
@@ -187,8 +224,21 @@ bump_version() {
 
     log_info "Bumping version ($VERSION_TYPE)..."
 
-    # Use npm version to bump (doesn't create tag, we'll do that manually)
-    NEW_VERSION=$(npm version "$VERSION_TYPE" --no-git-tag-version | sed 's/v//')
+    # SECURITY: Run npm with explicit flags to prevent output contamination
+    # - 2>/dev/null: Suppress npm's stderr (verbose output, progress bars)
+    # - --no-git-tag-version: Don't create git tag (we do it manually)
+    # - sed 's/v//': Strip 'v' prefix from npm output (e.g., "v1.0.12" → "1.0.12")
+    NEW_VERSION=$(npm version "$VERSION_TYPE" --no-git-tag-version 2>/dev/null | sed 's/v//')
+
+    # SECURITY: Strip any ANSI codes that might have leaked through
+    NEW_VERSION=$(strip_ansi "$NEW_VERSION")
+
+    # SECURITY: Validate version format before proceeding
+    if ! validate_version "$NEW_VERSION"; then
+        log_error "Version bump failed - invalid version format"
+        log_error "Check npm output for errors"
+        exit 1
+    fi
 
     log_success "Version bumped to $NEW_VERSION"
     echo "$NEW_VERSION"
@@ -198,10 +248,25 @@ bump_version() {
 set_version() {
     local VERSION=$1
 
+    # SECURITY: Validate input version BEFORE calling npm
+    VERSION=$(strip_ansi "$VERSION")
+    if ! validate_version "$VERSION"; then
+        log_error "Invalid version specified: $VERSION"
+        exit 1
+    fi
+
     log_info "Setting version to $VERSION..."
 
     # Update package.json
-    npm version "$VERSION" --no-git-tag-version >/dev/null
+    # SECURITY: Suppress stderr to prevent output contamination
+    npm version "$VERSION" --no-git-tag-version >/dev/null 2>&1
+
+    # SECURITY: Re-validate after npm (paranoid check)
+    ACTUAL_VERSION=$(get_current_version)
+    if [ "$ACTUAL_VERSION" != "$VERSION" ]; then
+        log_error "Version mismatch after npm: expected $VERSION, got $ACTUAL_VERSION"
+        exit 1
+    fi
 
     log_success "Version set to $VERSION"
     echo "$VERSION"
@@ -383,6 +448,15 @@ commit_version_bump() {
 create_git_tag() {
     local VERSION=$1
 
+    # SECURITY: Strip ANSI codes and validate version format
+    # This prevents contaminated version strings from breaking git tag creation
+    VERSION=$(strip_ansi "$VERSION")
+    if ! validate_version "$VERSION"; then
+        log_error "Cannot create git tag - invalid version format: '$VERSION'"
+        log_error "This should never happen if bump_version/set_version worked correctly"
+        return 1
+    fi
+
     log_info "Creating git tag v$VERSION..."
 
     # Delete tag if it exists locally
@@ -392,7 +466,8 @@ create_git_tag() {
     fi
 
     # Create annotated tag
-    git tag -a "v$VERSION" -m "Release v$VERSION"
+    # SECURITY: Quote the tag name to prevent shell injection (paranoid)
+    git tag -a "v${VERSION}" -m "Release v${VERSION}"
 
     log_success "Git tag created"
 }
@@ -415,6 +490,13 @@ push_commits_to_github() {
 # Create GitHub Release (this pushes the tag and triggers the workflow)
 create_github_release() {
     local VERSION=$1
+
+    # SECURITY: Strip ANSI codes and validate version format
+    VERSION=$(strip_ansi "$VERSION")
+    if ! validate_version "$VERSION"; then
+        log_error "Cannot create GitHub release - invalid version format: '$VERSION'"
+        return 1
+    fi
 
     log_info "Creating GitHub Release (this will push the tag and trigger workflow)..."
 

@@ -57,6 +57,9 @@ lerna-debug.log*
 .env.test.local
 .env.production.local
 
+# Project-specific instructions (private)
+CLAUDE.md
+
 # OS files
 Thumbs.db
 .DS_Store

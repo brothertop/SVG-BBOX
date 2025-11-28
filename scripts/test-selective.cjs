@@ -169,6 +169,13 @@ const TEST_DEPENDENCIES = {
   'scripts/validate-build.cjs': [], // Build validation - doesn't affect tests
   'scripts/bump-version.cjs': [], // Version bumping - doesn't affect tests
   'scripts/test-selective.cjs': [], // Test selection logic - doesn't affect test outcomes
+  'scripts/release.sh': [], // Release automation - doesn't affect tests
+  'scripts/README.md': [], // Documentation - doesn't affect tests
+
+  // Project documentation and configuration (private)
+  'CLAUDE.md': [], // Project instructions (private, gitignored) - doesn't affect tests
+  'README.md': [], // Documentation - doesn't affect tests
+  '.gitignore': [], // Git configuration - doesn't affect tests
 
   // Centralized configuration
   'config/timeouts.cjs': [RUN_ALL_TESTS_PATTERN], // Timeout config affects all tools

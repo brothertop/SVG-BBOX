@@ -191,32 +191,84 @@ generate_release_notes() {
 
     # Get commit range
     if [ -z "$PREVIOUS_TAG" ]; then
-        COMMITS=$(git log --pretty=format:"- %s" --no-merges)
+        ALL_COMMITS=$(git log --pretty=format:"%s" --no-merges)
     else
-        COMMITS=$(git log "$PREVIOUS_TAG"..HEAD --pretty=format:"- %s" --no-merges)
+        ALL_COMMITS=$(git log "$PREVIOUS_TAG"..HEAD --pretty=format:"%s" --no-merges)
     fi
 
-    # Create release notes
+    # Categorize commits by type (user-facing only)
+    FEATURES=$(echo "$ALL_COMMITS" | grep -E "^feat(\(|:)" | sed 's/^feat[(:][^)]*[):]* */- /' || true)
+    BREAKING=$(echo "$ALL_COMMITS" | grep -E "^(feat|refactor|fix).*!" | sed 's/^[^!]*!: */- /' || true)
+    IMPROVEMENTS=$(echo "$ALL_COMMITS" | grep -E "^(perf|docs|style)(\(|:)" | sed 's/^[^:]*: */- /' || true)
+    FIXES=$(echo "$ALL_COMMITS" | grep -E "^fix(\(|:)" | sed 's/^fix[(:][^)]*[):]* */- /' || true)
+
+    # Build release notes with only non-empty sections
     cat > /tmp/release-notes.md <<EOF
 ## ${PACKAGE_NAME} v${VERSION}
 
-### Changes
+EOF
 
-${COMMITS}
+    # Add breaking changes section if any
+    if [ -n "$BREAKING" ]; then
+        cat >> /tmp/release-notes.md <<EOF
+### ⚠️ Breaking Changes
 
-### Test Results
-- All tests passing: ✅
-- Linting: ✅ 0 errors
-- Type checking: ✅ 0 errors
+${BREAKING}
 
+EOF
+    fi
+
+    # Add features section if any
+    if [ -n "$FEATURES" ]; then
+        cat >> /tmp/release-notes.md <<EOF
+### ✨ New Features
+
+${FEATURES}
+
+EOF
+    fi
+
+    # Add improvements section if any
+    if [ -n "$IMPROVEMENTS" ]; then
+        cat >> /tmp/release-notes.md <<EOF
+### 📈 Improvements
+
+${IMPROVEMENTS}
+
+EOF
+    fi
+
+    # Add fixes section if any
+    if [ -n "$FIXES" ]; then
+        cat >> /tmp/release-notes.md <<EOF
+### 🐛 Bug Fixes
+
+${FIXES}
+
+EOF
+    fi
+
+    # Add installation instructions
+    cat >> /tmp/release-notes.md <<EOF
 ### Installation
 
 \`\`\`bash
 npm install ${PACKAGE_NAME}@${VERSION}
 \`\`\`
+
+### Browser (CDN)
+
+\`\`\`html
+<script src="https://cdn.jsdelivr.net/npm/${PACKAGE_NAME}@${VERSION}/SvgVisualBBox.min.js"></script>
+\`\`\`
+
+---
+
+**Full Changelog**: https://github.com/\$(gh repo view --json nameWithOwner -q .nameWithOwner)/compare/${PREVIOUS_TAG}...v${VERSION}
 EOF
 
     log_success "Release notes generated"
+    log_info "Preview: /tmp/release-notes.md"
 }
 
 # Commit version bump

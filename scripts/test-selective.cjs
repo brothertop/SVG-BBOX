@@ -521,7 +521,14 @@ async function main() {
 
   const { testsToRun, runAll } = determineRequiredTests(changedFiles);
 
-  if (runAll || testsToRun.size === 0) {
+  // If no tests needed (documentation-only changes), skip testing
+  if (testsToRun.size === 0 && !runAll) {
+    console.log(`${SYMBOLS.SUCCESS} No tests required (documentation/config only changes)`);
+    return;
+  }
+
+  // If unknown dependencies or runAll flag, run all tests
+  if (runAll) {
     console.log(`${SYMBOLS.SUCCESS} Running all tests`);
     if (!dryRun) {
       await runTests(new Set([RUN_ALL_TESTS_PATTERN]));

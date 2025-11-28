@@ -224,11 +224,21 @@ bump_version() {
 
     log_info "Bumping version ($VERSION_TYPE)..."
 
-    # SECURITY: Run npm with explicit flags to prevent output contamination
-    # - 2>/dev/null: Suppress npm's stderr (verbose output, progress bars)
-    # - --no-git-tag-version: Don't create git tag (we do it manually)
-    # - sed 's/v//': Strip 'v' prefix from npm output (e.g., "v1.0.12" → "1.0.12")
-    NEW_VERSION=$(npm version "$VERSION_TYPE" --no-git-tag-version 2>/dev/null | sed 's/v//')
+    # SECURITY: Silence npm entirely to prevent hook output contamination
+    # npm lifecycle hooks ("version", "prepublishOnly") output to stdout, which
+    # cannot be suppressed with 2>/dev/null. We must silence all npm output
+    # and read the version from package.json instead.
+    npm version "$VERSION_TYPE" --no-git-tag-version >/dev/null 2>&1
+
+    # Check if npm version succeeded
+    if [ $? -ne 0 ]; then
+        log_error "npm version command failed"
+        log_error "Run manually to see errors: npm version $VERSION_TYPE --no-git-tag-version"
+        exit 1
+    fi
+
+    # Read the new version from package.json (the source of truth)
+    NEW_VERSION=$(get_current_version)
 
     # SECURITY: Strip any ANSI codes that might have leaked through
     NEW_VERSION=$(strip_ansi "$NEW_VERSION")
@@ -236,7 +246,7 @@ bump_version() {
     # SECURITY: Validate version format before proceeding
     if ! validate_version "$NEW_VERSION"; then
         log_error "Version bump failed - invalid version format"
-        log_error "Check npm output for errors"
+        log_error "Check package.json for errors"
         exit 1
     fi
 
@@ -257,11 +267,18 @@ set_version() {
 
     log_info "Setting version to $VERSION..."
 
-    # Update package.json
-    # SECURITY: Suppress stderr to prevent output contamination
+    # SECURITY: Silence npm entirely to prevent hook output contamination
     npm version "$VERSION" --no-git-tag-version >/dev/null 2>&1
 
+    # Check if npm version succeeded
+    if [ $? -ne 0 ]; then
+        log_error "npm version command failed"
+        log_error "Run manually to see errors: npm version $VERSION --no-git-tag-version"
+        exit 1
+    fi
+
     # SECURITY: Re-validate after npm (paranoid check)
+    # Read from package.json (the source of truth) instead of capturing npm output
     ACTUAL_VERSION=$(get_current_version)
     if [ "$ACTUAL_VERSION" != "$VERSION" ]; then
         log_error "Version mismatch after npm: expected $VERSION, got $ACTUAL_VERSION"

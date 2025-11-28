@@ -153,15 +153,26 @@ The release script has comprehensive safeguards to prevent ANSI color codes from
 breaking git tag creation. This addresses a critical bug where colored terminal
 output contaminated version strings.
 
-**Historical Bug (Fixed in commit f1730c8):**
+**Historical Bugs:**
 
+**Bug 1 (Fixed in commit f1730c8):** ANSI code contamination from log functions
 ```bash
-# BEFORE SAFEGUARDS:
 fatal: 'v?[0;34mℹ ?[0mBumping version (patch)...' is not a valid tag name
 ```
 
-ANSI escape codes from log functions leaked into the VERSION variable, causing
-git tag creation to fail.
+**Bug 2 (Fixed in commit f826ead):** npm lifecycle hook output contamination
+```bash
+fatal: 'v?[0;34mℹ ?[0mBumping version (patch)...
+?[0;32m✓?[0m Version bumped to
+> ersion
+> node ersion.cjs
+
+sg-bbox v1.0.12
+1.0.12' is not a valid tag name
+```
+
+**Root Cause:** npm lifecycle hooks (`"version": "node version.cjs"` in package.json)
+output multiline content to stdout that CANNOT be suppressed with `2>/dev/null`.
 
 **Safeguards Implemented:**
 
@@ -176,31 +187,36 @@ git tag creation to fail.
    - Semver format validation: `^[0-9]+\.[0-9]+\.[0-9]+$`
    - Detailed error messages with hex dump for debugging
 
-3. **Applied in critical functions:**
-   - `bump_version()`: Strip + validate after npm version command
-   - `set_version()`: Validate input + verify package.json matches
+3. **npm hook output isolation (commit f826ead):**
+   - Silence npm ENTIRELY: `npm version patch >/dev/null 2>&1`
+   - Read version from package.json (source of truth) using `get_current_version()`
+   - Check npm exit code to detect failures
+   - Prevents lifecycle hook output from contaminating VERSION variable
+
+4. **Applied in critical functions:**
+   - `bump_version()`: Silence npm + read from package.json + validate
+   - `set_version()`: Silence npm + verify + validate
    - `create_git_tag()`: Strip + validate before tag creation
    - `create_github_release()`: Strip + validate before release
 
-4. **npm command hardening:**
-   - Suppress stderr (`2>/dev/null`) to prevent verbose output contamination
-   - Maintain stdout for clean version capture
-   - Validate actual package.json version matches expected
-
 **Defensive Layers:**
 
-- **Prevent:** Suppress npm stderr at source
-- **Detect:** Strip ANSI codes from captured output
-- **Validate:** Verify semver format before use
-- **Verify:** Double-check package.json for version mismatches
+1. **Prevent:** Silence npm entirely (`>/dev/null 2>&1`) to prevent hook output
+2. **Source of Truth:** Read version from package.json instead of capturing npm output
+3. **Detect:** Strip ANSI codes from package.json value (paranoid safeguard)
+4. **Validate:** Verify semver format before use
+5. **Verify:** Check npm exit code to detect failures
 
 **Why These Safeguards Matter:**
 
-- Prevents release script failures due to colored output
+- **npm lifecycle hooks are unavoidable:** They're a fundamental feature of npm
+- **Hooks output to stdout:** Cannot be suppressed with `2>/dev/null`
+- **Capturing npm output is unreliable:** Any script that captures `npm version` output will face this contamination issue
+- **package.json is the source of truth:** After `npm version` succeeds, reading package.json guarantees a clean version string
+- Prevents release script failures due to colored output and hook contamination
 - Ensures git tags have clean, valid names
 - Maintains consistency between package.json and git tags
-- Provides detailed debugging information when validation fails
-- Protects against both current and future output contamination
+- Provides clear error messages when npm fails
 
 **If Tag Creation Fails:**
 

@@ -186,7 +186,7 @@ test.beforeAll(async () => {
   // Check if test page already exists
   try {
     await fs.access(testPagePath);
-    console.log(`Test page already exists: ${testPagePath}`);
+    // Test page already exists, skip regeneration
     return;
   } catch (error) {
     // File doesn't exist, continue to create it
@@ -200,8 +200,7 @@ test.beforeAll(async () => {
     // Generate HTML test page
     const html = generateSetViewBoxTestPage(edgeCases, baseScenarios);
     await fs.writeFile(testPagePath, html, 'utf8');
-    console.log(`Test page generated: ${testPagePath}`);
-    console.log(`Total test combinations: ${getEdgeCaseKeys().length * baseScenarios.length}`);
+    // Test page generated successfully (Playwright will report test execution)
   } catch (error) {
     throw new Error(`Failed to generate test page: ${error.message}`);
   }
@@ -223,6 +222,22 @@ test.afterAll(async () => {
 test.describe('setViewBoxOnObjects() - Comprehensive Edge Case Tests', () => {
   test.describe.configure({ mode: 'serial' });
 
+  // Shared page reference for serial test optimization
+  let sharedPage = null;
+  const testPageUrl = 'file://' + testPagePath;
+
+  // Load page once for all tests in serial mode
+  test.beforeAll(async ({ browser }) => {
+    sharedPage = await browser.newPage();
+    await sharedPage.goto(testPageUrl);
+  });
+
+  test.afterAll(async () => {
+    if (sharedPage) {
+      await sharedPage.close();
+    }
+  });
+
   // Generate tests for each edge case × scenario combination
   for (const edgeKey of getEdgeCaseKeys()) {
     const edge = edgeCases[edgeKey];
@@ -231,8 +246,9 @@ test.describe('setViewBoxOnObjects() - Comprehensive Edge Case Tests', () => {
       for (let scenarioIdx = 0; scenarioIdx < baseScenarios.length; scenarioIdx++) {
         const scenario = baseScenarios[scenarioIdx];
 
-        test(`${scenario.name}`, async ({ page }) => {
-          await page.goto('file://' + testPagePath);
+        test(`${scenario.name}`, async () => {
+          // Reuse shared page instead of creating new page for each test
+          const page = sharedPage;
 
           // Determine target element ID
           // For sprite sheets, test the <use> element instead of content
@@ -260,11 +276,7 @@ test.describe('setViewBoxOnObjects() - Comprehensive Edge Case Tests', () => {
           } else {
             scenario.validate(result);
           }
-
-          // Log test completion
-          const edgeLabel = edgeKey.padEnd(15);
-          const scenarioLabel = scenario.name.padEnd(40);
-          console.log(`✓ [${edgeLabel}] ${scenarioLabel}`);
+          // Playwright reports test success automatically
         });
       }
     });
@@ -273,8 +285,10 @@ test.describe('setViewBoxOnObjects() - Comprehensive Edge Case Tests', () => {
   /**
    * Additional test: Restore function correctly undoes changes.
    */
-  test('Restore function: undoes changes', async ({ page }) => {
-    await page.goto('file://' + testPagePath);
+  test('Restore function: undoes changes', async () => {
+    // Reload page to get clean state (this test needs unmodified SVG)
+    const page = sharedPage;
+    await page.reload();
 
     const result = await page.evaluate(async () => {
       const svgId = 'svg_normal_0';
@@ -299,15 +313,14 @@ test.describe('setViewBoxOnObjects() - Comprehensive Edge Case Tests', () => {
 
     expect(result.wasChanged).toBe(true);
     expect(result.wasRestored).toBe(true);
-
-    console.log('✓ Restore function - viewBox correctly restored');
   });
 
   /**
    * Additional test: Error handling for nonexistent element ID.
    */
-  test('Error: nonexistent element ID', async ({ page }) => {
-    await page.goto('file://' + testPagePath);
+  test('Error: nonexistent element ID', async () => {
+    // Reuse shared page
+    const page = sharedPage;
 
     const result = await page.evaluate(() =>
       // @ts-ignore - testViewBox is defined in the test HTML page
@@ -316,7 +329,5 @@ test.describe('setViewBoxOnObjects() - Comprehensive Edge Case Tests', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('not found');
-
-    console.log('✓ Error handling - nonexistent element ID');
   });
 });

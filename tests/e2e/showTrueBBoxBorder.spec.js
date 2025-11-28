@@ -254,7 +254,6 @@ test.beforeAll(async () => {
   // Skip if file already exists (avoid race condition)
   try {
     await fs.access(testPagePath);
-    console.log('Test page already exists: ' + testPagePath);
     return;
   } catch {
     // File doesn't exist, create it
@@ -382,19 +381,27 @@ test.beforeAll(async () => {
 </html>`;
 
   await fs.writeFile(testPagePath, html, 'utf8');
-  console.log(`Test page generated: ${testPagePath}`);
-  console.log(`Total tests: ${baseScenarios.length * Object.keys(edgeCases).length}`);
 });
 
 test.describe('showTrueBBoxBorder() - Comprehensive Edge Case Tests', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test.beforeAll(async () => {
+  // Shared page reference for serial test optimization
+  let sharedPage = null;
+  const testPageUrl = 'file://' + testPagePath;
+
+  // Load page once for all tests in serial mode
+  test.beforeAll(async ({ browser }) => {
     // Create temp directory
     await fs.mkdir(TEMP_DIR, { recursive: true });
+    sharedPage = await browser.newPage();
+    await sharedPage.goto(testPageUrl);
   });
 
   test.afterAll(async () => {
+    if (sharedPage) {
+      await sharedPage.close();
+    }
     // Clean up temp directory
     await fs.rm(TEMP_DIR, { recursive: true, force: true });
   });
@@ -407,8 +414,9 @@ test.describe('showTrueBBoxBorder() - Comprehensive Edge Case Tests', () => {
       for (let scenarioIdx = 0; scenarioIdx < baseScenarios.length; scenarioIdx++) {
         const scenario = baseScenarios[scenarioIdx];
 
-        test(`${scenario.name}`, async ({ page }) => {
-          await page.goto('file://' + testPagePath);
+        test(`${scenario.name}`, async () => {
+          // Reuse shared page instead of creating new page for each test
+          const page = sharedPage;
 
           // Determine target element ID (sprite sheets use <use> element)
           let targetId = `elem_${edgeKey}_${scenarioIdx}`;
@@ -427,21 +435,16 @@ test.describe('showTrueBBoxBorder() - Comprehensive Edge Case Tests', () => {
 
           // Run scenario-specific validation
           scenario.validate(result);
-
-          // Log success
-          const edgeLabel = edgeKey.padEnd(15);
-          const scenarioLabel = scenario.name.padEnd(30);
-          console.log(
-            `✓ [${edgeLabel}] ${scenarioLabel} - accurate (x=${result.diffs.x.toFixed(2)}, y=${result.diffs.y.toFixed(2)})`
-          );
         });
       }
     });
   }
 
   // Additional test: Remove function cleanup
-  test('Remove function cleans up overlay', async ({ page }) => {
-    await page.goto('file://' + testPagePath);
+  test('Remove function cleans up overlay', async () => {
+    // Reload page to get clean state (this test needs unmodified DOM)
+    const page = sharedPage;
+    await page.reload();
 
     // Use first element
     const firstId = 'elem_normal_0';
@@ -463,7 +466,5 @@ test.describe('showTrueBBoxBorder() - Comprehensive Edge Case Tests', () => {
 
     count = await page.evaluate(() => document.querySelectorAll('[data-svg-bbox-overlay]').length);
     expect(count).toBe(0);
-
-    console.log('✓ Remove function: overlay cleaned up');
   });
 });

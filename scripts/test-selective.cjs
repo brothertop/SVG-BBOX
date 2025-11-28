@@ -511,11 +511,7 @@ async function main() {
   const changedFiles = await getChangedFiles(baseRef);
 
   if (changedFiles.length === 0) {
-    console.log(`${SYMBOLS.SUCCESS} No changes detected - running all tests`);
-    if (!dryRun) {
-      await runTests(new Set([RUN_ALL_TESTS_PATTERN]));
-      updateLastTestRunTimestamp(); // Update timestamp after successful run
-    }
+    console.log(`${SYMBOLS.SUCCESS} No changes detected - skipping tests`);
     return;
   }
 

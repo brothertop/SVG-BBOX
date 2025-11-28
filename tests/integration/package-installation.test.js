@@ -46,7 +46,9 @@ describe('Package Installation Verification', () => {
     });
 
     if (packResult.status !== 0) {
-      throw new Error(`npm pack failed: ${packResult.stderr}`);
+      // Windows may return null for stderr, use stderr || stdout for error message
+      const errorMsg = packResult.stderr || packResult.stdout || 'unknown error';
+      throw new Error(`npm pack failed: ${errorMsg}`);
     }
 
     // Extract tarball filename from output (last line)

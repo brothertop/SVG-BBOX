@@ -507,26 +507,39 @@ function determineRequiredTests(changedFiles) {
     }
 
     // STEP 4: Find files that IMPORT this changed file
-    debug(`  → Scanning for files that import: ${normalizedPath}`);
-    const importers = findFilesImporting(normalizedPath);
+    // IMPORTANT: Only apply reverse dependency tracking for LIBRARY files
+    // TESTING RULE 1: Library changes → run tests for tools that import it
+    // TESTING RULE 2: Tool changes → run ONLY that tool's tests (no reverse deps)
+    //
+    // If a tool A calls tool B, and B changes, we should NOT run A's tests.
+    // Reverse dependency tracking is only for the core library (SvgVisualBBox.js).
+    const LIBRARY_FILES = ['SvgVisualBBox.js', 'SvgVisualBBox.min.js'];
+    const basename = path.basename(normalizedPath);
 
-    if (importers.length > 0) {
-      debug(`  → Found ${importers.length} file(s) that import this file`);
+    if (LIBRARY_FILES.includes(basename)) {
+      debug(`  → Scanning for files that import library: ${normalizedPath}`);
+      const importers = findFilesImporting(normalizedPath);
 
-      // For each importer, add ITS tests
-      for (const importer of importers) {
-        if (importer in TEST_DEPENDENCIES) {
-          const importerTests = TEST_DEPENDENCIES[importer];
-          debug(`     ${importer} has ${importerTests.length} test(s)`);
+      if (importers.length > 0) {
+        debug(`  → Found ${importers.length} file(s) that import this library`);
 
-          importerTests.forEach((pattern) => {
-            if (pattern) {
-              debug(`       Adding test: ${pattern}`);
-              testsToRun.add(pattern);
-            }
-          });
+        // For each importer, add ITS tests
+        for (const importer of importers) {
+          if (importer in TEST_DEPENDENCIES) {
+            const importerTests = TEST_DEPENDENCIES[importer];
+            debug(`     ${importer} has ${importerTests.length} test(s)`);
+
+            importerTests.forEach((pattern) => {
+              if (pattern) {
+                debug(`       Adding test: ${pattern}`);
+                testsToRun.add(pattern);
+              }
+            });
+          }
         }
       }
+    } else {
+      debug(`  → Skipping reverse dependency scan (not a library file)`);
     }
   }
 

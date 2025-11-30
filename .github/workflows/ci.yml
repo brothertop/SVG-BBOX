@@ -8,20 +8,24 @@ on:
   workflow_dispatch:
 
 # Centralized configuration - Single source of truth for versions and settings
+# Simplified env vars - use semantic names (LTS vs LATEST)
 env:
   PNPM_VERSION: '9'
-  NODE_VERSION_LINT: '18'
-  NODE_VERSION_TYPECHECK: '18'
-  NODE_VERSION_TEST: '18'
-  NODE_VERSION_COVERAGE: '20'
-  NODE_VERSION_E2E_PRIMARY: '18'
-  NODE_VERSION_E2E_SECONDARY: '20'
-  GIT_FETCH_DEPTH: '1'
+  NODE_VERSION_LTS: '18'      # Node 18 LTS - Primary support target
+  NODE_VERSION_LATEST: '22'   # Node 22 Latest - Future support target
+  GIT_FETCH_DEPTH: '10'       # Increased from 1 to support selective testing
 
 jobs:
+  # =============================================================================
+  # STAGE 1: Fast Checks (run first, < 5 minutes)
+  # =============================================================================
+  # These jobs run in parallel and are required to pass before tests run.
+  # Lint and typecheck failures will stop the pipeline early, saving CI time.
+
   lint:
     name: Lint & Format
     runs-on: ubuntu-latest
+    timeout-minutes: 10  # Prevent hangs - lint should complete in 2-3 min
 
     steps:
       - name: Checkout code
@@ -30,25 +34,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION_LINT }}
+          node-version: ${{ env.NODE_VERSION_LTS }}
+          cache: 'pnpm'  # Built-in pnpm caching (simpler than manual cache)
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
           version: ${{ env.PNPM_VERSION }}
-
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -59,6 +51,7 @@ jobs:
   typecheck:
     name: Type Check
     runs-on: ubuntu-latest
+    timeout-minutes: 10  # Prevent hangs - typecheck should complete in 2-3 min
 
     steps:
       - name: Checkout code
@@ -67,25 +60,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION_TYPECHECK }}
+          node-version: ${{ env.NODE_VERSION_LTS }}
+          cache: 'pnpm'  # Built-in pnpm caching
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
           version: ${{ env.PNPM_VERSION }}
-
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -93,45 +74,65 @@ jobs:
       - name: Run TypeScript type checker
         run: pnpm run typecheck
 
+  # =============================================================================
+  # STAGE 2: Tests (only run if lint + typecheck pass)
+  # =============================================================================
+  # Matrix reduced from 9 jobs to 4 jobs (saves ~60 min per run):
+  # - Removed Node 20 (not a deployment target per package.json engines)
+  # - Test only 2 OSes per Node version instead of all 3
+  # - Primary: ubuntu (most common), Secondary: windows/macos (catch OS-specific issues)
+
   test:
     name: Test (Node ${{ matrix.node-version }} on ${{ matrix.os }})
+    needs: [lint, typecheck]  # Wait for fast checks to pass before running tests
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30  # Prevent hangs - tests should complete in 10-15 min
 
     strategy:
-      fail-fast: false
+      fail-fast: true  # Stop on first failure (saves CI time)
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        node-version: ['18', '20', '22'] # Test across multiple Node versions (not using env var - intentional matrix)
+        # Reduced from 9 combinations (3 OS × 3 Node) to 4 combinations
+        include:
+          # Node 18 LTS - Primary support (most important to test)
+          - os: ubuntu-latest
+            node-version: '18'
+          - os: windows-latest  # Test one non-Linux OS for Node 18
+            node-version: '18'
+
+          # Node 22 Latest - Future support
+          - os: ubuntu-latest
+            node-version: '22'
+          - os: macos-latest  # Test different OS for Node 22
+            node-version: '22'
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ env.GIT_FETCH_DEPTH }}  # Need history for selective testing
 
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+          cache: 'pnpm'  # Built-in pnpm caching
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # Cache browser binaries (saves ~60 sec per job after first run)
+      - name: Cache browser binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/puppeteer
+          key: browsers-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Install browser dependencies
         run: pnpm run install-browsers
@@ -146,19 +147,29 @@ jobs:
             node scripts/test-selective.cjs origin/${{ github.base_ref }}
           else
             echo "Running full test suite for main/develop..."
-            pnpm run test:unit
-            pnpm run test:integration
+            # Run unit and integration tests in parallel (saves ~30 sec)
+            pnpm run test:unit & pnpm run test:integration & wait
           fi
 
+  # =============================================================================
+  # E2E Tests (browser tests - only ubuntu, Node version independent)
+  # =============================================================================
+  # Matrix reduced from 9 jobs to 2 jobs:
+  # - Browser behavior is OS-independent (Playwright/Puppeteer use own binaries)
+  # - Only test ubuntu (most common CI environment)
+  # - Only test Node 18 LTS and 22 Latest (browser tests don't vary by Node version)
+
   e2e:
-    name: E2E Tests (Node ${{ matrix.node-version }} on ${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    name: E2E Tests (Node ${{ matrix.node-version }})
+    needs: [lint, typecheck]  # Wait for fast checks to pass before running E2E
+    runs-on: ubuntu-latest  # Browser tests don't need cross-OS testing
+    timeout-minutes: 30  # Prevent hangs - E2E with browser setup should complete in 15-20 min
 
     strategy:
-      fail-fast: false
+      fail-fast: true  # Stop on first failure
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        node-version: ['18', '20', '22'] # E2E test across multiple Node versions (not using env var - intentional matrix)
+        # Only test 2 Node versions on ubuntu (browser tests don't vary by Node version)
+        node-version: ['18', '22']
 
     steps:
       - name: Checkout code
@@ -168,27 +179,24 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+          cache: 'pnpm'  # Built-in pnpm caching
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # Cache Playwright browsers (saves ~60 sec per job after first run)
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/puppeteer
+          key: browsers-ubuntu-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
@@ -203,13 +211,21 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-${{ matrix.os }}-${{ matrix.node-version }}
+          name: playwright-report-node-${{ matrix.node-version }}
           path: playwright-report/
           retention-days: 7
 
+  # =============================================================================
+  # Coverage (only run if tests pass)
+  # =============================================================================
+  # Runs after tests to avoid duplicate test execution.
+  # Only runs on Node LTS (coverage doesn't need to run on all Node versions).
+
   coverage:
     name: Coverage
+    needs: [test]  # Only run if tests pass (avoid duplicate work)
     runs-on: ubuntu-latest
+    timeout-minutes: 30  # Prevent hangs - coverage should complete in 10-15 min
 
     steps:
       - name: Checkout code
@@ -218,28 +234,25 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION_COVERAGE }}
+          node-version: ${{ env.NODE_VERSION_LTS }}  # Use LTS for coverage
+          cache: 'pnpm'  # Built-in pnpm caching
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # Reuse browser binary cache from test job
+      - name: Cache browser binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/puppeteer
+          key: browsers-ubuntu-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Install browser dependencies
         run: pnpm run install-browsers

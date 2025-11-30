@@ -92,7 +92,7 @@
     "test:selective": "node scripts/test-selective.cjs",
     "test:since-commit": "node scripts/test-selective.cjs HEAD~1",
     "lint": "eslint . && prettier --check .",
-    "lint:fix": "eslint --fix . && prettier --write .",
+    "lint:fix": "prettier --write . && eslint --fix .",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
     "ci": "pnpm run lint && pnpm run typecheck && pnpm run test:coverage && pnpm run test:e2e",

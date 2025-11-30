@@ -185,319 +185,116 @@ const {
 
 // -------- CLI parsing --------
 
-function printHelp() {
-  console.log(`
-╔════════════════════════════════════════════════════════════════════════════╗
-║ sbb-extractor.cjs - SVG Object Extraction & Manipulation Toolkit     ║
-╚════════════════════════════════════════════════════════════════════════════╝
-
-DESCRIPTION:
-  Versatile tool for listing, renaming, extracting, and exporting SVG objects
-  with visual bbox calculation and interactive HTML catalog.
-
-USAGE:
-  node sbb-extractor.cjs input.svg <mode> [options]
-
-═══════════════════════════════════════════════════════════════════════════════
-
-MODE 1: LIST OBJECTS (--list)
-  Generate interactive HTML catalog with visual previews
-
-  node sbb-extractor.cjs input.svg --list \\
-    [--assign-ids] [--out-fixed fixed.svg] \\
-    [--out-html list.html] [--auto-open] [--json]
-
-  What it does:
-  • Scans for all objects (g, path, rect, circle, ellipse, polygon, etc.)
-  • Automatically detects sprite sheets (icon/sprite stacks)
-  • Computes visual bbox for each object
-  • Generates interactive HTML page with:
-    - Visual previews using computed bboxes
-    - Filterable table (regex, tag type, bbox area, groups)
-    - Rename UI with live validation
-    - JSON export for renaming workflow
-
-  Options:
-    --assign-ids        Auto-assign IDs to elements without IDs
-    --out-fixed <file>  Save SVG with auto-assigned IDs
-    --out-html <file>   Specify HTML output path (default: input.objects.html)
-    --auto-open         Open HTML in Chrome/Chromium automatically
-    --json              Output JSON instead of human-readable format
-
-  Example:
-    node sbb-extractor.cjs sprites.svg --list --assign-ids
-
-═══════════════════════════════════════════════════════════════════════════════
-
-MODE 2: RENAME IDS (--rename)
-  Apply ID renaming from JSON mapping file
-
-  node sbb-extractor.cjs input.svg --rename mapping.json output.svg [--json]
-
-  What it does:
-  • Validates ID syntax (^[A-Za-z_][A-Za-z0-9_.:-]*$)
-  • Checks for collisions with existing IDs
-  • Updates element IDs
-  • Updates all references (href, xlink:href, url(#id))
-  • Reports applied/skipped mappings
-
-  JSON format (from HTML "Save JSON with renaming"):
-    {
-      "sourceSvgFile": "input.svg",
-      "createdAt": "2025-01-01T00:00:00.000Z",
-      "mappings": [
-        { "from": "auto_id_path_3", "to": "icon_save" }
-      ]
-    }
-
-  Also accepts:
-    • Array: [ { "from": "oldId", "to": "newId" } ]
-    • Object: { "oldId": "newId" }
-
-  Example:
-    node sbb-extractor.cjs sprites.svg --rename map.json renamed.svg
-
-═══════════════════════════════════════════════════════════════════════════════
-
-MODE 3: EXTRACT OBJECT (--extract)
-  Extract single object to standalone SVG
-
-  node sbb-extractor.cjs input.svg --extract objectId output.svg \\
-    [--margin N] [--include-context] [--json]
-
-  Two behaviors:
-    Default (pure cut-out):
-      • Only target object and ancestors
-      • Clean asset for reuse elsewhere
-      • No siblings, no overlays
-
-    With --include-context:
-      • All objects remain (preserves filters, overlays, context)
-      • ViewBox cropped to target bbox + margin
-      • Shows object in its environment
-
-  Options:
-    --margin <number>     Add margin in SVG user units (default: 0)
-    --include-context     Keep all objects, crop viewBox to target
-    --json                Output JSON metadata
-
-  Example:
-    node sbb-extractor.cjs drawing.svg --extract logo logo.svg --margin 10
-
-═══════════════════════════════════════════════════════════════════════════════
-
-MODE 4: EXPORT ALL OBJECTS (--export-all)
-  Export each object as separate SVG file
-
-  node sbb-extractor.cjs input.svg --export-all out-dir \\
-    [--margin N] [--export-groups] [--json]
-
-  What it does:
-  • Exports: path, rect, circle, ellipse, polygon, polyline, text,
-            image, use, symbol
-  • Each object gets own SVG with:
-    - ViewBox = visual bbox + margin
-    - Ancestor chain (preserves transforms/groups)
-    - All <defs> (filters, patterns, gradients)
-
-  Options:
-    --margin <number>     Add margin in SVG user units (default: 0)
-    --export-groups       Also export each <g> as separate SVG
-    --json                Output JSON list of exported files
-
-  Example:
-    node sbb-extractor.cjs sprites.svg --export-all ./sprites --margin 2
-
-  Perfect for sprite sheets! Extracts each sprite/icon automatically.
-
-═══════════════════════════════════════════════════════════════════════════════
-
-SPRITE SHEET DETECTION:
-  Automatically detects SVGs used as icon/sprite stacks in --list mode:
-  • Size uniformity (coefficient of variation < 0.3)
-  • Grid arrangement (rows × columns)
-  • Common naming patterns (icon_, sprite_, symbol_, glyph_)
-  • Minimum 3 child elements
-
-  When detected, displays helpful tip:
-    🎨 Sprite sheet detected!
-       Sprites: 6
-       Grid: 2 rows × 3 cols
-       💡 Tip: Use --export-all to extract each sprite
-
-═══════════════════════════════════════════════════════════════════════════════
-
-COMPLETE WORKFLOW:
-  1. List & browse objects:
-     node sbb-extractor.cjs sprites.svg --list --assign-ids
-
-  2. Open HTML, use filters, rename objects interactively
-
-  3. Save JSON mapping from HTML page
-
-  4. Apply renaming:
-     node sbb-extractor.cjs sprites.ids.svg --rename map.json renamed.svg
-
-  5. Extract individual objects or export all:
-     node sbb-extractor.cjs renamed.svg --export-all ./icons --margin 5
-
-`);
-}
-
 function parseArgs(argv) {
-  const args = argv.slice(2);
+  const { createModeArgParser } = require('./lib/cli-utils.cjs');
 
-  // Check for --help
-  if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
-    printHelp();
-    process.exit(0);
-  }
+  // Create the mode-aware parser with flag-based mode triggers
+  const parser = createModeArgParser({
+    name: 'sbb-extract',
+    description: 'Extract and rename SVG objects',
+    defaultMode: 'list',
+    modeFlags: {
+      '--list': 'list',
+      '--extract': { mode: 'extract', consumesValue: true, valueTarget: 'extractId' },
+      '--export-all': { mode: 'exportAll', consumesValue: true, valueTarget: 'outDir' },
+      '--rename': { mode: 'rename', consumesValue: true, valueTarget: 'renameJson' }
+    },
+    globalFlags: [
+      { name: 'json', alias: 'j', type: 'boolean', description: 'Output in JSON format' },
+      { name: 'auto-open', type: 'boolean', description: 'Open result in Chrome' }
+    ],
+    modes: {
+      list: {
+        description: 'List all extractable objects in the SVG',
+        flags: [
+          { name: 'assign-ids', type: 'boolean', description: 'Assign IDs to unnamed objects' },
+          { name: 'out-fixed', type: 'string', description: 'Output fixed SVG with assigned IDs' },
+          { name: 'out-html', type: 'string', description: 'Output HTML preview' }
+        ],
+        positional: [{ name: 'input', required: true, description: 'Input SVG file' }]
+      },
+      extract: {
+        description: 'Extract a single object by ID',
+        flags: [
+          {
+            name: 'margin',
+            alias: 'm',
+            type: 'number',
+            default: 0,
+            description: 'Margin in pixels',
+            validator: (v) => v >= 0,
+            validationError: 'Margin must be >= 0'
+          },
+          { name: 'include-context', type: 'boolean', description: 'Include context elements' }
+        ],
+        positional: [
+          { name: 'input', required: true, description: 'Input SVG file' },
+          { name: 'output', required: true, description: 'Output SVG file' }
+        ]
+      },
+      exportAll: {
+        description: 'Export all named objects to a directory',
+        flags: [
+          {
+            name: 'margin',
+            alias: 'm',
+            type: 'number',
+            default: 0,
+            description: 'Margin in pixels',
+            validator: (v) => v >= 0,
+            validationError: 'Margin must be >= 0'
+          },
+          { name: 'export-groups', type: 'boolean', description: 'Export groups too' }
+        ],
+        positional: [{ name: 'input', required: true, description: 'Input SVG file' }]
+      },
+      rename: {
+        description: 'Rename objects according to a JSON mapping',
+        positional: [
+          { name: 'input', required: true, description: 'Input SVG file' },
+          { name: 'output', required: true, description: 'Output SVG file' }
+        ]
+      }
+    }
+  });
 
-  if (args.length < 2 && !(args.length === 2 && args[1] === '--list')) {
-    printHelp();
-    process.exit(1);
-  }
+  // Parse the arguments
+  const result = parser(argv);
 
-  const positional = [];
+  // Map parser output to the expected legacy format for backward compatibility
   const options = {
-    input: null,
-    mode: null, // 'list', 'extract', 'exportAll', 'rename'
-    extractId: null,
+    input: result.positional[0] || null,
+    mode: result.mode,
+    extractId: result.flags.extractId || null,
     outSvg: null,
-    outDir: null,
-    margin: 0,
-    includeContext: false,
-    assignIds: false,
-    outFixed: null,
-    exportGroups: false,
-    json: false,
-    outHtml: null,
-    renameJson: null,
+    outDir: result.flags.outDir || null,
+    margin: result.flags.margin || 0,
+    includeContext: result.flags['include-context'] || false,
+    assignIds: result.flags['assign-ids'] || false,
+    outFixed: result.flags['out-fixed'] || null,
+    exportGroups: result.flags['export-groups'] || false,
+    json: result.flags.json || false,
+    outHtml: result.flags['out-html'] || null,
+    renameJson: result.flags.renameJson || null,
     renameOut: null,
-    autoOpen: false // automatically open HTML in browser
+    autoOpen: result.flags['auto-open'] || false
   };
 
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-
-    if (a.startsWith('--')) {
-      const [key, val] = a.split('=');
-      const name = key.replace(/^--/, '');
-      const next = typeof val === 'undefined' ? args[i + 1] : val;
-
-      function useNext() {
-        if (typeof val === 'undefined') {
-          i++;
-        }
-      }
-
-      switch (name) {
-        case 'list':
-          options.mode = 'list';
-          break;
-        case 'assign-ids':
-          options.assignIds = true;
-          break;
-        case 'out-fixed':
-          options.outFixed = next;
-          useNext();
-          break;
-        case 'out-html':
-          options.outHtml = next;
-          useNext();
-          break;
-        case 'extract':
-          options.mode = 'extract';
-          options.extractId = next;
-          useNext();
-          break;
-        case 'export-all':
-          options.mode = 'exportAll';
-          options.outDir = next;
-          useNext();
-          break;
-        case 'margin':
-          options.margin = parseFloat(next);
-          if (!isFinite(options.margin) || options.margin < 0) {
-            options.margin = 0;
-          }
-          useNext();
-          break;
-        case 'include-context':
-          options.includeContext = true;
-          break;
-        case 'export-groups':
-          options.exportGroups = true;
-          break;
-        case 'json':
-          options.json = true;
-          break;
-        case 'auto-open':
-          options.autoOpen = true;
-          break;
-        case 'rename':
-          options.mode = 'rename';
-          options.renameJson = next;
-          useNext();
-          break;
-        default:
-          console.warn('Unknown option:', key);
-      }
-    } else {
-      positional.push(a);
-    }
+  // Mode-specific positional argument handling
+  if (result.mode === 'extract') {
+    options.outSvg = result.positional[1] || null;
   }
 
-  if (!positional[0]) {
-    console.error('You must provide an input.svg file.');
-    process.exit(1);
-  }
-  options.input = positional[0];
-
-  // extract: need outSvg
-  if (options.mode === 'extract') {
-    if (!options.extractId) {
-      console.error('--extract requires an element id');
-      process.exit(1);
-    }
-    if (!positional[1]) {
-      console.error('--extract requires an output SVG path');
-      process.exit(1);
-    }
-    options.outSvg = positional[1];
+  if (result.mode === 'rename') {
+    options.renameOut = result.positional[1] || null;
   }
 
-  // exportAll: need outDir
-  if (options.mode === 'exportAll') {
-    if (!options.outDir) {
-      console.error('--export-all requires an output directory');
-      process.exit(1);
-    }
-  }
-
-  // rename: need mapping json and output
-  if (options.mode === 'rename') {
-    if (!options.renameJson) {
-      console.error('--rename requires a mapping.json file');
-      process.exit(1);
-    }
-    if (!positional[1]) {
-      console.error('--rename requires an output SVG path');
-      process.exit(1);
-    }
-    options.renameOut = positional[1];
-  }
-
-  // list defaults
-  if (options.mode === 'list' && options.assignIds && !options.outFixed) {
+  // Apply default values for list mode
+  if (result.mode === 'list' && options.assignIds && !options.outFixed) {
     options.outFixed = options.input.replace(/\.svg$/i, '') + '.ids.svg';
   }
-  if (options.mode === 'list' && !options.outHtml) {
+  if (result.mode === 'list' && !options.outHtml) {
     options.outHtml = options.input.replace(/\.svg$/i, '') + '.objects.html';
-  }
-
-  if (!options.mode) {
-    options.mode = 'list';
   }
 
   return options;

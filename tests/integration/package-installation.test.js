@@ -48,11 +48,34 @@ describe('Package Installation Verification', () => {
     if (packResult.status !== 0) {
       // Windows may return null for stderr, use stderr || stdout for error message
       const errorMsg = packResult.stderr || packResult.stdout || 'unknown error';
-      throw new Error(`npm pack failed: ${errorMsg}`);
+      // Log signal info for debugging on Windows
+      console.log(`  npm pack exit code: ${packResult.status}`);
+      console.log(`  npm pack signal: ${packResult.signal}`);
+      console.log(`  npm pack error: ${packResult.error}`);
+      throw new Error(`npm pack failed (exit code ${packResult.status}): ${errorMsg}`);
     }
 
-    // Extract tarball filename from output (last line)
-    packageTarball = packResult.stdout.trim().split('\n').pop();
+    // Verify npm pack produced output (tarball filename)
+    if (!packResult.stdout || !packResult.stdout.trim()) {
+      // On Windows, npm pack may succeed but produce no output to stdout
+      // In that case, look for the tarball file directly
+      const packageJson = JSON.parse(
+        fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8')
+      );
+      const expectedTarball = `${packageJson.name.replace('@', '').replace('/', '-')}-${packageJson.version}.tgz`;
+      if (fs.existsSync(path.join(process.cwd(), expectedTarball))) {
+        console.log(`  Found tarball via fallback: ${expectedTarball}`);
+        packageTarball = expectedTarball;
+      } else {
+        throw new Error(
+          'npm pack succeeded but produced no output and tarball not found'
+        );
+      }
+    } else {
+      // Extract tarball filename from output (last line)
+      packageTarball = packResult.stdout.trim().split('\n').pop();
+    }
+
     const tarballPath = path.join(process.cwd(), packageTarball);
 
     console.log(`  Tarball created: ${packageTarball}`);

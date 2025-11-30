@@ -320,17 +320,23 @@ describe('sbb-svg2png CLI Integration Tests', () => {
 </svg>`;
       await fs.writeFile(svgPath, svgContent, 'utf8');
 
-      await execFileAsync('node', ['sbb-svg2png.cjs', svgPath, pngPath, '--background', 'blue'], {
-        cwd: projectRoot,
-        timeout: 60000
-      });
+      // Use --margin to add padding around content, exposing background at corners
+      // CLI crops to visible bbox by default, so without margin the corner would be yellow (the rect)
+      await execFileAsync(
+        'node',
+        ['sbb-svg2png.cjs', svgPath, pngPath, '--background', 'blue', '--margin', '10'],
+        {
+          cwd: projectRoot,
+          timeout: 60000
+        }
+      );
 
       const png = await parsePng(pngPath);
       const color = getCornerColor(png);
-      // Named color 'blue' renders as black background RGB(0, 0, 0)
+      // Named color 'blue' should render as RGB(0, 0, 255)
       expect(color.r).toBe(0);
       expect(color.g).toBe(0);
-      expect(color.b).toBe(0);
+      expect(color.b).toBe(255);
     });
   });
 

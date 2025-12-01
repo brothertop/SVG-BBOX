@@ -97,6 +97,12 @@ OPTIONS:
                             SVGs with aspect ratios differing beyond this threshold
                             will be rejected with 100% difference
 
+  --scale <number>          Resolution multiplier for rendering (default: 4)
+                            SVGs are extremely detailed - fine differences hidden at low
+                            resolution become visible at higher resolution. A flower and
+                            a planet may look identical at 1024px but are completely
+                            different at 4096px. Use higher values for more precision.
+
   --json                    Output results as JSON
   --verbose                 Show detailed progress information
   --help                    Show this help
@@ -204,6 +210,12 @@ function parseArgs(argv) {
         type: 'number',
         default: 0.001,
         description: 'Maximum allowed aspect ratio difference (0-1)'
+      },
+      {
+        name: 'scale',
+        type: 'number',
+        default: 4,
+        description: 'Resolution multiplier for rendering (default: 4x for detailed comparison)'
       }
     ],
     modes: {
@@ -239,7 +251,11 @@ function parseArgs(argv) {
     verbose: result.flags.verbose || false,
     batch: result.flags.batchFile || null,
     addMissingViewbox: result.flags['add-missing-viewbox'] || false,
-    aspectRatioThreshold: result.flags['aspect-ratio-threshold'] || 0.001
+    aspectRatioThreshold: result.flags['aspect-ratio-threshold'] || 0.001,
+    // CRITICAL: Default scale of 4x for detailed SVG comparison
+    // SVGs are extremely detailed - differences hidden at low resolution become visible at 4x
+    // A flower and a planet may look identical at 1024px but completely different at 4096px
+    scale: result.flags.scale || 4
   };
 
   // Validate threshold range (1-20)
@@ -529,15 +545,21 @@ async function calculateRenderParams(svg1Path, svg2Path, args, browser) {
       break;
   }
 
+  // CRITICAL BUG FIX: Apply scale factor for detailed comparison
+  // SVGs are extremely detailed - differences hidden at low resolution become visible at higher resolution
+  // Example: A flower and a planet may look identical at 1024px but completely different at 4096px
+  // Default scale is 4x to ensure fine details are captured in the diff
+  const scale = args.scale || 4;
+
   // Determine resolution based on mode
   let width1, height1, width2, height2;
 
   switch (args.resolution) {
     case 'nominal':
-      width1 = analysis1.width || 800;
-      height1 = analysis1.height || 600;
-      width2 = analysis2.width || 800;
-      height2 = analysis2.height || 600;
+      width1 = (analysis1.width || 800) * scale;
+      height1 = (analysis1.height || 600) * scale;
+      width2 = (analysis2.width || 800) * scale;
+      height2 = (analysis2.height || 600) * scale;
       break;
 
     case 'viewbox':
@@ -545,29 +567,32 @@ async function calculateRenderParams(svg1Path, svg2Path, args, browser) {
       // When an SVG has both width/height attributes AND viewBox, the attributes
       // define the natural rendering size. Using viewBox dimensions for CSS sizing
       // causes incorrect rendering when the aspect ratios differ.
-      width1 = analysis1.width || analysis1.viewBox?.width || 800;
-      height1 = analysis1.height || analysis1.viewBox?.height || 600;
-      width2 = analysis2.width || analysis2.viewBox?.width || 800;
-      height2 = analysis2.height || analysis2.viewBox?.height || 600;
+      // THEN apply scale factor for detailed comparison
+      width1 = (analysis1.width || analysis1.viewBox?.width || 800) * scale;
+      height1 = (analysis1.height || analysis1.viewBox?.height || 600) * scale;
+      width2 = (analysis2.width || analysis2.viewBox?.width || 800) * scale;
+      height2 = (analysis2.height || analysis2.viewBox?.height || 600) * scale;
       break;
 
     case 'full':
       // Would need to compute full drawing bbox - use viewbox as fallback for now
-      width1 = analysis1.viewBox?.width || analysis1.width || 800;
-      height1 = analysis1.viewBox?.height || analysis1.height || 600;
-      width2 = analysis2.viewBox?.width || analysis2.width || 800;
-      height2 = analysis2.viewBox?.height || analysis2.height || 600;
+      // Apply scale factor for detailed comparison
+      width1 = (analysis1.viewBox?.width || analysis1.width || 800) * scale;
+      height1 = (analysis1.viewBox?.height || analysis1.height || 600) * scale;
+      width2 = (analysis2.viewBox?.width || analysis2.width || 800) * scale;
+      height2 = (analysis2.viewBox?.height || analysis2.height || 600) * scale;
       break;
 
     case 'scale': {
       // Scale both to match the larger one (uniform scaling)
-      width1 = analysis1.viewBox?.width || analysis1.width || 800;
-      height1 = analysis1.viewBox?.height || analysis1.height || 600;
-      width2 = analysis2.viewBox?.width || analysis2.width || 800;
-      height2 = analysis2.viewBox?.height || analysis2.height || 600;
+      // Apply scale factor for detailed comparison
+      const base1w = (analysis1.viewBox?.width || analysis1.width || 800) * scale;
+      const base1h = (analysis1.viewBox?.height || analysis1.height || 600) * scale;
+      const base2w = (analysis2.viewBox?.width || analysis2.width || 800) * scale;
+      const base2h = (analysis2.viewBox?.height || analysis2.height || 600) * scale;
 
-      const maxWidth = Math.max(width1, width2);
-      const maxHeight = Math.max(height1, height2);
+      const maxWidth = Math.max(base1w, base2w);
+      const maxHeight = Math.max(base1h, base2h);
       width1 = width2 = maxWidth;
       height1 = height2 = maxHeight;
       break;
@@ -575,13 +600,14 @@ async function calculateRenderParams(svg1Path, svg2Path, args, browser) {
 
     case 'stretch': {
       // Stretch both to match the larger one (non-uniform)
-      width1 = analysis1.viewBox?.width || analysis1.width || 800;
-      height1 = analysis1.viewBox?.height || analysis1.height || 600;
-      width2 = analysis2.viewBox?.width || analysis2.width || 800;
-      height2 = analysis2.viewBox?.height || analysis2.height || 600;
+      // Apply scale factor for detailed comparison
+      const base1w = (analysis1.viewBox?.width || analysis1.width || 800) * scale;
+      const base1h = (analysis1.viewBox?.height || analysis1.height || 600) * scale;
+      const base2w = (analysis2.viewBox?.width || analysis2.width || 800) * scale;
+      const base2h = (analysis2.viewBox?.height || analysis2.height || 600) * scale;
 
-      const stretchWidth = Math.max(width1, width2);
-      const stretchHeight = Math.max(height1, height2);
+      const stretchWidth = Math.max(base1w, base2w);
+      const stretchHeight = Math.max(base1h, base2h);
       width1 = width2 = stretchWidth;
       height1 = height2 = stretchHeight;
       break;
@@ -589,21 +615,22 @@ async function calculateRenderParams(svg1Path, svg2Path, args, browser) {
 
     case 'clip': {
       // Clip both to match the smaller one
-      width1 = analysis1.viewBox?.width || analysis1.width || 800;
-      height1 = analysis1.viewBox?.height || analysis1.height || 600;
-      width2 = analysis2.viewBox?.width || analysis2.width || 800;
-      height2 = analysis2.viewBox?.height || analysis2.height || 600;
+      // Apply scale factor for detailed comparison
+      const base1w = (analysis1.viewBox?.width || analysis1.width || 800) * scale;
+      const base1h = (analysis1.viewBox?.height || analysis1.height || 600) * scale;
+      const base2w = (analysis2.viewBox?.width || analysis2.width || 800) * scale;
+      const base2h = (analysis2.viewBox?.height || analysis2.height || 600) * scale;
 
-      const minWidth = Math.min(width1, width2);
-      const minHeight = Math.min(height1, height2);
+      const minWidth = Math.min(base1w, base2w);
+      const minHeight = Math.min(base1h, base2h);
       width1 = width2 = minWidth;
       height1 = height2 = minHeight;
       break;
     }
 
     default:
-      width1 = width2 = 800;
-      height1 = height2 = 600;
+      width1 = width2 = 800 * scale;
+      height1 = height2 = 600 * scale;
   }
 
   // Calculate canvas size and offsets

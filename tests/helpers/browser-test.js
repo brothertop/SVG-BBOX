@@ -56,7 +56,7 @@ export async function closeBrowser(timeout = 10000) {
           setTimeout(() => reject(new Error('Browser close timeout')), timeout)
         )
       ]);
-    } catch (error) {
+    } catch {
       // If close times out or fails, try to force kill the process
       try {
         const browserProcess = browser.process();

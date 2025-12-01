@@ -30,9 +30,8 @@ export default defineConfig({
     // This prevents infinite hangs when browser.close() gets stuck
     teardownTimeout: 30000, // 30 seconds max for cleanup
 
-    // Shutdown timeout - maximum time to wait for vitest to shut down
-    // After all tests complete, vitest must terminate within this time
-    shutdownTimeout: 10000, // 10 seconds max to exit
+    // Note: Shutdown timeout is handled by globalTeardown with a 5-second force exit timer
+    // See tests/helpers/global-teardown.js
 
     // Globals
     globals: true,

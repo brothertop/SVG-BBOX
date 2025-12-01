@@ -559,10 +559,18 @@ ${sanitizedSvg}
         if (expanded.width <= 0 || expanded.height <= 0) {
           throw new Error('Expanded bbox is empty after clamping/margin.');
         }
-        svg.setAttribute(
-          'viewBox',
-          `${expanded.x} ${expanded.y} ${expanded.width} ${expanded.height}`
-        );
+
+        // CRITICAL BUG FIX: Only modify viewBox in "full" or "element" mode
+        // In "visible" mode, the viewBox should remain UNCHANGED (unless it was missing)
+        // Modifying the viewBox in visible mode corrupts the SVG and produces wrong PNG output
+        // This was causing sbb-svg2png to systematically produce incorrect renderings
+        if (mode === 'full' || mode === 'element') {
+          svg.setAttribute(
+            'viewBox',
+            `${expanded.x} ${expanded.y} ${expanded.width} ${expanded.height}`
+          );
+        }
+        // In "visible" mode, we keep the original viewBox - just render what's inside it
 
         // Compute suggested pixel size
         const scale =

@@ -41,13 +41,45 @@ export async function getBrowser() {
 
 /**
  * Close the shared browser instance
+ * @param {number} [timeout=10000] - Maximum time to wait for browser to close
  */
-export async function closeBrowser() {
+export async function closeBrowser(timeout = 10000) {
   if (sharedBrowser) {
-    await sharedBrowser.close();
-    sharedBrowser = null;
+    const browser = sharedBrowser;
+    sharedBrowser = null; // Clear reference immediately to prevent double-close
+
+    try {
+      // Race between browser.close() and timeout
+      await Promise.race([
+        browser.close(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Browser close timeout')), timeout)
+        )
+      ]);
+    } catch (error) {
+      // If close times out or fails, try to force kill the process
+      try {
+        const browserProcess = browser.process();
+        if (browserProcess && !browserProcess.killed) {
+          browserProcess.kill('SIGKILL');
+        }
+      } catch {
+        // Process may already be dead - that's fine
+      }
+    }
   }
 }
+
+// Register signal handlers to ensure browser cleanup on process termination
+// This prevents orphaned Chrome processes when vitest is interrupted
+const cleanupOnExit = async () => {
+  await closeBrowser(5000); // Quick cleanup on exit
+};
+
+// Handle graceful shutdown signals
+process.on('SIGTERM', cleanupOnExit);
+process.on('SIGINT', cleanupOnExit);
+process.on('beforeExit', cleanupOnExit);
 
 /**
  * Load SVG content from a fixture file

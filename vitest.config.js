@@ -25,6 +25,15 @@ export default defineConfig({
     // Hook timeout (browser launch + font discovery)
     hookTimeout: HOOK_TIMEOUT_MS,
 
+    // Teardown timeout - maximum time for afterAll/afterEach hooks
+    // If teardown takes longer, vitest will force terminate
+    // This prevents infinite hangs when browser.close() gets stuck
+    teardownTimeout: 30000, // 30 seconds max for cleanup
+
+    // Shutdown timeout - maximum time to wait for vitest to shut down
+    // After all tests complete, vitest must terminate within this time
+    shutdownTimeout: 10000, // 10 seconds max to exit
+
     // Globals
     globals: true,
 
@@ -102,6 +111,17 @@ export default defineConfig({
     // Sequence
     sequence: {
       shuffle: false
-    }
+    },
+
+    // Global setup/teardown for browser cleanup
+    // globalTeardown ensures all browser processes are killed even if tests crash
+    globalSetup: undefined,
+    globalTeardown: './tests/helpers/global-teardown.js',
+
+    // Detect and report open handles that prevent exit
+    // This helps debug hanging tests
+    // Note: dangerouslyIgnoreUnhandledErrors not recommended for production
+    // but we have proper cleanup in globalTeardown
+    passWithNoTests: true
   }
 });

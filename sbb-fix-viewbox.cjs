@@ -26,7 +26,7 @@
  *   SVG file with properly set viewBox, width, and height attributes.
  *
  *   Dependencies:
- *   - sbb-comparer.cjs calls this tool via subprocess to regenerate missing viewBox
+ *   - sbb-compare.cjs calls this tool via subprocess to regenerate missing viewBox
  *     before performing aspect ratio comparisons. It expects the output file to be
  *     a valid SVG with viewBox/width/height attributes.
  *

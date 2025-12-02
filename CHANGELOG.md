@@ -44,7 +44,7 @@ and this project adheres to
 ### Code Refactoring
 
 - **sbb-extract**: Use createModeArgParser with modeFlags (Phase 4 P6)
-- **sbb-comparer**: Use createModeArgParser with modeFlags (Phase 4 P7)
+- **sbb-compare**: Use createModeArgParser with modeFlags (Phase 4 P7)
 - **ci**: Major CI pipeline rewrite for reliability (21->8 jobs)
 
 ### Testing
@@ -64,10 +64,10 @@ and this project adheres to
 - **release**: CRITICAL - redirect log output to stderr
 - Add get_bboxes_for_text2path.cjs example script
 - **tests**: Handle null stderr on Windows in package-installation test
-- **sbb-comparer**: CRITICAL - Handle percentage width/height values correctly
+- **sbb-compare**: CRITICAL - Handle percentage width/height values correctly
 - **sbb-fix-viewbox**: Add --overwrite flag, default to \_fixed suffix for
   safety (BREAKING)
-- **sbb-comparer**: Add aspect ratio validation to prevent meaningless
+- **sbb-compare**: Add aspect ratio validation to prevent meaningless
   comparisons (BREAKING)
 - **examples**: Resolve 15+ critical issues in local-vs-global-coordinates.cjs
 - **release**: Add comprehensive safeguards against ANSI code contamination in
@@ -99,7 +99,7 @@ and this project adheres to
 
 ### Code Refactoring
 
-- **sbb-comparer**: Remove redundant execFile import from regenerateViewBox
+- **sbb-compare**: Remove redundant execFile import from regenerateViewBox
 
 ### Testing
 
@@ -158,7 +158,7 @@ and this project adheres to
 
 - **readme**: Fix TOC to match actual section structure
 - **policy**: Add publishing policy to never push/publish without user approval
-- **readme**: Add preserveAspectRatio diagram to sbb-comparer section
+- **readme**: Add preserveAspectRatio diagram to sbb-compare section
 - **claude**: Add critical instruction to use js-code-fixer for JS/TS files
 
 ### New Features
@@ -275,7 +275,7 @@ and this project adheres to
 - **ci**: Update pnpm version to 9 in GitHub Actions
 - **e2e**: Fix Playwright ESM import error by using CommonJS for E2E tests
 - **e2e**: Fix temp directory race conditions in E2E tests
-- **test**: Increase sbb-comparer timeout for CI environments
+- **test**: Increase sbb-compare timeout for CI environments
 - **core**: Fix <use> element and SVG root rendering bugs
 - **coverage**: Configure coverage for server-side code only
 
@@ -297,7 +297,7 @@ and this project adheres to
 
 ### Bug Fixes
 
-- Resolve vertical shift bug in sbb-comparer viewBox handling
+- Resolve vertical shift bug in sbb-compare viewBox handling
 - Ensure all 3 Inkscape tools match exact Python defaults
 
 ### Documentation
@@ -307,8 +307,8 @@ and this project adheres to
 
 ### New Features
 
-- Add sbb-comparer tool for visual SVG comparison
-- Add HTML comparison report to sbb-comparer
+- Add sbb-compare tool for visual SVG comparison
+- Add HTML comparison report to sbb-compare
 - Add browser API with showTrueBBoxBorder() function
 - Add setViewBoxOnObjects() for viewBox reframing
 - Apply comprehensive security fixes to all CLI tools
@@ -321,7 +321,7 @@ and this project adheres to
 
 ### Testing
 
-- Add comprehensive tests for sbb-comparer
+- Add comprehensive tests for sbb-compare
 - Add comprehensive E2E tests for showTrueBBoxBorder()
 - Add comprehensive security test suite
 - Add integration tests for all 3 Inkscape tools

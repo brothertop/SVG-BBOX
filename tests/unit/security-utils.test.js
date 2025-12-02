@@ -17,7 +17,6 @@ describe('Security Utils', () => {
   // ============================================================================
 
   describe('validateFilePath', () => {
-    // eslint-disable-next-line vitest/expect-expect
     it('should accept valid file path in current directory', () => {
       /**Test that valid paths in current directory are accepted*/
       const validPath = 'test.svg';
@@ -26,13 +25,11 @@ describe('Security Utils', () => {
       assert.ok(result.endsWith('test.svg'));
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should reject null bytes in file path', () => {
       /**Test that paths with null bytes are rejected*/
       assert.throws(() => securityUtils.validateFilePath('file\0.svg'), /null byte detected/);
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should reject shell metacharacters (command injection)', () => {
       /**Test that paths with shell metacharacters are rejected*/
       const dangerousPaths = [
@@ -55,7 +52,6 @@ describe('Security Utils', () => {
       }
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should reject path traversal attempts', () => {
       /**Test that path traversal attempts are rejected*/
       const traversalPaths = ['../../../etc/passwd', '../../etc/shadow', './../../../etc/hosts'];
@@ -69,7 +65,6 @@ describe('Security Utils', () => {
       }
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should enforce required file extensions', () => {
       /**Test that file extension validation works*/
       assert.throws(
@@ -87,7 +82,6 @@ describe('Security Utils', () => {
       assert.ok(result.endsWith('.svg'));
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should enforce mustExist option', () => {
       /**Test that mustExist validation works*/
       const nonExistent = path.join(process.cwd(), 'nonexistent-file-xyz-123.svg');
@@ -101,7 +95,6 @@ describe('Security Utils', () => {
       );
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should allow absolute paths within allowed directories', () => {
       /**Test that absolute paths within allowed dirs are accepted*/
       const allowed = process.cwd();
@@ -116,7 +109,6 @@ describe('Security Utils', () => {
   });
 
   describe('validateOutputPath', () => {
-    // eslint-disable-next-line vitest/expect-expect
     it('should accept output paths for non-existent files', () => {
       /**Test that output paths for new files are accepted*/
       const outputPath = path.join(process.cwd(), 'new-output.svg');
@@ -124,7 +116,6 @@ describe('Security Utils', () => {
       assert.strictEqual(result, outputPath);
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should still reject dangerous paths', () => {
       /**Test that output validation still blocks dangerous paths*/
       assert.throws(
@@ -151,7 +142,6 @@ describe('Security Utils', () => {
       testFiles = [];
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should read valid SVG file', () => {
       /**Test that valid SVG files are read successfully*/
       const validSVG = '<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>';
@@ -164,7 +154,6 @@ describe('Security Utils', () => {
       assert.strictEqual(content, validSVG);
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should reject non-SVG files', () => {
       /**Test that non-SVG files are rejected*/
       const testPath = path.join(process.cwd(), 'test-security-invalid.svg');
@@ -175,7 +164,6 @@ describe('Security Utils', () => {
       assert.throws(() => securityUtils.readSVGFileSafe(testPath), /not appear to be valid SVG/);
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should reject files exceeding size limit', () => {
       /**Test that oversized SVG files are rejected*/
       const testPath = path.join(process.cwd(), 'test-security-large.svg');
@@ -189,7 +177,6 @@ describe('Security Utils', () => {
       assert.throws(() => securityUtils.readSVGFileSafe(testPath), /SVG file too large/);
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should reject non-existent files', () => {
       /**Test that missing files are rejected*/
       const nonExistent = path.join(process.cwd(), 'nonexistent-test-security.svg');
@@ -199,7 +186,6 @@ describe('Security Utils', () => {
   });
 
   describe('sanitizeSVGContent', () => {
-    // eslint-disable-next-line vitest/expect-expect
     it('should remove script tags', () => {
       /**Test that script tags are removed from SVG*/
       const malicious = '<svg><script>alert("XSS")</script><rect/></svg>';
@@ -210,7 +196,6 @@ describe('Security Utils', () => {
       assert.ok(sanitized.includes('<rect'));
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should remove event handler attributes', () => {
       /**Test that event handlers are removed from SVG*/
       const malicious = '<svg><rect onclick="alert(1)" onload="doEvil()"/></svg>';
@@ -222,7 +207,6 @@ describe('Security Utils', () => {
       assert.ok(sanitized.includes('<rect'));
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should remove javascript: URIs', () => {
       /**Test that javascript: URIs are removed from SVG*/
       const malicious = '<svg><a href="javascript:alert(1)">Link</a></svg>';
@@ -232,7 +216,6 @@ describe('Security Utils', () => {
       assert.ok(sanitized.includes('href=""'));
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should remove foreignObject elements', () => {
       /**Test that foreignObject elements are removed from SVG*/
       const malicious =
@@ -244,7 +227,6 @@ describe('Security Utils', () => {
       assert.ok(sanitized.includes('<rect'));
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should preserve clean SVG content', () => {
       /**Test that clean SVG content is preserved*/
       const clean =
@@ -272,7 +254,6 @@ describe('Security Utils', () => {
       testFiles = [];
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should read valid JSON file', () => {
       /**Test that valid JSON files are read successfully*/
       const validJSON = { key: 'value', num: 42 };
@@ -285,7 +266,6 @@ describe('Security Utils', () => {
       assert.deepStrictEqual(result, validJSON);
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should reject invalid JSON', () => {
       /**Test that invalid JSON is rejected*/
       const testPath = path.join(process.cwd(), 'test-security-invalid.json');
@@ -296,7 +276,6 @@ describe('Security Utils', () => {
       assert.throws(() => securityUtils.readJSONFileSafe(testPath), /Invalid JSON file/);
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should reject prototype pollution attempts', () => {
       /**Test that prototype pollution is prevented*/
       const testPath = path.join(process.cwd(), 'test-security-pollution.json');
@@ -309,7 +288,6 @@ describe('Security Utils', () => {
       assert.throws(() => securityUtils.readJSONFileSafe(testPath), /prototype pollution detected/);
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should reject files exceeding size limit', () => {
       /**Test that oversized JSON files are rejected*/
       const testPath = path.join(process.cwd(), 'test-security-large.json');
@@ -324,7 +302,6 @@ describe('Security Utils', () => {
       assert.throws(() => securityUtils.readJSONFileSafe(testPath), /JSON file too large/);
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should use custom validator if provided', () => {
       /**Test that custom validators are applied*/
       const testPath1 = path.join(process.cwd(), 'test-security-validator1.json');
@@ -355,7 +332,6 @@ describe('Security Utils', () => {
   });
 
   describe('validateRenameMapping', () => {
-    // eslint-disable-next-line vitest/expect-expect
     it('should accept array format', () => {
       /**Test that array format rename mappings are accepted*/
       const mappings = [
@@ -367,7 +343,6 @@ describe('Security Utils', () => {
       assert.deepStrictEqual(result, mappings);
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should accept object with mappings property', () => {
       /**Test that {mappings: [...]} format is accepted*/
       const data = {
@@ -378,7 +353,6 @@ describe('Security Utils', () => {
       assert.deepStrictEqual(result, data.mappings);
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should accept key-value object format', () => {
       /**Test that {old: new} format is accepted*/
       const data = {
@@ -392,7 +366,6 @@ describe('Security Utils', () => {
       assert.deepStrictEqual(result[1], { from: 'oldId2', to: 'newId2' });
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should reject invalid ID formats', () => {
       /**Test that invalid ID formats are rejected*/
       const invalidMappings = [
@@ -411,7 +384,6 @@ describe('Security Utils', () => {
       }
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should accept valid ID characters', () => {
       /**Test that valid ID formats with allowed characters are accepted*/
       const validMappings = [
@@ -424,7 +396,6 @@ describe('Security Utils', () => {
       assert.strictEqual(result.length, 3);
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should throw on any invalid entries (fail-fast behavior)', () => {
       /**Test that invalid mappings trigger immediate error (fail-fast for security)*/
       const mixedMappings = [
@@ -455,7 +426,6 @@ describe('Security Utils', () => {
       assert.strictEqual(result[1].from, 'valid2');
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should throw if no valid mappings found', () => {
       /**Test that error is thrown when all mappings are invalid*/
       const invalidMappings = [{ from: '', to: '' }, { from: 'only-from' }];
@@ -474,7 +444,6 @@ describe('Security Utils', () => {
   // ============================================================================
 
   describe('createSecureTempDir', () => {
-    // eslint-disable-next-line vitest/expect-expect
     it('should create temporary directory with random name', () => {
       /**Test that secure temp directories are created*/
       const tempDir1 = securityUtils.createSecureTempDir('test-prefix');
@@ -505,7 +474,6 @@ describe('Security Utils', () => {
       }
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should use default prefix if none provided', () => {
       /**Test that default prefix is used when not specified*/
       const tempDir = securityUtils.createSecureTempDir();
@@ -522,7 +490,6 @@ describe('Security Utils', () => {
   });
 
   describe('createSecureTempFile', () => {
-    // eslint-disable-next-line vitest/expect-expect
     it('should create unique temporary file paths', () => {
       /**Test that unique temp file paths are generated*/
       const tempFile1 = securityUtils.createSecureTempFile('.svg', 'test');
@@ -557,7 +524,6 @@ describe('Security Utils', () => {
       }
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should create directory if it does not exist', () => {
       /**Test that directories are created when missing*/
       const newDir = path.join(tempDir, 'new', 'nested', 'directory');
@@ -567,7 +533,6 @@ describe('Security Utils', () => {
       assert.ok(fs.statSync(newDir).isDirectory());
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should not throw if directory already exists', () => {
       /**Test that existing directories don't cause errors*/
       assert.doesNotThrow(() => {
@@ -590,7 +555,6 @@ describe('Security Utils', () => {
       }
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should write file and create parent directories', () => {
       /**Test that files are written with auto-created parent dirs*/
       const filePath = path.join(tempDir, 'new', 'nested', 'file.txt');
@@ -602,7 +566,6 @@ describe('Security Utils', () => {
       assert.strictEqual(fs.readFileSync(filePath, 'utf8'), content);
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should overwrite existing files', () => {
       /**Test that existing files are overwritten*/
       const filePath = path.join(tempDir, 'file.txt');
@@ -619,7 +582,6 @@ describe('Security Utils', () => {
   // ============================================================================
 
   describe('escapeWindowsPath', () => {
-    // eslint-disable-next-line vitest/expect-expect
     it('should wrap path in quotes', () => {
       /**Test that Windows paths are wrapped in quotes*/
       const result = securityUtils.escapeWindowsPath('C:\\Users\\test\\file.svg');
@@ -627,7 +589,6 @@ describe('Security Utils', () => {
       assert.ok(result.endsWith('"'));
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should escape embedded quotes', () => {
       /**Test that embedded quotes are escaped for Windows*/
       const result = securityUtils.escapeWindowsPath('path with "quotes".svg');
@@ -636,14 +597,12 @@ describe('Security Utils', () => {
   });
 
   describe('escapeUnixPath', () => {
-    // eslint-disable-next-line vitest/expect-expect
     it('should escape spaces', () => {
       /**Test that spaces are escaped for Unix shells*/
       const result = securityUtils.escapeUnixPath('path with spaces.svg');
       assert.strictEqual(result, 'path\\ with\\ spaces.svg');
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should escape special shell characters', () => {
       /**Test that special characters are escaped for Unix shells*/
       const dangerous = 'file $var `cmd` "quote" \'quote\' !bang \\slash.svg';
@@ -663,7 +622,6 @@ describe('Security Utils', () => {
   // ============================================================================
 
   describe('Error Classes', () => {
-    // eslint-disable-next-line vitest/expect-expect
     it('should create SVGBBoxError with code and details', () => {
       /**Test that SVGBBoxError includes code and details*/
       const err = new securityUtils.SVGBBoxError('test message', 'TEST_CODE', { detail: 'info' });
@@ -674,7 +632,6 @@ describe('Security Utils', () => {
       assert.deepStrictEqual(err.details, { detail: 'info' });
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should create ValidationError', () => {
       /**Test that ValidationError is properly constructed*/
       const err = new securityUtils.ValidationError('validation failed');
@@ -683,7 +640,6 @@ describe('Security Utils', () => {
       assert.strictEqual(err.code, 'VALIDATION_ERROR');
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should create FileSystemError', () => {
       /**Test that FileSystemError is properly constructed*/
       const err = new securityUtils.FileSystemError('fs operation failed');
@@ -692,7 +648,6 @@ describe('Security Utils', () => {
       assert.strictEqual(err.code, 'FILESYSTEM_ERROR');
     });
 
-    // eslint-disable-next-line vitest/expect-expect
     it('should create SecurityError', () => {
       /**Test that SecurityError is properly constructed*/
       const err = new securityUtils.SecurityError('security violation');
@@ -707,7 +662,6 @@ describe('Security Utils', () => {
   // ============================================================================
 
   describe('Constants', () => {
-    // eslint-disable-next-line vitest/expect-expect
     it('should export correct constants', () => {
       /**Test that security constants are properly exported*/
       assert.strictEqual(securityUtils.MAX_SVG_SIZE, 10 * 1024 * 1024);

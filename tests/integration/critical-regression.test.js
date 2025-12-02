@@ -1,12 +1,12 @@
 /**
- * @file Critical Regression Tests for sbb-svg2png and sbb-comparer
+ * @file Critical Regression Tests for sbb-svg2png and sbb-compare
  * @description These tests guard against two critical bugs that caused 3 days of debugging:
  *
  * BUG 1 (Fixed in commit 59d0a0c): sbb-svg2png.cjs was modifying the viewBox
  * even in "visible" mode (default), corrupting PNG output by showing expanded
  * content instead of only what's inside the original viewBox.
  *
- * BUG 2 (Fixed in commit 59d0a0c): sbb-comparer.cjs was generating diff images
+ * BUG 2 (Fixed in commit 59d0a0c): sbb-compare.cjs was generating diff images
  * at 1/4 resolution (using viewBox dimensions directly as pixels instead of
  * applying the 4x default scale factor).
  *
@@ -266,11 +266,11 @@ describe('CRITICAL REGRESSION: ViewBox Preservation in sbb-svg2png', () => {
   });
 });
 
-describe('CRITICAL REGRESSION: Resolution Scaling in sbb-comparer', () => {
+describe('CRITICAL REGRESSION: Resolution Scaling in sbb-compare', () => {
   /**
    * CRITICAL REGRESSION TEST FOR BUG 2
    *
-   * This test ensures sbb-comparer applies the 4x default scale factor correctly.
+   * This test ensures sbb-compare applies the 4x default scale factor correctly.
    *
    * The bug was: In all resolution modes, viewBox dimensions were used directly
    * as pixel dimensions WITHOUT applying the scale factor. A viewBox of 100x100
@@ -332,7 +332,7 @@ describe('CRITICAL REGRESSION: Resolution Scaling in sbb-comparer', () => {
     // Run comparer with default settings (4x scale)
     await execFileAsync(
       'node',
-      ['sbb-comparer.cjs', svg1Path, svg2Path, '--json', '--out-diff', diffPath],
+      ['sbb-compare.cjs', svg1Path, svg2Path, '--json', '--out-diff', diffPath],
       {
         cwd: projectRoot,
         timeout: 60000
@@ -370,7 +370,7 @@ describe('CRITICAL REGRESSION: Resolution Scaling in sbb-comparer', () => {
     // Run with explicit 2x scale
     await execFileAsync(
       'node',
-      ['sbb-comparer.cjs', svg1Path, svg2Path, '--json', '--scale', '2', '--out-diff', diffPath],
+      ['sbb-compare.cjs', svg1Path, svg2Path, '--json', '--scale', '2', '--out-diff', diffPath],
       {
         cwd: projectRoot,
         timeout: 60000
@@ -408,7 +408,7 @@ describe('CRITICAL REGRESSION: Resolution Scaling in sbb-comparer', () => {
     // Run with 8x scale for high-resolution comparison
     await execFileAsync(
       'node',
-      ['sbb-comparer.cjs', svg1Path, svg2Path, '--json', '--scale', '8', '--out-diff', diffPath],
+      ['sbb-compare.cjs', svg1Path, svg2Path, '--json', '--scale', '8', '--out-diff', diffPath],
       {
         cwd: projectRoot,
         timeout: 60000
@@ -446,7 +446,7 @@ describe('CRITICAL REGRESSION: Resolution Scaling in sbb-comparer', () => {
     // Default 4x scale
     await execFileAsync(
       'node',
-      ['sbb-comparer.cjs', svg1Path, svg2Path, '--json', '--out-diff', diffPath],
+      ['sbb-compare.cjs', svg1Path, svg2Path, '--json', '--out-diff', diffPath],
       {
         cwd: projectRoot,
         timeout: 60000
@@ -484,7 +484,7 @@ describe('CRITICAL REGRESSION: Resolution Scaling in sbb-comparer', () => {
     await execFileAsync(
       'node',
       [
-        'sbb-comparer.cjs',
+        'sbb-compare.cjs',
         svg1Path,
         svg2Path,
         '--json',

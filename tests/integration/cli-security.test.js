@@ -17,7 +17,7 @@ const execFilePromise = promisify(execFile);
 // Paths to CLI tools
 const CLI_TOOLS = {
   extractor: path.join(__dirname, '../../sbb-extract.cjs'),
-  comparer: path.join(__dirname, '../../sbb-comparer.cjs'),
+  comparer: path.join(__dirname, '../../sbb-compare.cjs'),
   textToPath: path.join(__dirname, '../../sbb-inkscape-text2path.cjs')
 };
 
@@ -75,8 +75,8 @@ describe('CLI Security Integration Tests', () => {
       }
     });
 
-    it('sbb-comparer should reject paths with shell metacharacters', async () => {
-      /**Test that sbb-comparer rejects command injection attempts*/
+    it('sbb-compare should reject paths with shell metacharacters', async () => {
+      /**Test that sbb-compare rejects command injection attempts*/
       const validPath = path.join(testDir, 'valid.svg');
       // Use pipe instead of backticks to avoid shell expansion issues
       const maliciousPath = path.join(testDir, 'file|cat.svg');
@@ -142,8 +142,8 @@ describe('CLI Security Integration Tests', () => {
       }
     });
 
-    it('sbb-comparer should reject path traversal attempts', async () => {
-      /**Test that sbb-comparer blocks path traversal*/
+    it('sbb-compare should reject path traversal attempts', async () => {
+      /**Test that sbb-compare blocks path traversal*/
       const validPath = path.join(testDir, 'valid.svg');
       const traversalPath = '../../etc/hosts';
       testFiles.push(validPath);
@@ -309,8 +309,8 @@ describe('CLI Security Integration Tests', () => {
       }
     });
 
-    it('sbb-comparer should reject non-SVG files', async () => {
-      /**Test that sbb-comparer rejects non-SVG extensions*/
+    it('sbb-compare should reject non-SVG files', async () => {
+      /**Test that sbb-compare rejects non-SVG extensions*/
       const validPath = path.join(testDir, 'valid.svg');
       const txtPath = path.join(testDir, 'notsvg.txt');
       testFiles.push(validPath, txtPath);
@@ -423,8 +423,8 @@ describe('CLI Security Integration Tests', () => {
       assert.ok(!jsonStr.includes('C:\\Windows'), 'Should not include Windows system paths');
     });
 
-    it('sbb-comparer JSON output should be safely parseable', async () => {
-      /**Test that sbb-comparer JSON output is valid and safe*/
+    it('sbb-compare JSON output should be safely parseable', async () => {
+      /**Test that sbb-compare JSON output is valid and safe*/
       const svg1Path = path.join(testDir, 'svg1.svg');
       const svg2Path = path.join(testDir, 'svg2.svg');
       const diffPath = path.join(testDir, 'diff.png');
@@ -671,8 +671,8 @@ describe('CLI Security Integration Tests', () => {
       assert.strictEqual(result.objects[0].id, 'rect');
     });
 
-    it('sbb-comparer should successfully compare valid SVGs', async () => {
-      /**Test that sbb-comparer works correctly with valid inputs*/
+    it('sbb-compare should successfully compare valid SVGs', async () => {
+      /**Test that sbb-compare works correctly with valid inputs*/
       const svg1Path = path.join(testDir, 'cmp1.svg');
       const svg2Path = path.join(testDir, 'cmp2.svg');
       const diffPath = path.join(testDir, 'cmp_diff.png');

@@ -952,7 +952,7 @@ verify_post_publish_installation() {
         "sbb-inkscape-extract"
         "sbb-svg2png"
         "sbb-fix-viewbox"
-        "sbb-comparer"
+        "sbb-compare"
         "sbb-test"
         "sbb-inkscape-text2path"
         "sbb-inkscape-svg2png"

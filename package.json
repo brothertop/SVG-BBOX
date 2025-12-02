@@ -27,7 +27,7 @@
     "sbb-inkscape-extract": "sbb-inkscape-extract.cjs",
     "sbb-svg2png": "sbb-svg2png.cjs",
     "sbb-fix-viewbox": "sbb-fix-viewbox.cjs",
-    "sbb-comparer": "sbb-comparer.cjs",
+    "sbb-compare": "sbb-compare.cjs",
     "sbb-test": "sbb-test.cjs",
     "sbb-inkscape-text2path": "sbb-inkscape-text2path.cjs",
     "sbb-inkscape-svg2png": "sbb-inkscape-svg2png.cjs"

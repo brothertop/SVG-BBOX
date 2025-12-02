@@ -166,7 +166,7 @@ export default [
     },
     rules: {
       ...vitestPlugin.configs.recommended.rules,
-      'vitest/expect-expect': 'warn',
+      'vitest/expect-expect': ['warn', { assertFunctionNames: ['expect', 'assert', 'assert.*'] }],
       'vitest/no-identical-title': 'error',
       'vitest/no-disabled-tests': 'warn',
       'vitest/no-focused-tests': 'error',

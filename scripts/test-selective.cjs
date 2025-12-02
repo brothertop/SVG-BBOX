@@ -191,7 +191,7 @@ for f in files:
 // - sbb-getbbox.cjs → cli-security
 //
 // Tools that DON'T use SvgVisualBBox.js:
-// - sbb-comparer.cjs (uses own comparison logic, no browser)
+// - sbb-compare.cjs (uses own comparison logic, no browser)
 // - sbb-inkscape-*.cjs (uses Inkscape CLI, not SvgVisualBBox.js)
 // - sbb-chrome-*.cjs (uses Chrome DevTools Protocol, not SvgVisualBBox.js)
 const LIBRARY_DEPENDENT_TESTS = [
@@ -199,7 +199,7 @@ const LIBRARY_DEPENDENT_TESTS = [
   'tests/integration/html-preview-structure.test.js', // Tests sbb-extract.cjs
   'tests/integration/html-preview-rendering.test.js', // Tests sbb-extract.cjs
   'tests/integration/cli-security.test.js' // Tests sbb-test/fix-viewbox/render/getbbox
-  // NOTE: sbb-comparer.test.js is NOT included - sbb-comparer doesn't use SvgVisualBBox.js
+  // NOTE: sbb-compare.test.js is NOT included - sbb-compare doesn't use SvgVisualBBox.js
 ];
 
 const TEST_DEPENDENCIES = {
@@ -208,7 +208,7 @@ const TEST_DEPENDENCIES = {
   'SvgVisualBBox.min.js': LIBRARY_DEPENDENT_TESTS,
 
   // TESTING RULE 2: Tool-specific tests
-  'sbb-comparer.cjs': ['tests/integration/sbb-comparer.test.js'],
+  'sbb-compare.cjs': ['tests/integration/sbb-compare.test.js'],
 
   'sbb-extract.cjs': [
     'tests/integration/html-preview-structure.test.js',
@@ -244,7 +244,7 @@ const TEST_DEPENDENCIES = {
 
   'lib/cli-utils.cjs': [
     // CLI utility functions used by integration tests
-    'tests/integration/sbb-comparer.test.js',
+    'tests/integration/sbb-compare.test.js',
     'tests/integration/cli-security.test.js'
   ],
 

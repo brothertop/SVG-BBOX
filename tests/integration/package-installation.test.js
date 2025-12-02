@@ -200,7 +200,7 @@ describe('Package Installation Verification', () => {
     'sbb-extract.cjs',
     'sbb-svg2png.cjs',
     'sbb-fix-viewbox.cjs',
-    'sbb-comparer.cjs',
+    'sbb-compare.cjs',
     'sbb-test.cjs',
     'sbb-chrome-extract.cjs',
     'sbb-chrome-getbbox.cjs',
@@ -291,7 +291,7 @@ describe('Package Installation Verification', () => {
     { tool: 'sbb-extract.cjs', name: 'sbb-extract' },
     { tool: 'sbb-svg2png.cjs', name: 'sbb-svg2png' },
     { tool: 'sbb-fix-viewbox.cjs', name: 'sbb-fix-viewbox' },
-    { tool: 'sbb-comparer.cjs', name: 'sbb-comparer' },
+    { tool: 'sbb-compare.cjs', name: 'sbb-compare' },
     { tool: 'sbb-test.cjs', name: 'sbb-test' },
     { tool: 'sbb-chrome-getbbox.cjs', name: 'sbb-chrome-getbbox' },
     { tool: 'sbb-chrome-extract.cjs', name: 'sbb-chrome-extract' }

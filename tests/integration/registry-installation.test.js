@@ -44,7 +44,7 @@ const CLI_TOOLS = [
   'sbb-inkscape-extract',
   'sbb-svg2png',
   'sbb-fix-viewbox',
-  'sbb-comparer',
+  'sbb-compare',
   'sbb-test',
   'sbb-inkscape-text2path',
   'sbb-inkscape-svg2png'

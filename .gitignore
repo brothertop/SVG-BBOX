@@ -100,3 +100,4 @@ yarn.lock
 *.bak3
 .tmp-compare/
 bbox_comparison_*/
+docs_dev/

@@ -1,5 +1,5 @@
 /**
- * Integration Tests for sbb-comparer.cjs
+ * Integration Tests for sbb-compare.cjs
  *
  * Tests the SVG comparison tool with real SVG files and Puppeteer rendering.
  */
@@ -15,11 +15,11 @@ const execFilePromise = promisify(execFile);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const COMPARER_PATH = path.join(__dirname, '../../sbb-comparer.cjs');
+const COMPARER_PATH = path.join(__dirname, '../../sbb-compare.cjs');
 const FIXTURES_DIR = path.join(__dirname, '../fixtures');
 const TEMP_DIR = path.join(__dirname, '../.tmp-comparer-tests');
 
-// Helper to run sbb-comparer
+// Helper to run sbb-compare
 async function runComparer(svg1, svg2, args = []) {
   const svg1Path = path.join(FIXTURES_DIR, svg1);
   const svg2Path = path.join(FIXTURES_DIR, svg2);
@@ -49,7 +49,7 @@ async function runComparer(svg1, svg2, args = []) {
   return JSON.parse(stdout);
 }
 
-describe('sbb-comparer Integration Tests', () => {
+describe('sbb-compare Integration Tests', () => {
   beforeAll(() => {
     // Create temp directory for test outputs
     if (!fs.existsSync(TEMP_DIR)) {

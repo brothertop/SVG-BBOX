@@ -62,9 +62,9 @@ const TOOLS = [
     category: 'Core'
   },
   {
-    name: 'sbb-comparer',
+    name: 'sbb-compare',
     description: 'Visual diff between SVGs (pixel comparison)',
-    example: 'sbb-comparer a.svg b.svg diff.png',
+    example: 'sbb-compare a.svg b.svg diff.png',
     category: 'Core'
   },
   {

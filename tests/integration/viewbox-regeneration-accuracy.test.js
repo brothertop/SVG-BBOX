@@ -10,7 +10,7 @@
  * 1. Takes an SVG file
  * 2. Creates an exact duplicate (should be 0% difference)
  * 3. Forces viewBox regeneration on the duplicate using sbb-fix-viewbox --force
- * 4. Compares original vs regenerated using sbb-comparer
+ * 4. Compares original vs regenerated using sbb-compare
  * 5. Expects 0% difference (same visual content should produce same rendering)
  *
  * CURRENT BEHAVIOR (BUG):
@@ -23,7 +23,7 @@
  * POSSIBLE ROOT CAUSES:
  * 1. SvgVisualBBox.getSvgElementVisibleAndFullBBoxes() returns incorrect bbox
  * 2. sbb-fix-viewbox serialization changes content structure
- * 3. sbb-comparer rendering uses different browser defaults
+ * 3. sbb-compare rendering uses different browser defaults
  * 4. ViewBox calculation doesn't account for all visual elements
  *
  * WHY THIS IS CRITICAL:
@@ -85,7 +85,7 @@ describe('ViewBox Regeneration Accuracy (Critical Bug Discovery)', () => {
       });
 
       testIfEnabled('should show 0% difference between original and duplicate', () => {
-        const result = spawnSync('node', ['sbb-comparer.cjs', originalPath, duplicatePath], {
+        const result = spawnSync('node', ['sbb-compare.cjs', originalPath, duplicatePath], {
           cwd: process.cwd(),
           encoding: 'utf8',
           timeout: 120000
@@ -124,7 +124,7 @@ describe('ViewBox Regeneration Accuracy (Critical Bug Discovery)', () => {
       testIfEnabled(
         'should show acceptable difference between original and regenerated (< 15% tolerance)',
         () => {
-          const result = spawnSync('node', ['sbb-comparer.cjs', originalPath, regeneratedPath], {
+          const result = spawnSync('node', ['sbb-compare.cjs', originalPath, regeneratedPath], {
             cwd: process.cwd(),
             encoding: 'utf8',
             timeout: 120000
@@ -140,7 +140,7 @@ describe('ViewBox Regeneration Accuracy (Critical Bug Discovery)', () => {
 
           console.log(`    → Original vs regenerated: ${diffPercentage}% difference`);
 
-          // AFTER FIX: sbb-comparer now correctly handles percentage width/height
+          // AFTER FIX: sbb-compare now correctly handles percentage width/height
           // Results are much better but not perfect due to:
           // 1. Font rendering differences (cross-platform tolerance: 4px)
           // 2. ViewBox precision differences (~0.3px)

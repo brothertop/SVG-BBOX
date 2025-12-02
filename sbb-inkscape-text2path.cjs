@@ -66,7 +66,7 @@ OPTIONS:
   --batch <file.txt>    Process multiple SVG files listed in text file
                         (one file path per line)
   --overwrite           Overwrite output file if it exists
-  --skip-comparison     Skip automatic similarity check with sbb-comparer
+  --skip-comparison     Skip automatic similarity check with sbb-compare
                         (only applies to single file mode)
   --json                Output results as JSON
   --help                Show this help
@@ -74,7 +74,7 @@ OPTIONS:
 
 EXAMPLES:
 
-  # Basic conversion (creates input-paths.svg, then compares with sbb-comparer)
+  # Basic conversion (creates input-paths.svg, then compares with sbb-compare)
   node sbb-inkscape-text2path.cjs drawing.svg
 
   # Specify output file
@@ -274,15 +274,15 @@ function parseArgs(argv) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Run sbb-comparer to check similarity between original and converted SVG.
+ * Run sbb-compare to check similarity between original and converted SVG.
  * Returns comparison result or null if comparer fails.
  */
 async function runComparison(originalPath, convertedPath, jsonMode) {
-  const comparerPath = path.join(__dirname, 'sbb-comparer.cjs');
+  const comparerPath = path.join(__dirname, 'sbb-compare.cjs');
 
   if (!fs.existsSync(comparerPath)) {
     if (!jsonMode) {
-      printWarning('sbb-comparer.cjs not found - skipping comparison');
+      printWarning('sbb-compare.cjs not found - skipping comparison');
     }
     return null;
   }

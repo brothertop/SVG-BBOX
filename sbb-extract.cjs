@@ -180,7 +180,7 @@ const {
   printSuccess: _printSuccess,
   printError: _printError,
   printInfo,
-  printWarning: _printWarning
+  printWarning
 } = require('./lib/cli-utils.cjs');
 
 // -------- CLI parsing --------
@@ -201,7 +201,12 @@ function parseArgs(argv) {
     },
     globalFlags: [
       { name: 'json', alias: 'j', type: 'boolean', description: 'Output in JSON format' },
-      { name: 'auto-open', type: 'boolean', description: 'Open result in Chrome' }
+      { name: 'auto-open', type: 'boolean', description: 'Open result in Chrome' },
+      {
+        name: 'ignore-resolution',
+        type: 'boolean',
+        description: 'Use full drawing bbox instead of width/height for viewBox'
+      }
     ],
     modes: {
       list: {
@@ -277,7 +282,8 @@ function parseArgs(argv) {
     outHtml: result.flags['out-html'] || null,
     renameJson: result.flags.renameJson || null,
     renameOut: null,
-    autoOpen: result.flags['auto-open'] || false
+    autoOpen: result.flags['auto-open'] || false,
+    ignoreResolution: result.flags['ignore-resolution'] || false
   };
 
   // Mode-specific positional argument handling
@@ -302,7 +308,9 @@ function parseArgs(argv) {
 
 // -------- shared browser/page setup --------
 
-async function withPageForSvg(inputPath, handler) {
+async function withPageForSvg(inputPath, handler, options = {}) {
+  const { ignoreResolution = false } = options;
+
   // SECURITY: Validate and read SVG file safely
   const safePath = validateFilePath(inputPath, {
     requiredExtensions: ['.svg'],
@@ -346,7 +354,8 @@ ${sanitizedSvg}
     await page.addScriptTag({ path: libPath });
 
     // Shared "initial import": normalize viewBox + width/height in memory.
-    await page.evaluate(async () => {
+    // IMPORTANT: Respects existing viewBox. Only synthesizes when truly missing.
+    const normalizationWarning = await page.evaluate(async (useIgnoreResolution) => {
       /* eslint-disable no-undef */
       const SvgVisualBBox = window.SvgVisualBBox;
       if (!SvgVisualBBox) {
@@ -362,24 +371,54 @@ ${sanitizedSvg}
       await SvgVisualBBox.waitForDocumentFonts(document, 8000);
       /* eslint-enable no-undef */
 
+      let warning = null;
       const vbVal = rootSvg.viewBox && rootSvg.viewBox.baseVal;
-      if (!vbVal || !vbVal.width || !vbVal.height) {
-        const both = await SvgVisualBBox.getSvgElementVisibleAndFullBBoxes(rootSvg, {
-          coarseFactor: 3,
-          fineFactor: 24,
-          useLayoutScale: true
-        });
-        const full = both.full;
-        if (full && full.width > 0 && full.height > 0) {
-          rootSvg.setAttribute('viewBox', `${full.x} ${full.y} ${full.width} ${full.height}`);
-          if (!rootSvg.getAttribute('width')) {
-            rootSvg.setAttribute('width', String(full.width));
-          }
-          if (!rootSvg.getAttribute('height')) {
-            rootSvg.setAttribute('height', String(full.height));
+      const hasViewBox = vbVal && vbVal.width && vbVal.height;
+
+      if (!hasViewBox) {
+        // No viewBox - check if we have width/height attributes
+        const widthAttr = rootSvg.getAttribute('width');
+        const heightAttr = rootSvg.getAttribute('height');
+        const hasWidth = widthAttr && parseFloat(widthAttr) > 0;
+        const hasHeight = heightAttr && parseFloat(heightAttr) > 0;
+
+        if (hasWidth && hasHeight && !useIgnoreResolution) {
+          // Use width/height as viewBox (preserves original coordinate system)
+          const w = parseFloat(widthAttr);
+          const h = parseFloat(heightAttr);
+          rootSvg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+          warning = {
+            type: 'resolution_used',
+            message:
+              `No viewBox found. Using width/height (${w}x${h}) as viewBox="0 0 ${w} ${h}". ` +
+              'Use --ignore-resolution to use full drawing bbox instead.'
+          };
+        } else {
+          // No viewBox and no width/height (or --ignore-resolution) - compute full bbox
+          const both = await SvgVisualBBox.getSvgElementVisibleAndFullBBoxes(rootSvg, {
+            coarseFactor: 3,
+            fineFactor: 24,
+            useLayoutScale: true
+          });
+          const full = both.full;
+          if (full && full.width > 0 && full.height > 0) {
+            rootSvg.setAttribute('viewBox', `${full.x} ${full.y} ${full.width} ${full.height}`);
+            if (!hasWidth) {
+              rootSvg.setAttribute('width', String(full.width));
+            }
+            if (!hasHeight) {
+              rootSvg.setAttribute('height', String(full.height));
+            }
+            warning = {
+              type: 'bbox_computed',
+              message:
+                `No viewBox found. Computed full drawing bbox: viewBox="${full.x} ${full.y} ${full.width} ${full.height}". ` +
+                'This may affect coordinate calculations if the SVG was designed with a different viewport.'
+            };
           }
         }
       } else {
+        // Has viewBox - just ensure width/height are set for proper rendering
         const hasW = !!rootSvg.getAttribute('width');
         const hasH = !!rootSvg.getAttribute('height');
         const vb = rootSvg.viewBox.baseVal;
@@ -397,7 +436,13 @@ ${sanitizedSvg}
           rootSvg.setAttribute('height', String(h));
         }
       }
-    });
+      return warning;
+    }, ignoreResolution);
+
+    // Print warning if normalization occurred
+    if (normalizationWarning) {
+      printWarning(`⚠️  ${normalizationWarning.message}`);
+    }
 
     return await handler(page);
   } finally {
@@ -423,465 +468,474 @@ async function listAndAssignIds(
   outFixedPath,
   outHtmlPath,
   jsonMode,
-  autoOpen
+  autoOpen,
+  ignoreResolution = false
 ) {
-  const result = await withPageForSvg(inputPath, async (page) => {
-    const evalResult = await page.evaluate(async (assignIds) => {
-      /* eslint-disable no-undef */
-      const SvgVisualBBox = window.SvgVisualBBox;
-      if (!SvgVisualBBox) {
-        throw new Error('SvgVisualBBox not found.');
-      }
-
-      const rootSvg = document.querySelector('svg');
-      if (!rootSvg) {
-        throw new Error('No <svg> found');
-      }
-
-      const serializer = new XMLSerializer();
-
-      // Sprite sheet detection function (runs in browser context)
-      function detectSpriteSheet(rootSvg) {
-        const children = Array.from(rootSvg.children).filter((el) => {
-          const tag = el.tagName.toLowerCase();
-          return (
-            tag !== 'defs' &&
-            tag !== 'style' &&
-            tag !== 'script' &&
-            tag !== 'title' &&
-            tag !== 'desc' &&
-            tag !== 'metadata'
-          );
-        });
-
-        if (children.length < 3) {
-          return { isSprite: false, sprites: [], grid: null, stats: null };
+  const result = await withPageForSvg(
+    inputPath,
+    async (page) => {
+      const evalResult = await page.evaluate(async (assignIds) => {
+        /* eslint-disable no-undef */
+        const SvgVisualBBox = window.SvgVisualBBox;
+        if (!SvgVisualBBox) {
+          throw new Error('SvgVisualBBox not found.');
         }
 
-        const sprites = [];
-        for (const child of children) {
-          const id = child.id || `auto_${child.tagName}_${sprites.length}`;
-          const bbox = child.getBBox ? child.getBBox() : null;
-
-          if (bbox && bbox.width > 0 && bbox.height > 0) {
-            sprites.push({
-              id,
-              tag: child.tagName.toLowerCase(),
-              x: bbox.x,
-              y: bbox.y,
-              width: bbox.width,
-              height: bbox.height,
-              hasId: !!child.id
-            });
-          }
+        const rootSvg = document.querySelector('svg');
+        if (!rootSvg) {
+          throw new Error('No <svg> found');
         }
 
-        if (sprites.length < 3) {
-          return { isSprite: false, sprites: [], grid: null, stats: null };
-        }
+        const serializer = new XMLSerializer();
 
-        const widths = sprites.map((s) => s.width);
-        const heights = sprites.map((s) => s.height);
-        const areas = sprites.map((s) => s.width * s.height);
-
-        const avgWidth = widths.reduce((a, b) => a + b, 0) / widths.length;
-        const avgHeight = heights.reduce((a, b) => a + b, 0) / heights.length;
-        const avgArea = areas.reduce((a, b) => a + b, 0) / areas.length;
-
-        const widthStdDev = Math.sqrt(
-          widths.reduce((sum, w) => sum + Math.pow(w - avgWidth, 2), 0) / widths.length
-        );
-        const heightStdDev = Math.sqrt(
-          heights.reduce((sum, h) => sum + Math.pow(h - avgHeight, 2), 0) / heights.length
-        );
-        const areaStdDev = Math.sqrt(
-          areas.reduce((sum, a) => sum + Math.pow(a - avgArea, 2), 0) / areas.length
-        );
-
-        const widthCV = widthStdDev / avgWidth;
-        const heightCV = heightStdDev / avgHeight;
-        const areaCV = areaStdDev / avgArea;
-
-        const idPatterns = [
-          /^icon[-_]/i,
-          /^sprite[-_]/i,
-          /^symbol[-_]/i,
-          /^glyph[-_]/i,
-          /[-_]\d+$/,
-          /^\d+$/
-        ];
-
-        const hasCommonPattern =
-          sprites.filter((s) => s.hasId && idPatterns.some((p) => p.test(s.id))).length /
-            sprites.length >
-          0.5;
-
-        const xPositions = [...new Set(sprites.map((s) => Math.round(s.x)))].sort((a, b) => a - b);
-        const yPositions = [...new Set(sprites.map((s) => Math.round(s.y)))].sort((a, b) => a - b);
-
-        const isGridArranged = xPositions.length >= 2 && yPositions.length >= 2;
-
-        const isSpriteSheet =
-          (widthCV < 0.3 && heightCV < 0.3) || areaCV < 0.3 || hasCommonPattern || isGridArranged;
-
-        return {
-          isSprite: isSpriteSheet,
-          sprites: sprites.map((s) => ({ id: s.id, tag: s.tag })),
-          grid: isGridArranged
-            ? {
-                rows: yPositions.length,
-                cols: xPositions.length
-              }
-            : null,
-          stats: {
-            count: sprites.length,
-            avgSize: { width: avgWidth, height: avgHeight },
-            uniformity: {
-              widthCV: widthCV.toFixed(3),
-              heightCV: heightCV.toFixed(3),
-              areaCV: areaCV.toFixed(3)
-            },
-            hasCommonPattern,
-            isGridArranged
-          }
-        };
-      }
-
-      // Detect if this is a sprite sheet
-      const spriteInfo = detectSpriteSheet(rootSvg);
-
-      const selector = [
-        'g',
-        'path',
-        'rect',
-        'circle',
-        'ellipse',
-        'polygon',
-        'polyline',
-        'text',
-        'image',
-        'use',
-        'symbol'
-      ].join(',');
-
-      const els = Array.from(rootSvg.querySelectorAll(selector));
-
-      const seenIds = new Set();
-      function ensureUniqueId(base) {
-        let id = base;
-        let counter = 1;
-        while (seenIds.has(id) || document.getElementById(id)) {
-          id = base + '_' + counter++;
-        }
-        seenIds.add(id);
-        return id;
-      }
-
-      for (const el of els) {
-        if (el.id) {
-          seenIds.add(el.id);
-        }
-      }
-
-      const info = [];
-      let changed = false;
-
-      for (const el of els) {
-        let id = el.id || null;
-
-        if (assignIds && !id) {
-          const base = 'auto_id_' + el.tagName.toLowerCase();
-          const newId = ensureUniqueId(base);
-          el.setAttribute('id', newId);
-          id = newId;
-          changed = true;
-        }
-
-        // Compute group ancestors (IDs of ancestor <g>)
-        const groupIds = [];
-        /** @type {HTMLElement | null} */
-        let parent = el.parentElement;
-        while (parent && parent !== /** @type {unknown} */ (rootSvg)) {
-          if (parent.tagName && parent.tagName.toLowerCase() === 'g' && parent.id) {
-            groupIds.push(parent.id);
-          }
-          parent = parent.parentElement;
-        }
-
-        // Compute visual bbox (may fail / be null)
-        let bbox = null;
-        let bboxError = null;
-        try {
-          const b = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(el, {
-            mode: 'unclipped',
-            coarseFactor: 3,
-            fineFactor: 24,
-            useLayoutScale: true,
-            fontTimeoutMs: 15000 // Longer timeout for font loading
+        // Sprite sheet detection function (runs in browser context)
+        function detectSpriteSheet(rootSvg) {
+          const children = Array.from(rootSvg.children).filter((el) => {
+            const tag = el.tagName.toLowerCase();
+            return (
+              tag !== 'defs' &&
+              tag !== 'style' &&
+              tag !== 'script' &&
+              tag !== 'title' &&
+              tag !== 'desc' &&
+              tag !== 'metadata'
+            );
           });
-          if (b) {
-            bbox = { x: b.x, y: b.y, width: b.width, height: b.height };
-          } else {
-            // Check if it's a text element - likely font issue
-            const tagLower = el.tagName && el.tagName.toLowerCase();
-            if (tagLower === 'text') {
-              bboxError = 'No visible pixels (likely missing fonts)';
+
+          if (children.length < 3) {
+            return { isSprite: false, sprites: [], grid: null, stats: null };
+          }
+
+          const sprites = [];
+          for (const child of children) {
+            const id = child.id || `auto_${child.tagName}_${sprites.length}`;
+            const bbox = child.getBBox ? child.getBBox() : null;
+
+            if (bbox && bbox.width > 0 && bbox.height > 0) {
+              sprites.push({
+                id,
+                tag: child.tagName.toLowerCase(),
+                x: bbox.x,
+                y: bbox.y,
+                width: bbox.width,
+                height: bbox.height,
+                hasId: !!child.id
+              });
+            }
+          }
+
+          if (sprites.length < 3) {
+            return { isSprite: false, sprites: [], grid: null, stats: null };
+          }
+
+          const widths = sprites.map((s) => s.width);
+          const heights = sprites.map((s) => s.height);
+          const areas = sprites.map((s) => s.width * s.height);
+
+          const avgWidth = widths.reduce((a, b) => a + b, 0) / widths.length;
+          const avgHeight = heights.reduce((a, b) => a + b, 0) / heights.length;
+          const avgArea = areas.reduce((a, b) => a + b, 0) / areas.length;
+
+          const widthStdDev = Math.sqrt(
+            widths.reduce((sum, w) => sum + Math.pow(w - avgWidth, 2), 0) / widths.length
+          );
+          const heightStdDev = Math.sqrt(
+            heights.reduce((sum, h) => sum + Math.pow(h - avgHeight, 2), 0) / heights.length
+          );
+          const areaStdDev = Math.sqrt(
+            areas.reduce((sum, a) => sum + Math.pow(a - avgArea, 2), 0) / areas.length
+          );
+
+          const widthCV = widthStdDev / avgWidth;
+          const heightCV = heightStdDev / avgHeight;
+          const areaCV = areaStdDev / avgArea;
+
+          const idPatterns = [
+            /^icon[-_]/i,
+            /^sprite[-_]/i,
+            /^symbol[-_]/i,
+            /^glyph[-_]/i,
+            /[-_]\d+$/,
+            /^\d+$/
+          ];
+
+          const hasCommonPattern =
+            sprites.filter((s) => s.hasId && idPatterns.some((p) => p.test(s.id))).length /
+              sprites.length >
+            0.5;
+
+          const xPositions = [...new Set(sprites.map((s) => Math.round(s.x)))].sort(
+            (a, b) => a - b
+          );
+          const yPositions = [...new Set(sprites.map((s) => Math.round(s.y)))].sort(
+            (a, b) => a - b
+          );
+
+          const isGridArranged = xPositions.length >= 2 && yPositions.length >= 2;
+
+          const isSpriteSheet =
+            (widthCV < 0.3 && heightCV < 0.3) || areaCV < 0.3 || hasCommonPattern || isGridArranged;
+
+          return {
+            isSprite: isSpriteSheet,
+            sprites: sprites.map((s) => ({ id: s.id, tag: s.tag })),
+            grid: isGridArranged
+              ? {
+                  rows: yPositions.length,
+                  cols: xPositions.length
+                }
+              : null,
+            stats: {
+              count: sprites.length,
+              avgSize: { width: avgWidth, height: avgHeight },
+              uniformity: {
+                widthCV: widthCV.toFixed(3),
+                heightCV: heightCV.toFixed(3),
+                areaCV: areaCV.toFixed(3)
+              },
+              hasCommonPattern,
+              isGridArranged
+            }
+          };
+        }
+
+        // Detect if this is a sprite sheet
+        const spriteInfo = detectSpriteSheet(rootSvg);
+
+        const selector = [
+          'g',
+          'path',
+          'rect',
+          'circle',
+          'ellipse',
+          'polygon',
+          'polyline',
+          'text',
+          'image',
+          'use',
+          'symbol'
+        ].join(',');
+
+        const els = Array.from(rootSvg.querySelectorAll(selector));
+
+        const seenIds = new Set();
+        function ensureUniqueId(base) {
+          let id = base;
+          let counter = 1;
+          while (seenIds.has(id) || document.getElementById(id)) {
+            id = base + '_' + counter++;
+          }
+          seenIds.add(id);
+          return id;
+        }
+
+        for (const el of els) {
+          if (el.id) {
+            seenIds.add(el.id);
+          }
+        }
+
+        const info = [];
+        let changed = false;
+
+        for (const el of els) {
+          let id = el.id || null;
+
+          if (assignIds && !id) {
+            const base = 'auto_id_' + el.tagName.toLowerCase();
+            const newId = ensureUniqueId(base);
+            el.setAttribute('id', newId);
+            id = newId;
+            changed = true;
+          }
+
+          // Compute group ancestors (IDs of ancestor <g>)
+          const groupIds = [];
+          /** @type {HTMLElement | null} */
+          let parent = el.parentElement;
+          while (parent && parent !== /** @type {unknown} */ (rootSvg)) {
+            if (parent.tagName && parent.tagName.toLowerCase() === 'g' && parent.id) {
+              groupIds.push(parent.id);
+            }
+            parent = parent.parentElement;
+          }
+
+          // Compute visual bbox (may fail / be null)
+          let bbox = null;
+          let bboxError = null;
+          try {
+            const b = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(el, {
+              mode: 'unclipped',
+              coarseFactor: 3,
+              fineFactor: 24,
+              useLayoutScale: true,
+              fontTimeoutMs: 15000 // Longer timeout for font loading
+            });
+            if (b) {
+              bbox = { x: b.x, y: b.y, width: b.width, height: b.height };
             } else {
-              bboxError = 'No visible pixels detected';
+              // Check if it's a text element - likely font issue
+              const tagLower = el.tagName && el.tagName.toLowerCase();
+              if (tagLower === 'text') {
+                bboxError = 'No visible pixels (likely missing fonts)';
+              } else {
+                bboxError = 'No visible pixels detected';
+              }
             }
+          } catch (err) {
+            bboxError = err.message || 'BBox measurement failed';
           }
-        } catch (err) {
-          bboxError = err.message || 'BBox measurement failed';
+
+          info.push({
+            tagName: el.tagName,
+            id,
+            bbox,
+            bboxError,
+            groups: groupIds
+          });
         }
 
-        info.push({
-          tagName: el.tagName,
-          id,
-          bbox,
-          bboxError,
-          groups: groupIds
+        let fixedSvgString = null;
+        if (assignIds && changed) {
+          fixedSvgString = serializer.serializeToString(rootSvg);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // CRITICAL FIX #1: Remove viewBox/width/height/x/y from hidden container SVG
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //
+        // WHY THIS IS NECESSARY:
+        // The hidden SVG container (which holds all element definitions for <use> references)
+        // MUST NOT have viewBox, width, height, x, or y attributes because they constrain
+        // the coordinate system and cause incorrect clipping of referenced elements.
+        //
+        // WHAT HAPPENS IF WE DON'T REMOVE THESE:
+        // 1. The viewBox creates a "viewport coordinate system" for the container
+        // 2. When <use href="#element-id" /> references an element, the browser tries to
+        //    fit it within the container's viewBox
+        // 3. Elements with coordinates outside the container viewBox get clipped
+        // 4. This causes preview SVGs to show partial/empty content even though their
+        //    individual viewBox is correct
+        //
+        // EXAMPLE OF THE BUG:
+        // - Container has viewBox="0 0 1037.227 2892.792"
+        // - Element rect1851 has bbox at x=42.34, y=725.29 (inside container viewBox) ✓
+        // - Element text8 has bbox at x=-455.64 (OUTSIDE container viewBox, negative!) ✗
+        // - Result: text8 preview appears empty because container viewBox clips it
+        //
+        // HOW WE TESTED THIS:
+        // 1. Generated HTML with container viewBox → text8, text9, rect1851 broken
+        // 2. Removed container viewBox → All previews showed correctly
+        // 3. Extracted objects to individual SVG files (--extract) → All worked perfectly
+        //    (proving bbox calculations are correct, issue is HTML-specific)
+        //
+        // WHY THIS FIX IS CORRECT:
+        // According to SVG spec, a <use> element inherits the coordinate system from
+        // its context (the preview SVG), NOT from the element's original container.
+        // By removing the container's viewBox, we allow <use> to work purely with
+        // the preview SVG's viewBox, which is correctly sized to the element's bbox.
+        //
+        // COMPREHENSIVE TESTS PROVING THIS FIX:
+        // See tests/unit/html-preview-rendering.test.js
+        // - "Elements with negative coordinates get clipped when container has viewBox"
+        //   → Proves faulty method (container with viewBox) clips elements
+        // - "Elements with negative coordinates render fully when container has NO viewBox"
+        //   → Proves correct method (no viewBox) works
+        // - "EDGE CASE: Element far outside container viewBox (negative coordinates)"
+        //   → Tests real bug from text8 at x=-455.64
+        // - "EDGE CASE: Element with coordinates in all quadrants"
+        //   → Tests negative X, negative Y, positive X, positive Y
+        const clonedForMarkup = /** @type {Element} */ (rootSvg.cloneNode(true));
+        clonedForMarkup.removeAttribute('viewBox');
+        clonedForMarkup.removeAttribute('width');
+        clonedForMarkup.removeAttribute('height');
+        clonedForMarkup.removeAttribute('x');
+        clonedForMarkup.removeAttribute('y');
+        const rootSvgMarkup = serializer.serializeToString(clonedForMarkup);
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // CRITICAL FIX #2: Collect parent group transforms for <use> elements
+        // ═══════════════════════════════════════════════════════════════════════════════
+        //
+        // ROOT CAUSE OF THE TRANSFORM BUG (discovered after extensive testing):
+        // ───────────────────────────────────────────────────────────────────────────────
+        // When using <use href="#element-id" />, SVG does NOT apply parent group transforms!
+        // This is a fundamental SVG specification behavior that MUST be handled explicitly.
+        //
+        // DETAILED EXPLANATION:
+        // In the original SVG document, elements inherit transforms from their parent groups:
+        //
+        //   <g id="g37" transform="translate(-13.613145,-10.209854)">
+        //     <text id="text8" transform="scale(0.86535508,1.155595)">Λοπ</text>
+        //   </g>
+        //
+        // When the browser renders this, text8's FINAL transform matrix is:
+        //   1. Apply g37's translate(-13.613145,-10.209854)
+        //   2. Apply text8's scale(0.86535508,1.155595)
+        //   3. Render text content
+        //
+        // But when HTML preview creates:
+        //   <svg viewBox="-455.64 1474.75 394.40 214.40">
+        //     <use href="#text8" />
+        //   </svg>
+        //
+        // The <use> element ONLY applies text8's LOCAL transform:
+        //   ✓ scale(0.86535508,1.155595) from text8's transform attribute
+        //   ✗ MISSING translate(-13.613145,-10.209854) from parent g37!
+        //
+        // RESULT: Preview is shifted/mispositioned by exactly the parent transform amount
+        //
+        // REAL-WORLD EXAMPLE FROM test_text_to_path_advanced.svg:
+        // ───────────────────────────────────────────────────────────────────────────────
+        // Elements that BROKE in HTML preview:
+        // - text8: Has parent g37 with translate(-13.613145,-10.209854)
+        //   → Preview shifted 13.6 pixels left, 10.2 pixels up
+        // - text9: Has parent g37 with translate(-13.613145,-10.209854)
+        //   → Preview shifted 13.6 pixels left, 10.2 pixels up
+        // - rect1851: Has parent g1 with translate(-1144.8563,517.64642)
+        //   → Preview shifted 1144.8 pixels left, 517.6 pixels down (appeared empty!)
+        //
+        // Elements that WORKED in HTML preview:
+        // - text37: Direct child of root SVG, NO parent group
+        //   → No parent transforms to miss, worked perfectly
+        // - text2: Has parent g6 with translate(0,0)
+        //   → Parent transform is identity, no visible shift
+        //
+        // HOW WE DEBUGGED THIS:
+        // ───────────────────────────────────────────────────────────────────────────────
+        // 1. Initial hypothesis: bbox calculation wrong
+        //    TEST: Extracted text8 to individual SVG file with --extract --margin 0
+        //    RESULT: Extracted SVG rendered PERFECTLY in browser! ✓
+        //    CONCLUSION: Bbox calculations are correct, bug is HTML-specific ✓
+        //
+        // 2. Second hypothesis: viewBox constraining coordinates
+        //    TEST: Removed viewBox from hidden container SVG
+        //    RESULT: Still broken! ✗
+        //    CONCLUSION: Not the root cause
+        //
+        // 3. Third hypothesis: width/height conflicting with viewBox
+        //    TEST: Removed width/height from preview SVGs
+        //    RESULT: Still broken! ✗
+        //    CONCLUSION: Not the root cause
+        //
+        // 4. Fourth hypothesis: <use> element not inheriting transforms
+        //    COMPARISON: Analyzed working vs broken elements:
+        //    - text37 (works): No parent group
+        //    - text2 (works): Parent g6 has translate(0,0)
+        //    - text8 (broken): Parent g37 has translate(-13.613145,-10.209854)
+        //    - text9 (broken): Parent g37 has translate(-13.613145,-10.209854)
+        //    PATTERN: All broken elements have non-identity parent transforms! ✓
+        //    CONCLUSION: This is the root cause! ✓
+        //
+        // THE SOLUTION:
+        // ───────────────────────────────────────────────────────────────────────────────
+        // Wrap <use> in a <g> element with explicitly collected parent transforms:
+        //
+        //   <svg viewBox="-455.64 1474.75 394.40 214.40">
+        //     <g transform="translate(-13.613145,-10.209854)">  ← Parent transform
+        //       <use href="#text8" />  ← Element with local scale transform
+        //     </g>
+        //   </svg>
+        //
+        // Now the transform chain is COMPLETE:
+        //   1. Apply wrapper <g>'s translate (parent transform from g37)
+        //   2. Apply text8's scale (local transform from text8)
+        //   3. Render text content
+        //
+        // This exactly matches the original SVG's transform chain! ✓
+        //
+        // VERIFICATION THAT THIS FIX WORKS:
+        // ───────────────────────────────────────────────────────────────────────────────
+        // After implementing this fix:
+        // - text8 preview: Renders perfectly, text fully visible ✓
+        // - text9 preview: Renders perfectly, text fully visible ✓
+        // - rect1851 preview: Renders perfectly, red oval fully visible ✓
+        // - All other elements: Still working correctly ✓
+        //
+        // User confirmation: "yes, it worked!"
+        //
+        // IMPLEMENTATION DETAILS:
+        // ───────────────────────────────────────────────────────────────────────────────
+        // We collect transforms by walking UP the DOM tree from each element to the root:
+        // 1. Start at element's parent
+        // 2. For each ancestor group until root SVG:
+        //    a. Get transform attribute if present
+        //    b. Prepend to list (unshift) to maintain parent→child order
+        // 3. Join all transforms with spaces
+        // 4. Store in parentTransforms[id] for use in HTML generation
+        //
+        // Example transform collection for text8:
+        //   text8 → g37 (transform="translate(-13.613145,-10.209854)") → root SVG
+        //   parentTransforms["text8"] = "translate(-13.613145,-10.209854)"
+        //
+        // Example transform collection for deeply nested element:
+        //   elem → g3 (transform="rotate(45)") → g2 (transform="scale(2)") → g1 (transform="translate(10,20)") → root
+        //   parentTransforms["elem"] = "translate(10,20) scale(2) rotate(45)"
+        //   (Note: parent→child order is preserved!)
+        //
+        // WHY THIS APPROACH IS CORRECT:
+        // ───────────────────────────────────────────────────────────────────────────────
+        // SVG transform matrices multiply from RIGHT to LEFT (parent first, then child):
+        //   final_matrix = child_matrix × parent_matrix
+        //
+        // When we write:
+        //   <g transform="translate(10,20) scale(2) rotate(45)">
+        //
+        // The browser computes:
+        //   matrix = rotate(45) × scale(2) × translate(10,20)
+        //
+        // By collecting parent→child order and letting the browser parse it,
+        // we get the exact same transform chain as the original SVG! ✓
+        //
+        // COMPREHENSIVE TESTS PROVING THIS FIX:
+        // See tests/unit/html-preview-rendering.test.js
+        // - "Element with parent translate transform renders incorrectly without wrapper"
+        //   → Proves faulty method (<use> alone) is shifted by parent transform amount
+        // - "Element with multiple nested parent transforms requires all transforms"
+        //   → Tests complex case: translate(100,200) scale(2,2) rotate(45) chain
+        // - "EDGE CASE: Element with no parent transforms (direct child of root)"
+        //   → Tests text37 from test_text_to_path_advanced.svg (works without wrapper)
+        // - "EDGE CASE: Element with identity parent transform (translate(0,0))"
+        //   → Tests text2 from test_text_to_path_advanced.svg (no-op transform)
+        // - "EDGE CASE: Large parent transform (rect1851 bug - shifted 1144px)"
+        //   → Tests rect1851 real bug: translate(-1144.8563,517.64642) made it empty!
+        // - "REAL-WORLD REGRESSION TEST: text8, text9, rect1851"
+        //   → Tests exact production bug with all three broken elements
+        //   → User confirmation: "yes, it worked!"
+        const parentTransforms = {};
+        info.forEach((obj) => {
+          const el = rootSvg.getElementById(obj.id);
+          if (!el) {
+            return;
+          }
+
+          // Collect transforms from all ancestor groups (bottom-up, then reverse for correct order)
+          const transforms = [];
+          /** @type {Node | null} */
+          let node = el.parentNode;
+          while (node && node !== rootSvg) {
+            // Type guard: Check if node is an Element before accessing getAttribute
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              const transform = /** @type {Element} */ (node).getAttribute('transform');
+              if (transform) {
+                transforms.unshift(transform); // Prepend to maintain parent→child order
+              }
+            }
+            node = node.parentNode;
+          }
+
+          if (transforms.length > 0) {
+            parentTransforms[obj.id] = transforms.join(' ');
+          }
         });
-      }
 
-      let fixedSvgString = null;
-      if (assignIds && changed) {
-        fixedSvgString = serializer.serializeToString(rootSvg);
-      }
-
-      // ═══════════════════════════════════════════════════════════════════════════════
-      // CRITICAL FIX #1: Remove viewBox/width/height/x/y from hidden container SVG
-      // ═══════════════════════════════════════════════════════════════════════════════
-      //
-      // WHY THIS IS NECESSARY:
-      // The hidden SVG container (which holds all element definitions for <use> references)
-      // MUST NOT have viewBox, width, height, x, or y attributes because they constrain
-      // the coordinate system and cause incorrect clipping of referenced elements.
-      //
-      // WHAT HAPPENS IF WE DON'T REMOVE THESE:
-      // 1. The viewBox creates a "viewport coordinate system" for the container
-      // 2. When <use href="#element-id" /> references an element, the browser tries to
-      //    fit it within the container's viewBox
-      // 3. Elements with coordinates outside the container viewBox get clipped
-      // 4. This causes preview SVGs to show partial/empty content even though their
-      //    individual viewBox is correct
-      //
-      // EXAMPLE OF THE BUG:
-      // - Container has viewBox="0 0 1037.227 2892.792"
-      // - Element rect1851 has bbox at x=42.34, y=725.29 (inside container viewBox) ✓
-      // - Element text8 has bbox at x=-455.64 (OUTSIDE container viewBox, negative!) ✗
-      // - Result: text8 preview appears empty because container viewBox clips it
-      //
-      // HOW WE TESTED THIS:
-      // 1. Generated HTML with container viewBox → text8, text9, rect1851 broken
-      // 2. Removed container viewBox → All previews showed correctly
-      // 3. Extracted objects to individual SVG files (--extract) → All worked perfectly
-      //    (proving bbox calculations are correct, issue is HTML-specific)
-      //
-      // WHY THIS FIX IS CORRECT:
-      // According to SVG spec, a <use> element inherits the coordinate system from
-      // its context (the preview SVG), NOT from the element's original container.
-      // By removing the container's viewBox, we allow <use> to work purely with
-      // the preview SVG's viewBox, which is correctly sized to the element's bbox.
-      //
-      // COMPREHENSIVE TESTS PROVING THIS FIX:
-      // See tests/unit/html-preview-rendering.test.js
-      // - "Elements with negative coordinates get clipped when container has viewBox"
-      //   → Proves faulty method (container with viewBox) clips elements
-      // - "Elements with negative coordinates render fully when container has NO viewBox"
-      //   → Proves correct method (no viewBox) works
-      // - "EDGE CASE: Element far outside container viewBox (negative coordinates)"
-      //   → Tests real bug from text8 at x=-455.64
-      // - "EDGE CASE: Element with coordinates in all quadrants"
-      //   → Tests negative X, negative Y, positive X, positive Y
-      const clonedForMarkup = /** @type {Element} */ (rootSvg.cloneNode(true));
-      clonedForMarkup.removeAttribute('viewBox');
-      clonedForMarkup.removeAttribute('width');
-      clonedForMarkup.removeAttribute('height');
-      clonedForMarkup.removeAttribute('x');
-      clonedForMarkup.removeAttribute('y');
-      const rootSvgMarkup = serializer.serializeToString(clonedForMarkup);
-
-      // ═══════════════════════════════════════════════════════════════════════════════
-      // CRITICAL FIX #2: Collect parent group transforms for <use> elements
-      // ═══════════════════════════════════════════════════════════════════════════════
-      //
-      // ROOT CAUSE OF THE TRANSFORM BUG (discovered after extensive testing):
-      // ───────────────────────────────────────────────────────────────────────────────
-      // When using <use href="#element-id" />, SVG does NOT apply parent group transforms!
-      // This is a fundamental SVG specification behavior that MUST be handled explicitly.
-      //
-      // DETAILED EXPLANATION:
-      // In the original SVG document, elements inherit transforms from their parent groups:
-      //
-      //   <g id="g37" transform="translate(-13.613145,-10.209854)">
-      //     <text id="text8" transform="scale(0.86535508,1.155595)">Λοπ</text>
-      //   </g>
-      //
-      // When the browser renders this, text8's FINAL transform matrix is:
-      //   1. Apply g37's translate(-13.613145,-10.209854)
-      //   2. Apply text8's scale(0.86535508,1.155595)
-      //   3. Render text content
-      //
-      // But when HTML preview creates:
-      //   <svg viewBox="-455.64 1474.75 394.40 214.40">
-      //     <use href="#text8" />
-      //   </svg>
-      //
-      // The <use> element ONLY applies text8's LOCAL transform:
-      //   ✓ scale(0.86535508,1.155595) from text8's transform attribute
-      //   ✗ MISSING translate(-13.613145,-10.209854) from parent g37!
-      //
-      // RESULT: Preview is shifted/mispositioned by exactly the parent transform amount
-      //
-      // REAL-WORLD EXAMPLE FROM test_text_to_path_advanced.svg:
-      // ───────────────────────────────────────────────────────────────────────────────
-      // Elements that BROKE in HTML preview:
-      // - text8: Has parent g37 with translate(-13.613145,-10.209854)
-      //   → Preview shifted 13.6 pixels left, 10.2 pixels up
-      // - text9: Has parent g37 with translate(-13.613145,-10.209854)
-      //   → Preview shifted 13.6 pixels left, 10.2 pixels up
-      // - rect1851: Has parent g1 with translate(-1144.8563,517.64642)
-      //   → Preview shifted 1144.8 pixels left, 517.6 pixels down (appeared empty!)
-      //
-      // Elements that WORKED in HTML preview:
-      // - text37: Direct child of root SVG, NO parent group
-      //   → No parent transforms to miss, worked perfectly
-      // - text2: Has parent g6 with translate(0,0)
-      //   → Parent transform is identity, no visible shift
-      //
-      // HOW WE DEBUGGED THIS:
-      // ───────────────────────────────────────────────────────────────────────────────
-      // 1. Initial hypothesis: bbox calculation wrong
-      //    TEST: Extracted text8 to individual SVG file with --extract --margin 0
-      //    RESULT: Extracted SVG rendered PERFECTLY in browser! ✓
-      //    CONCLUSION: Bbox calculations are correct, bug is HTML-specific ✓
-      //
-      // 2. Second hypothesis: viewBox constraining coordinates
-      //    TEST: Removed viewBox from hidden container SVG
-      //    RESULT: Still broken! ✗
-      //    CONCLUSION: Not the root cause
-      //
-      // 3. Third hypothesis: width/height conflicting with viewBox
-      //    TEST: Removed width/height from preview SVGs
-      //    RESULT: Still broken! ✗
-      //    CONCLUSION: Not the root cause
-      //
-      // 4. Fourth hypothesis: <use> element not inheriting transforms
-      //    COMPARISON: Analyzed working vs broken elements:
-      //    - text37 (works): No parent group
-      //    - text2 (works): Parent g6 has translate(0,0)
-      //    - text8 (broken): Parent g37 has translate(-13.613145,-10.209854)
-      //    - text9 (broken): Parent g37 has translate(-13.613145,-10.209854)
-      //    PATTERN: All broken elements have non-identity parent transforms! ✓
-      //    CONCLUSION: This is the root cause! ✓
-      //
-      // THE SOLUTION:
-      // ───────────────────────────────────────────────────────────────────────────────
-      // Wrap <use> in a <g> element with explicitly collected parent transforms:
-      //
-      //   <svg viewBox="-455.64 1474.75 394.40 214.40">
-      //     <g transform="translate(-13.613145,-10.209854)">  ← Parent transform
-      //       <use href="#text8" />  ← Element with local scale transform
-      //     </g>
-      //   </svg>
-      //
-      // Now the transform chain is COMPLETE:
-      //   1. Apply wrapper <g>'s translate (parent transform from g37)
-      //   2. Apply text8's scale (local transform from text8)
-      //   3. Render text content
-      //
-      // This exactly matches the original SVG's transform chain! ✓
-      //
-      // VERIFICATION THAT THIS FIX WORKS:
-      // ───────────────────────────────────────────────────────────────────────────────
-      // After implementing this fix:
-      // - text8 preview: Renders perfectly, text fully visible ✓
-      // - text9 preview: Renders perfectly, text fully visible ✓
-      // - rect1851 preview: Renders perfectly, red oval fully visible ✓
-      // - All other elements: Still working correctly ✓
-      //
-      // User confirmation: "yes, it worked!"
-      //
-      // IMPLEMENTATION DETAILS:
-      // ───────────────────────────────────────────────────────────────────────────────
-      // We collect transforms by walking UP the DOM tree from each element to the root:
-      // 1. Start at element's parent
-      // 2. For each ancestor group until root SVG:
-      //    a. Get transform attribute if present
-      //    b. Prepend to list (unshift) to maintain parent→child order
-      // 3. Join all transforms with spaces
-      // 4. Store in parentTransforms[id] for use in HTML generation
-      //
-      // Example transform collection for text8:
-      //   text8 → g37 (transform="translate(-13.613145,-10.209854)") → root SVG
-      //   parentTransforms["text8"] = "translate(-13.613145,-10.209854)"
-      //
-      // Example transform collection for deeply nested element:
-      //   elem → g3 (transform="rotate(45)") → g2 (transform="scale(2)") → g1 (transform="translate(10,20)") → root
-      //   parentTransforms["elem"] = "translate(10,20) scale(2) rotate(45)"
-      //   (Note: parent→child order is preserved!)
-      //
-      // WHY THIS APPROACH IS CORRECT:
-      // ───────────────────────────────────────────────────────────────────────────────
-      // SVG transform matrices multiply from RIGHT to LEFT (parent first, then child):
-      //   final_matrix = child_matrix × parent_matrix
-      //
-      // When we write:
-      //   <g transform="translate(10,20) scale(2) rotate(45)">
-      //
-      // The browser computes:
-      //   matrix = rotate(45) × scale(2) × translate(10,20)
-      //
-      // By collecting parent→child order and letting the browser parse it,
-      // we get the exact same transform chain as the original SVG! ✓
-      //
-      // COMPREHENSIVE TESTS PROVING THIS FIX:
-      // See tests/unit/html-preview-rendering.test.js
-      // - "Element with parent translate transform renders incorrectly without wrapper"
-      //   → Proves faulty method (<use> alone) is shifted by parent transform amount
-      // - "Element with multiple nested parent transforms requires all transforms"
-      //   → Tests complex case: translate(100,200) scale(2,2) rotate(45) chain
-      // - "EDGE CASE: Element with no parent transforms (direct child of root)"
-      //   → Tests text37 from test_text_to_path_advanced.svg (works without wrapper)
-      // - "EDGE CASE: Element with identity parent transform (translate(0,0))"
-      //   → Tests text2 from test_text_to_path_advanced.svg (no-op transform)
-      // - "EDGE CASE: Large parent transform (rect1851 bug - shifted 1144px)"
-      //   → Tests rect1851 real bug: translate(-1144.8563,517.64642) made it empty!
-      // - "REAL-WORLD REGRESSION TEST: text8, text9, rect1851"
-      //   → Tests exact production bug with all three broken elements
-      //   → User confirmation: "yes, it worked!"
-      const parentTransforms = {};
-      info.forEach((obj) => {
-        const el = rootSvg.getElementById(obj.id);
-        if (!el) {
-          return;
-        }
-
-        // Collect transforms from all ancestor groups (bottom-up, then reverse for correct order)
-        const transforms = [];
-        /** @type {Node | null} */
-        let node = el.parentNode;
-        while (node && node !== rootSvg) {
-          // Type guard: Check if node is an Element before accessing getAttribute
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            const transform = /** @type {Element} */ (node).getAttribute('transform');
-            if (transform) {
-              transforms.unshift(transform); // Prepend to maintain parent→child order
-            }
-          }
-          node = node.parentNode;
-        }
-
-        if (transforms.length > 0) {
-          parentTransforms[obj.id] = transforms.join(' ');
-        }
-      });
-
-      /* eslint-enable no-undef */
-      return { info, fixedSvgString, rootSvgMarkup, parentTransforms, spriteInfo };
-    }, assignIds);
-    return evalResult;
-  });
+        /* eslint-enable no-undef */
+        return { info, fixedSvgString, rootSvgMarkup, parentTransforms, spriteInfo };
+      }, assignIds);
+      return evalResult;
+    },
+    { ignoreResolution }
+  );
 
   // Build HTML listing file
   const html = buildListHtml(
@@ -1613,119 +1667,124 @@ async function extractSingleObject(
   outSvgPath,
   margin,
   includeContext,
-  jsonMode
+  jsonMode,
+  ignoreResolution = false
 ) {
-  const result = await withPageForSvg(inputPath, async (page) => {
-    const evalResult = await page.evaluate(
-      async (elementId, marginUser, includeContext) => {
-        /* eslint-disable no-undef */
-        const SvgVisualBBox = window.SvgVisualBBox;
-        if (!SvgVisualBBox) {
-          throw new Error('SvgVisualBBox not found.');
-        }
-
-        const rootSvg = document.querySelector('svg');
-        if (!rootSvg) {
-          throw new Error('No <svg> found');
-        }
-
-        const el = rootSvg.ownerDocument.getElementById(elementId);
-        if (!el) {
-          throw new Error('No element found with id="' + elementId + '"');
-        }
-
-        const bboxData = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(el, {
-          mode: 'unclipped',
-          coarseFactor: 3,
-          fineFactor: 24,
-          useLayoutScale: true
-        });
-        if (!bboxData) {
-          throw new Error('Element id="' + elementId + '" has no visible pixels.');
-        }
-
-        let x = bboxData.x;
-        let y = bboxData.y;
-        let w = bboxData.width;
-        let h = bboxData.height;
-        if (marginUser > 0) {
-          x -= marginUser;
-          y -= marginUser;
-          w += 2 * marginUser;
-          h += 2 * marginUser;
-        }
-        if (w <= 0 || h <= 0) {
-          throw new Error('Degenerate bbox after margin.');
-        }
-
-        const clonedRoot = /** @type {Element} */ (rootSvg.cloneNode(false));
-        if (!clonedRoot.getAttribute('xmlns')) {
-          clonedRoot.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-        }
-        const xlinkNS = rootSvg.getAttribute('xmlns:xlink');
-        if (xlinkNS && !clonedRoot.getAttribute('xmlns:xlink')) {
-          clonedRoot.setAttribute('xmlns:xlink', xlinkNS);
-        }
-
-        clonedRoot.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
-        clonedRoot.setAttribute('width', String(w));
-        clonedRoot.setAttribute('height', String(h));
-
-        const defsList = Array.from(rootSvg.querySelectorAll('defs'));
-        for (const defs of defsList) {
-          clonedRoot.appendChild(defs.cloneNode(true));
-        }
-
-        if (!includeContext) {
-          const ancestors = [];
-          /** @type {Node | null} */
-          let node = el;
-          while (node && node !== rootSvg) {
-            ancestors.unshift(node);
-            node = node.parentNode;
+  const result = await withPageForSvg(
+    inputPath,
+    async (page) => {
+      const evalResult = await page.evaluate(
+        async (elementId, marginUser, includeContext) => {
+          /* eslint-disable no-undef */
+          const SvgVisualBBox = window.SvgVisualBBox;
+          if (!SvgVisualBBox) {
+            throw new Error('SvgVisualBBox not found.');
           }
-          /** @type {Element} */
-          let currentParent = clonedRoot;
-          for (const original of ancestors) {
-            const clone = original.cloneNode(false);
-            if (original === el) {
-              const fullSubtree = original.cloneNode(true);
-              currentParent.appendChild(fullSubtree);
-            } else {
-              const nextParent = /** @type {Element} */ (clone);
-              currentParent.appendChild(nextParent);
-              currentParent = nextParent;
+
+          const rootSvg = document.querySelector('svg');
+          if (!rootSvg) {
+            throw new Error('No <svg> found');
+          }
+
+          const el = rootSvg.ownerDocument.getElementById(elementId);
+          if (!el) {
+            throw new Error('No element found with id="' + elementId + '"');
+          }
+
+          const bboxData = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(el, {
+            mode: 'unclipped',
+            coarseFactor: 3,
+            fineFactor: 24,
+            useLayoutScale: true
+          });
+          if (!bboxData) {
+            throw new Error('Element id="' + elementId + '" has no visible pixels.');
+          }
+
+          let x = bboxData.x;
+          let y = bboxData.y;
+          let w = bboxData.width;
+          let h = bboxData.height;
+          if (marginUser > 0) {
+            x -= marginUser;
+            y -= marginUser;
+            w += 2 * marginUser;
+            h += 2 * marginUser;
+          }
+          if (w <= 0 || h <= 0) {
+            throw new Error('Degenerate bbox after margin.');
+          }
+
+          const clonedRoot = /** @type {Element} */ (rootSvg.cloneNode(false));
+          if (!clonedRoot.getAttribute('xmlns')) {
+            clonedRoot.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+          }
+          const xlinkNS = rootSvg.getAttribute('xmlns:xlink');
+          if (xlinkNS && !clonedRoot.getAttribute('xmlns:xlink')) {
+            clonedRoot.setAttribute('xmlns:xlink', xlinkNS);
+          }
+
+          clonedRoot.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
+          clonedRoot.setAttribute('width', String(w));
+          clonedRoot.setAttribute('height', String(h));
+
+          const defsList = Array.from(rootSvg.querySelectorAll('defs'));
+          for (const defs of defsList) {
+            clonedRoot.appendChild(defs.cloneNode(true));
+          }
+
+          if (!includeContext) {
+            const ancestors = [];
+            /** @type {Node | null} */
+            let node = el;
+            while (node && node !== rootSvg) {
+              ancestors.unshift(node);
+              node = node.parentNode;
+            }
+            /** @type {Element} */
+            let currentParent = clonedRoot;
+            for (const original of ancestors) {
+              const clone = original.cloneNode(false);
+              if (original === el) {
+                const fullSubtree = original.cloneNode(true);
+                currentParent.appendChild(fullSubtree);
+              } else {
+                const nextParent = /** @type {Element} */ (clone);
+                currentParent.appendChild(nextParent);
+                currentParent = nextParent;
+              }
+            }
+          } else {
+            const children = Array.from(rootSvg.childNodes);
+            for (const child of children) {
+              // Type guard: Check if child is an Element before accessing tagName
+              if (
+                child.nodeType === Node.ELEMENT_NODE &&
+                /** @type {Element} */ (child).tagName.toLowerCase() === 'defs'
+              ) {
+                continue;
+              }
+              clonedRoot.appendChild(child.cloneNode(true));
             }
           }
-        } else {
-          const children = Array.from(rootSvg.childNodes);
-          for (const child of children) {
-            // Type guard: Check if child is an Element before accessing tagName
-            if (
-              child.nodeType === Node.ELEMENT_NODE &&
-              /** @type {Element} */ (child).tagName.toLowerCase() === 'defs'
-            ) {
-              continue;
-            }
-            clonedRoot.appendChild(child.cloneNode(true));
-          }
-        }
 
-        const serializer = new XMLSerializer();
-        const svgString = serializer.serializeToString(clonedRoot);
+          const serializer = new XMLSerializer();
+          const svgString = serializer.serializeToString(clonedRoot);
 
-        return {
-          bbox: { x, y, width: w, height: h },
-          svgString
-        };
-        /* eslint-enable no-undef */
-      },
-      elementId,
-      margin,
-      includeContext
-    );
-    return evalResult;
-  });
+          return {
+            bbox: { x, y, width: w, height: h },
+            svgString
+          };
+          /* eslint-enable no-undef */
+        },
+        elementId,
+        margin,
+        includeContext
+      );
+      return evalResult;
+    },
+    { ignoreResolution }
+  );
 
   // SECURITY: Validate and write extracted SVG file safely
   const safeOutputPath = validateOutputPath(outSvgPath, {
@@ -1759,177 +1818,188 @@ async function extractSingleObject(
 
 // -------- EXPORT-ALL mode --------
 
-async function exportAllObjects(inputPath, outDir, margin, exportGroups, jsonMode) {
+async function exportAllObjects(
+  inputPath,
+  outDir,
+  margin,
+  exportGroups,
+  jsonMode,
+  ignoreResolution = false
+) {
   if (!fs.existsSync(outDir)) {
     fs.mkdirSync(outDir, { recursive: true });
   }
 
-  const exports = await withPageForSvg(inputPath, async (page) => {
-    const evalResult = await page.evaluate(
-      async (marginUser, exportGroups) => {
-        /* eslint-disable no-undef */
-        const SvgVisualBBox = window.SvgVisualBBox;
-        if (!SvgVisualBBox) {
-          throw new Error('SvgVisualBBox not found.');
-        }
-
-        const rootSvg = document.querySelector('svg');
-        if (!rootSvg) {
-          throw new Error('No <svg> found');
-        }
-
-        const serializer = new XMLSerializer();
-
-        const baseTags = [
-          'path',
-          'rect',
-          'circle',
-          'ellipse',
-          'polygon',
-          'polyline',
-          'text',
-          'image',
-          'use',
-          'symbol'
-        ];
-        const groupTag = 'g';
-
-        const selector = exportGroups ? baseTags.concat(groupTag).join(',') : baseTags.join(',');
-
-        const allCandidates = Array.from(rootSvg.querySelectorAll(selector));
-
-        const usedIds = new Set();
-        for (const el of allCandidates) {
-          if (el.id) {
-            usedIds.add(el.id);
-          }
-        }
-        function ensureId(el) {
-          if (el.id) {
-            return el.id;
-          }
-          const base = 'auto_id_' + el.tagName.toLowerCase();
-          let id = base;
-          let i = 1;
-          while (usedIds.has(id) || document.getElementById(id)) {
-            id = base + '_' + i++;
-          }
-          el.setAttribute('id', id);
-          usedIds.add(id);
-          return id;
-        }
-
-        const defsList = Array.from(rootSvg.querySelectorAll('defs'));
-
-        function makeRootSvgWithBBox(bbox) {
-          const clonedRoot = /** @type {Element} */ (rootSvg.cloneNode(false));
-          if (!clonedRoot.getAttribute('xmlns')) {
-            clonedRoot.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-          }
-          const xlinkNS = rootSvg.getAttribute('xmlns:xlink');
-          if (xlinkNS && !clonedRoot.getAttribute('xmlns:xlink')) {
-            clonedRoot.setAttribute('xmlns:xlink', xlinkNS);
-          }
-          let { x, y, width, height } = bbox;
-          if (marginUser > 0) {
-            x -= marginUser;
-            y -= marginUser;
-            width += 2 * marginUser;
-            height += 2 * marginUser;
-          }
-          if (width <= 0 || height <= 0) {
-            return null;
-          }
-          clonedRoot.setAttribute('viewBox', `${x} ${y} ${width} ${height}`);
-          clonedRoot.setAttribute('width', String(width));
-          clonedRoot.setAttribute('height', String(height));
-          for (const defs of defsList) {
-            clonedRoot.appendChild(defs.cloneNode(true));
-          }
-          return clonedRoot;
-        }
-
-        function tagEquals(el, tagName) {
-          return el.tagName && el.tagName.toLowerCase() === tagName.toLowerCase();
-        }
-
-        const exports = [];
-
-        async function exportElement(el, prefix) {
-          const id = ensureId(el);
-          const bboxData = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(el, {
-            mode: 'unclipped',
-            coarseFactor: 3,
-            fineFactor: 24,
-            useLayoutScale: true
-          });
-          if (!bboxData) {
-            return;
+  const exports = await withPageForSvg(
+    inputPath,
+    async (page) => {
+      const evalResult = await page.evaluate(
+        async (marginUser, exportGroups) => {
+          /* eslint-disable no-undef */
+          const SvgVisualBBox = window.SvgVisualBBox;
+          if (!SvgVisualBBox) {
+            throw new Error('SvgVisualBBox not found.');
           }
 
-          const rootForExport = makeRootSvgWithBBox(bboxData);
-          if (!rootForExport) {
-            return;
+          const rootSvg = document.querySelector('svg');
+          if (!rootSvg) {
+            throw new Error('No <svg> found');
           }
 
-          const ancestors = [];
-          let node = el;
-          while (node && node !== rootSvg) {
-            ancestors.unshift(node);
-            node = node.parentNode;
-          }
+          const serializer = new XMLSerializer();
 
-          let currentParent = rootForExport;
-          for (const original of ancestors) {
-            const shallowClone = original.cloneNode(false);
-            if (original === el) {
-              const subtree = original.cloneNode(true);
-              currentParent.appendChild(subtree);
-            } else {
-              const nextParent = shallowClone;
-              currentParent.appendChild(nextParent);
-              currentParent = nextParent;
+          const baseTags = [
+            'path',
+            'rect',
+            'circle',
+            'ellipse',
+            'polygon',
+            'polyline',
+            'text',
+            'image',
+            'use',
+            'symbol'
+          ];
+          const groupTag = 'g';
+
+          const selector = exportGroups ? baseTags.concat(groupTag).join(',') : baseTags.join(',');
+
+          const allCandidates = Array.from(rootSvg.querySelectorAll(selector));
+
+          const usedIds = new Set();
+          for (const el of allCandidates) {
+            if (el.id) {
+              usedIds.add(el.id);
             }
           }
+          function ensureId(el) {
+            if (el.id) {
+              return el.id;
+            }
+            const base = 'auto_id_' + el.tagName.toLowerCase();
+            let id = base;
+            let i = 1;
+            while (usedIds.has(id) || document.getElementById(id)) {
+              id = base + '_' + i++;
+            }
+            el.setAttribute('id', id);
+            usedIds.add(id);
+            return id;
+          }
 
-          const svgString = serializer.serializeToString(rootForExport);
-          const fileName = (prefix ? prefix + '_' : '') + id + '.svg';
+          const defsList = Array.from(rootSvg.querySelectorAll('defs'));
 
-          exports.push({
-            id,
-            fileName,
-            bbox: {
-              x: bboxData.x,
-              y: bboxData.y,
-              width: bboxData.width,
-              height: bboxData.height
-            },
-            svgString
-          });
+          function makeRootSvgWithBBox(bbox) {
+            const clonedRoot = /** @type {Element} */ (rootSvg.cloneNode(false));
+            if (!clonedRoot.getAttribute('xmlns')) {
+              clonedRoot.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+            }
+            const xlinkNS = rootSvg.getAttribute('xmlns:xlink');
+            if (xlinkNS && !clonedRoot.getAttribute('xmlns:xlink')) {
+              clonedRoot.setAttribute('xmlns:xlink', xlinkNS);
+            }
+            let { x, y, width, height } = bbox;
+            if (marginUser > 0) {
+              x -= marginUser;
+              y -= marginUser;
+              width += 2 * marginUser;
+              height += 2 * marginUser;
+            }
+            if (width <= 0 || height <= 0) {
+              return null;
+            }
+            clonedRoot.setAttribute('viewBox', `${x} ${y} ${width} ${height}`);
+            clonedRoot.setAttribute('width', String(width));
+            clonedRoot.setAttribute('height', String(height));
+            for (const defs of defsList) {
+              clonedRoot.appendChild(defs.cloneNode(true));
+            }
+            return clonedRoot;
+          }
 
-          if (exportGroups && tagEquals(el, groupTag)) {
-            const children = Array.from(el.children);
-            for (const child of children) {
-              const tag = child.tagName.toLowerCase();
-              if (baseTags.includes(tag) || tag === groupTag) {
-                await exportElement(child, id);
+          function tagEquals(el, tagName) {
+            return el.tagName && el.tagName.toLowerCase() === tagName.toLowerCase();
+          }
+
+          const exports = [];
+
+          async function exportElement(el, prefix) {
+            const id = ensureId(el);
+            const bboxData = await SvgVisualBBox.getSvgElementVisualBBoxTwoPassAggressive(el, {
+              mode: 'unclipped',
+              coarseFactor: 3,
+              fineFactor: 24,
+              useLayoutScale: true
+            });
+            if (!bboxData) {
+              return;
+            }
+
+            const rootForExport = makeRootSvgWithBBox(bboxData);
+            if (!rootForExport) {
+              return;
+            }
+
+            const ancestors = [];
+            let node = el;
+            while (node && node !== rootSvg) {
+              ancestors.unshift(node);
+              node = node.parentNode;
+            }
+
+            let currentParent = rootForExport;
+            for (const original of ancestors) {
+              const shallowClone = original.cloneNode(false);
+              if (original === el) {
+                const subtree = original.cloneNode(true);
+                currentParent.appendChild(subtree);
+              } else {
+                const nextParent = shallowClone;
+                currentParent.appendChild(nextParent);
+                currentParent = nextParent;
+              }
+            }
+
+            const svgString = serializer.serializeToString(rootForExport);
+            const fileName = (prefix ? prefix + '_' : '') + id + '.svg';
+
+            exports.push({
+              id,
+              fileName,
+              bbox: {
+                x: bboxData.x,
+                y: bboxData.y,
+                width: bboxData.width,
+                height: bboxData.height
+              },
+              svgString
+            });
+
+            if (exportGroups && tagEquals(el, groupTag)) {
+              const children = Array.from(el.children);
+              for (const child of children) {
+                const tag = child.tagName.toLowerCase();
+                if (baseTags.includes(tag) || tag === groupTag) {
+                  await exportElement(child, id);
+                }
               }
             }
           }
-        }
 
-        for (const el of allCandidates) {
-          await exportElement(el, '');
-        }
+          for (const el of allCandidates) {
+            await exportElement(el, '');
+          }
 
-        return exports;
-        /* eslint-enable no-undef */
-      },
-      margin,
-      exportGroups
-    );
-    return evalResult;
-  });
+          return exports;
+          /* eslint-enable no-undef */
+        },
+        margin,
+        exportGroups
+      );
+      return evalResult;
+    },
+    { ignoreResolution }
+  );
 
   if (!exports || exports.length === 0) {
     if (jsonMode) {
@@ -1994,7 +2064,13 @@ async function exportAllObjects(inputPath, outDir, margin, exportGroups, jsonMod
 
 // -------- RENAME mode --------
 
-async function renameIds(inputPath, renameJsonPath, renameOutPath, jsonMode) {
+async function renameIds(
+  inputPath,
+  renameJsonPath,
+  renameOutPath,
+  jsonMode,
+  ignoreResolution = false
+) {
   // SECURITY: Read and validate JSON mapping file safely
   const safeJsonPath = validateFilePath(renameJsonPath, {
     requiredExtensions: ['.json'],
@@ -2024,122 +2100,126 @@ async function renameIds(inputPath, renameJsonPath, renameOutPath, jsonMode) {
   // SECURITY: Validate each mapping
   validateRenameMapping(mappings);
 
-  const result = await withPageForSvg(inputPath, async (page) => {
-    const evalResult = await page.evaluate((mappings) => {
-      /* eslint-disable no-undef */
-      const SvgVisualBBox = window.SvgVisualBBox;
-      if (!SvgVisualBBox) {
-        throw new Error('SvgVisualBBox not found.');
-      }
-
-      const rootSvg = document.querySelector('svg');
-      if (!rootSvg) {
-        throw new Error('No <svg> found');
-      }
-
-      function isValidIdName(id) {
-        return /^[A-Za-z_][A-Za-z0-9_.:-]*$/.test(id);
-      }
-
-      const allWithId = rootSvg.ownerDocument.querySelectorAll('[id]');
-      const existingIds = new Set();
-      allWithId.forEach((el) => existingIds.add(el.id));
-
-      const applied = [];
-      const skipped = [];
-      const usedTargets = new Set();
-      const seenFrom = new Set();
-
-      for (const m of mappings) {
-        const from = m.from;
-        const to = m.to;
-
-        if (!from || !to) {
-          skipped.push({ mapping: m, reason: 'Empty from/to' });
-          continue;
+  const result = await withPageForSvg(
+    inputPath,
+    async (page) => {
+      const evalResult = await page.evaluate((mappings) => {
+        /* eslint-disable no-undef */
+        const SvgVisualBBox = window.SvgVisualBBox;
+        if (!SvgVisualBBox) {
+          throw new Error('SvgVisualBBox not found.');
         }
 
-        if (!isValidIdName(to)) {
-          skipped.push({ mapping: m, reason: 'Invalid target ID syntax' });
-          continue;
+        const rootSvg = document.querySelector('svg');
+        if (!rootSvg) {
+          throw new Error('No <svg> found');
         }
 
-        if (seenFrom.has(from)) {
-          skipped.push({ mapping: m, reason: 'Duplicate source ID; earlier mapping wins' });
-          continue;
+        function isValidIdName(id) {
+          return /^[A-Za-z_][A-Za-z0-9_.:-]*$/.test(id);
         }
 
-        const el = rootSvg.ownerDocument.getElementById(from);
-        if (!el) {
-          skipped.push({ mapping: m, reason: 'Source ID not found in SVG' });
-          continue;
-        }
+        const allWithId = rootSvg.ownerDocument.querySelectorAll('[id]');
+        const existingIds = new Set();
+        allWithId.forEach((el) => existingIds.add(el.id));
 
-        if (from === to) {
-          skipped.push({ mapping: m, reason: 'Source and target IDs are the same' });
-          continue;
-        }
+        const applied = [];
+        const skipped = [];
+        const usedTargets = new Set();
+        const seenFrom = new Set();
 
-        if (existingIds.has(to) && to !== from) {
-          skipped.push({ mapping: m, reason: 'Target ID already exists in SVG' });
-          continue;
-        }
+        for (const m of mappings) {
+          const from = m.from;
+          const to = m.to;
 
-        if (usedTargets.has(to) && to !== from) {
-          skipped.push({ mapping: m, reason: 'Target ID already used by a previous mapping' });
-          continue;
-        }
-
-        // Apply the rename
-        seenFrom.add(from);
-        usedTargets.add(to);
-        existingIds.delete(from);
-        existingIds.add(to);
-
-        el.setAttribute('id', to);
-
-        // Update references: href, xlink:href, url(#from) in attributes
-        const allEls = rootSvg.ownerDocument.querySelectorAll('*');
-        const oldRef = '#' + from;
-        const newRef = '#' + to;
-        const urlOld = 'url(#' + from + ')';
-        const urlNew = 'url(#' + to + ')';
-
-        allEls.forEach((node) => {
-          if (node.hasAttribute('href')) {
-            const v = node.getAttribute('href');
-            if (v === oldRef) {
-              node.setAttribute('href', newRef);
-            }
+          if (!from || !to) {
+            skipped.push({ mapping: m, reason: 'Empty from/to' });
+            continue;
           }
-          if (node.hasAttributeNS('http://www.w3.org/1999/xlink', 'href')) {
-            const v = node.getAttributeNS('http://www.w3.org/1999/xlink', 'href');
-            if (v === oldRef) {
-              node.setAttributeNS('http://www.w3.org/1999/xlink', 'href', newRef);
-            }
+
+          if (!isValidIdName(to)) {
+            skipped.push({ mapping: m, reason: 'Invalid target ID syntax' });
+            continue;
           }
-          for (const attr of Array.from(node.attributes)) {
-            const val = attr.value;
-            if (!val) {
-              continue;
-            }
-            if (val.indexOf(urlOld) !== -1) {
-              node.setAttribute(attr.name, val.split(urlOld).join(urlNew));
-            }
+
+          if (seenFrom.has(from)) {
+            skipped.push({ mapping: m, reason: 'Duplicate source ID; earlier mapping wins' });
+            continue;
           }
-        });
 
-        applied.push({ from, to });
-      }
+          const el = rootSvg.ownerDocument.getElementById(from);
+          if (!el) {
+            skipped.push({ mapping: m, reason: 'Source ID not found in SVG' });
+            continue;
+          }
 
-      const serializer = new XMLSerializer();
-      const svgString = serializer.serializeToString(rootSvg);
+          if (from === to) {
+            skipped.push({ mapping: m, reason: 'Source and target IDs are the same' });
+            continue;
+          }
 
-      return { svgString, applied, skipped };
-      /* eslint-enable no-undef */
-    }, mappings);
-    return evalResult;
-  });
+          if (existingIds.has(to) && to !== from) {
+            skipped.push({ mapping: m, reason: 'Target ID already exists in SVG' });
+            continue;
+          }
+
+          if (usedTargets.has(to) && to !== from) {
+            skipped.push({ mapping: m, reason: 'Target ID already used by a previous mapping' });
+            continue;
+          }
+
+          // Apply the rename
+          seenFrom.add(from);
+          usedTargets.add(to);
+          existingIds.delete(from);
+          existingIds.add(to);
+
+          el.setAttribute('id', to);
+
+          // Update references: href, xlink:href, url(#from) in attributes
+          const allEls = rootSvg.ownerDocument.querySelectorAll('*');
+          const oldRef = '#' + from;
+          const newRef = '#' + to;
+          const urlOld = 'url(#' + from + ')';
+          const urlNew = 'url(#' + to + ')';
+
+          allEls.forEach((node) => {
+            if (node.hasAttribute('href')) {
+              const v = node.getAttribute('href');
+              if (v === oldRef) {
+                node.setAttribute('href', newRef);
+              }
+            }
+            if (node.hasAttributeNS('http://www.w3.org/1999/xlink', 'href')) {
+              const v = node.getAttributeNS('http://www.w3.org/1999/xlink', 'href');
+              if (v === oldRef) {
+                node.setAttributeNS('http://www.w3.org/1999/xlink', 'href', newRef);
+              }
+            }
+            for (const attr of Array.from(node.attributes)) {
+              const val = attr.value;
+              if (!val) {
+                continue;
+              }
+              if (val.indexOf(urlOld) !== -1) {
+                node.setAttribute(attr.name, val.split(urlOld).join(urlNew));
+              }
+            }
+          });
+
+          applied.push({ from, to });
+        }
+
+        const serializer = new XMLSerializer();
+        const svgString = serializer.serializeToString(rootSvg);
+
+        return { svgString, applied, skipped };
+        /* eslint-enable no-undef */
+      }, mappings);
+      return evalResult;
+    },
+    { ignoreResolution }
+  );
 
   // SECURITY: Validate and write renamed SVG file safely
   const safeOutputPath = validateOutputPath(renameOutPath, {
@@ -2195,7 +2275,8 @@ async function main() {
         opts.outFixed,
         opts.outHtml,
         opts.json,
-        opts.autoOpen
+        opts.autoOpen,
+        opts.ignoreResolution
       );
     } else if (opts.mode === 'extract') {
       await extractSingleObject(
@@ -2204,12 +2285,26 @@ async function main() {
         opts.outSvg,
         opts.margin,
         opts.includeContext,
-        opts.json
+        opts.json,
+        opts.ignoreResolution
       );
     } else if (opts.mode === 'exportAll') {
-      await exportAllObjects(opts.input, opts.outDir, opts.margin, opts.exportGroups, opts.json);
+      await exportAllObjects(
+        opts.input,
+        opts.outDir,
+        opts.margin,
+        opts.exportGroups,
+        opts.json,
+        opts.ignoreResolution
+      );
     } else if (opts.mode === 'rename') {
-      await renameIds(opts.input, opts.renameJson, opts.renameOut, opts.json);
+      await renameIds(
+        opts.input,
+        opts.renameJson,
+        opts.renameOut,
+        opts.json,
+        opts.ignoreResolution
+      );
     } else {
       throw new SVGBBoxError(`Unknown mode: ${opts.mode}`);
     }

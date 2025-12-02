@@ -219,8 +219,9 @@ describe('sbb-comparer Integration Tests', () => {
 
   describe('Error Handling', () => {
     it('should fail gracefully with invalid threshold', async () => {
+      // threshold must be 1-255, so 300 is invalid
       await expect(
-        runComparer('simple-rect.svg', 'simple-rect.svg', ['--threshold', '25'])
+        runComparer('simple-rect.svg', 'simple-rect.svg', ['--threshold', '300'])
       ).rejects.toThrow();
     });
 

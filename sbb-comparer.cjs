@@ -59,9 +59,9 @@ OPTIONS:
   --out-diff <file>         Output diff PNG file (white=different, black=same)
                             Default: <svg1>_vs_<svg2>_diff.png
 
-  --threshold <1-20>        Pixel difference threshold (default: 1)
+  --threshold <1-255>       Pixel difference threshold (default: 1)
                             Pixels differ if any RGBA channel differs by more
-                            than threshold/256. Range: 1-20
+                            than threshold/256. Range: 1-255
 
   --alignment <mode>        How to align the two SVGs (default: origin)
     origin                  Align using respective SVG origins (0,0)
@@ -174,7 +174,7 @@ function parseArgs(argv) {
         name: 'threshold',
         type: 'number',
         default: 1,
-        description: 'Pixel difference threshold (1-20)'
+        description: 'Pixel difference threshold (1-255)'
       },
       {
         name: 'alignment',
@@ -258,9 +258,9 @@ function parseArgs(argv) {
     scale: result.flags.scale || 4
   };
 
-  // Validate threshold range (1-20)
-  if (args.threshold < 1 || args.threshold > 20) {
-    throw new Error('--threshold must be between 1 and 20');
+  // Validate threshold range (1-255)
+  if (args.threshold < 1 || args.threshold > 255) {
+    throw new Error('--threshold must be between 1 and 255');
   }
 
   // Validate aspectRatioThreshold range (0-1)
@@ -754,7 +754,7 @@ async function compareImages(png1Path, png2Path, diffPath, threshold) {
 
   let differentPixels = 0;
   const totalPixels = width * height;
-  const thresholdValue = threshold; // threshold is already 1-20
+  const thresholdValue = threshold; // threshold is already 1-255
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {

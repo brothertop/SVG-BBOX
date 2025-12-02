@@ -115,6 +115,7 @@ export default defineConfig({
     // Global setup/teardown for browser cleanup
     // globalTeardown ensures all browser processes are killed even if tests crash
     globalSetup: undefined,
+    // @ts-ignore - globalTeardown is a valid Vitest option but types may be incomplete
     globalTeardown: './tests/helpers/global-teardown.js',
 
     // Detect and report open handles that prevent exit

@@ -3,7 +3,8 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+and this project adheres to
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.0.16] - 2025-12-03
 
@@ -50,9 +51,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **security**: Comprehensive audit fixes for error handling and validation
 - **tests**: Limit reverse dependency tracking to library files only
-- **test**: Add margin to named color background test to expose background at corners
+- **test**: Add margin to named color background test to expose background at
+  corners
 - **test**: Handle Windows npm pack empty stdout in package-installation test
-- **test**: Add shell: true for Windows npm command compatibility ([#46](https://github.com/Emasoft/SVG-BBOX/issues/46))
+- **test**: Add shell: true for Windows npm command compatibility
+  ([#46](https://github.com/Emasoft/SVG-BBOX/issues/46))
 - **test**: Add graceful termination to prevent hanging test processes
 - **critical**: Fix viewBox modification and resolution bugs in svg2png/comparer
 - **extract,comparer**: ViewBox preservation and threshold range
@@ -63,7 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ★ New Features
 
-- **infra**: Infrastructure Overhaul Phase 1-2 - Publishing Pipeline Hardening + Test Expansion
+- **infra**: Infrastructure Overhaul Phase 1-2 - Publishing Pipeline Hardening +
+  Test Expansion
 - **cli**: Add createModeArgParser for multi-mode CLI tools (Phase 4 P1)
 - **cli**: Add modeFlags support to createModeArgParser (Phase 4 P3)
 
@@ -97,12 +101,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add get_bboxes_for_text2path.cjs example script
 - **tests**: Handle null stderr on Windows in package-installation test
 - **sbb-comparer**: CRITICAL - Handle percentage width/height values correctly
-- **sbb-fix-viewbox**: Add --overwrite flag, default to _fixed suffix for safety ⚠ **BREAKING**
-- **sbb-comparer**: Add aspect ratio validation to prevent meaningless comparisons ⚠ **BREAKING**
+- **sbb-fix-viewbox**: Add --overwrite flag, default to \_fixed suffix for
+  safety ⚠ **BREAKING**
+- **sbb-comparer**: Add aspect ratio validation to prevent meaningless
+  comparisons ⚠ **BREAKING**
 - **examples**: Resolve 15+ critical issues in local-vs-global-coordinates.cjs
-- **release**: Add comprehensive safeguards against ANSI code contamination in version strings
-- **release**: CRITICAL - Fix npm hook output contamination by silencing npm and reading from package.json
-- **publish**: Add package installation test + fix broken npm package ([#46](https://github.com/Emasoft/SVG-BBOX/issues/46))
+- **release**: Add comprehensive safeguards against ANSI code contamination in
+  version strings
+- **release**: CRITICAL - Fix npm hook output contamination by silencing npm and
+  reading from package.json
+- **publish**: Add package installation test + fix broken npm package
+  ([#46](https://github.com/Emasoft/SVG-BBOX/issues/46))
 
 ### ◆ Documentation
 
@@ -110,13 +119,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **examples**: Add local vs global coordinates demonstration script
 - **API**: Add comprehensive Coordinate Systems section
 - **CLAUDE**: Document release safeguards and version tag format requirements
-- **CLAUDE**: Document npm lifecycle hook contamination fix and updated safeguards
+- **CLAUDE**: Document npm lifecycle hook contamination fix and updated
+  safeguards
 - **CLAUDE**: Add 'Source of Truth Pattern' insight to release safeguards
 
 ### ★ New Features
 
 - **release**: Make release.sh bulletproof with auto-fix and rollback
-- **critical-bug**: Add --force option to sbb-fix-viewbox and expose critical viewBox regeneration bug
+- **critical-bug**: Add --force option to sbb-fix-viewbox and expose critical
+  viewBox regeneration bug
 
 ### Miscellaneous Tasks
 
@@ -139,20 +150,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **tests**: Fix backwards logic - skip tests when no changes detected
 - **tests**: Fix SECOND backwards logic - skip tests when 0 tests needed
 - **tests**: CRITICAL - SvgVisualBBox.js should ONLY test tools that import it
-- **publish**: Add config/ directory to npm package ([#46](https://github.com/Emasoft/SVG-BBOX/issues/46))
-- **publish**: Add package installation test + fix broken npm package ([#46](https://github.com/Emasoft/SVG-BBOX/issues/46))
+- **publish**: Add config/ directory to npm package
+  ([#46](https://github.com/Emasoft/SVG-BBOX/issues/46))
+- **publish**: Add package installation test + fix broken npm package
+  ([#46](https://github.com/Emasoft/SVG-BBOX/issues/46))
 
 ### ◆ Documentation
 
-- Improve release workflow documentation - clarify CI wait steps and race condition prevention
+- Improve release workflow documentation - clarify CI wait steps and race
+  condition prevention
 
 ### ★ New Features
 
-- **release**: Add automated release script with proper GitHub Release → npm sequencing
-- **release**: Improve release notes and fix test-selective for documentation files
+- **release**: Add automated release script with proper GitHub Release → npm
+  sequencing
+- **release**: Improve release notes and fix test-selective for documentation
+  files
 - **tests**: Integrate Python filesystem-based change detection
 - **tests**: Implement runtime dependency detection
-- **release**: Improve release workflow with CI monitoring and professional release notes
+- **release**: Improve release workflow with CI monitoring and professional
+  release notes
 
 ### Miscellaneous Tasks
 
@@ -168,8 +185,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **docs**: Fix typos and add viewBox to aspect ratio diagram
 - **reliability**: Add file locking and timeouts (Issues #17, #4)
-- **security**: Add git ref validation to prevent command injection ([#10](https://github.com/Emasoft/SVG-BBOX/issues/10))
-- **publish**: Add build validation to prepublishOnly ([#40](https://github.com/Emasoft/SVG-BBOX/issues/40))
+- **security**: Add git ref validation to prevent command injection
+  ([#10](https://github.com/Emasoft/SVG-BBOX/issues/10))
+- **publish**: Add build validation to prepublishOnly
+  ([#40](https://github.com/Emasoft/SVG-BBOX/issues/40))
 
 ### ◆ Documentation
 
@@ -186,7 +205,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **tests**: Phase 1 test performance optimizations
 - **tests**: Phases 1 & 2 test performance optimizations
-- **tests**: Optimize E2E test performance with shared page pattern (Issues #8, #18)
+- **tests**: Optimize E2E test performance with shared page pattern (Issues #8,
+  #18)
 
 ### ↻ Code Refactoring
 
@@ -258,7 +278,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Run Prettier on README.md to fix CI formatting check
 - Format README with Prettier
-- **types**: Add proper type assertions for SVGGraphicsElement in sbb-getbbox-extract
+- **types**: Add proper type assertions for SVGGraphicsElement in
+  sbb-getbbox-extract
 
 ### ◆ Documentation
 
@@ -311,7 +332,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Miscellaneous Tasks
 
-- Add *_dev/ pattern to gitignore and npmignore
+- Add \*\_dev/ pattern to gitignore and npmignore
 - Repository maintenance and improvements
 - Add npm publish workflow
 - Bump version to 1.0.4
@@ -399,7 +420,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhance HTML comparison report with dark mode and branding
 - Add comprehensive tooltips to HTML comparison report
 - Improve sbb-comparer HTML tooltips and fix SVG border sizing
-- Add browser API with showTrueBBoxBorder() function and comprehensive documentation
+- Add browser API with showTrueBBoxBorder() function and comprehensive
+  documentation
 - Add setViewBoxOnObjects() for viewBox reframing
 - Apply comprehensive security fixes to sbb-getbbox.cjs
 - Apply comprehensive security fixes to sbb-fix-viewbox.cjs
@@ -430,7 +452,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Rename sbb-export to sbb-extractor
 - Improve option naming and add symbol resolution
-- Comprehensive test improvement - modularization, cross-platform, error handling
+- Comprehensive test improvement - modularization, cross-platform, error
+  handling
 - Rename sbb-text-to-path to sbb-inkscape-text2path
 - Consolidate to 3 Inkscape tools, rename exportpng to svg2png
 
@@ -471,7 +494,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add comprehensive documentation for HTML preview border solution
 - Add getbbox.cjs documentation to README
 - Improve help screens for all CLI tools
-- Fix README to use correct sbb-* command names
+- Fix README to use correct sbb-\* command names
 - Add comprehensive cross-platform compatibility section
 
 ### ★ New Features
@@ -495,7 +518,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✓ Testing
 
-- Add comprehensive HTML preview rendering tests with all faulty methods documented
+- Add comprehensive HTML preview rendering tests with all faulty methods
+  documented
 - Rewrite tests to use runtime font detection (no hardcoded fonts)
 - Add comprehensive Playwright E2E tests for HTML list interactive features
 

@@ -137,7 +137,7 @@ jobs:
       - name: Install browser dependencies
         run: pnpm run install-browsers
 
-      - name: Run selective tests (PRs) or full tests (main/develop)
+      - name: Run selective tests based on changed files
         shell: bash
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -146,9 +146,10 @@ jobs:
             git fetch --depth=${{ env.GIT_FETCH_DEPTH }} origin ${{ github.base_ref }}
             node scripts/test-selective.cjs origin/${{ github.base_ref }}
           else
-            echo "Running full test suite for main/develop..."
-            # Run unit and integration tests in parallel (saves ~30 sec)
-            pnpm run test:unit & pnpm run test:integration & wait
+            echo "Running selective tests for push to main/develop..."
+            # Compare against previous commit to determine which tests to run
+            # This avoids running ALL tests when only docs/fixtures changed
+            node scripts/test-selective.cjs HEAD~1
           fi
 
   # =============================================================================

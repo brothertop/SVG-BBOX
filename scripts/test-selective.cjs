@@ -256,9 +256,12 @@ const TEST_DEPENDENCIES = {
 
   'vitest.config.js': [RUN_ALL_TESTS_PATTERN],
 
-  'package.json': [RUN_ALL_TESTS_PATTERN],
+  // package.json is handled specially - version-only changes skip tests
+  // dependency/script changes trigger all tests (see isPackageJsonVersionOnlyChange)
+  'package.json': 'SPECIAL_PACKAGE_JSON', // Marker for special handling
 
   'package-lock.json': [RUN_ALL_TESTS_PATTERN],
+  'pnpm-lock.yaml': [RUN_ALL_TESTS_PATTERN],
 
   // Build and utility scripts
   // Empty arrays = these files don't require any specific tests to run
@@ -279,6 +282,54 @@ const TEST_DEPENDENCIES = {
   'config/timeouts.cjs': [RUN_ALL_TESTS_PATTERN], // Timeout config affects all tools
   'config/timeouts.js': [RUN_ALL_TESTS_PATTERN] // Timeout config affects all tools
 };
+
+// ============================================================================
+// Smart Package.json Change Detection
+// ============================================================================
+
+/**
+ * Check if package.json changes are version-only (no tests needed)
+ * Returns true if ONLY the version field changed, false if dependencies/scripts changed
+ * @param {string} baseRef - Git reference to compare against
+ * @returns {Promise<boolean>} True if version-only change
+ */
+async function isPackageJsonVersionOnlyChange(baseRef) {
+  try {
+    // Get the diff for package.json specifically
+    const { stdout: diffOutput } = await execFileAsync(
+      'git',
+      ['diff', baseRef, '--', 'package.json'],
+      { timeout: GIT_DIFF_TIMEOUT_MS }
+    );
+
+    if (!diffOutput.trim()) {
+      return true; // No changes to package.json
+    }
+
+    // Parse the diff to see what changed
+    const lines = diffOutput.split('\n');
+    const changedLines = lines.filter(
+      (line) =>
+        (line.startsWith('+') || line.startsWith('-')) &&
+        !line.startsWith('+++') &&
+        !line.startsWith('---')
+    );
+
+    // Check if ALL changes are to the version field
+    const versionOnlyPattern = /^\s*[+-]\s*"version":\s*"[0-9]+\.[0-9]+\.[0-9]+"/;
+    const isVersionOnly = changedLines.every(
+      (line) => versionOnlyPattern.test(line) || line.trim() === ''
+    );
+
+    debug(`Package.json change analysis: ${isVersionOnly ? 'VERSION-ONLY' : 'HAS OTHER CHANGES'}`);
+    debug(`Changed lines: ${changedLines.length}`);
+
+    return isVersionOnly;
+  } catch (err) {
+    debug(`Failed to analyze package.json diff: ${err.message}`);
+    return false; // Assume tests needed if analysis fails
+  }
+}
 
 // ============================================================================
 // Runtime Dependency Detection
@@ -451,9 +502,10 @@ function isUnknownSourceFile(normalizedPath) {
  * 3. Deduplicate the final test list
  *
  * @param {string[]} changedFiles - List of changed file paths
- * @returns {{ testsToRun: Set<string>, runAll: boolean }} Test scope determination
+ * @param {string} baseRef - Git reference to compare against (needed for package.json analysis)
+ * @returns {Promise<{ testsToRun: Set<string>, runAll: boolean }>} Test scope determination
  */
-function determineRequiredTests(changedFiles) {
+async function determineRequiredTests(changedFiles, baseRef) {
   const testsToRun = new Set();
   let hasUnknownDependencies = false;
 
@@ -474,21 +526,47 @@ function determineRequiredTests(changedFiles) {
     // STEP 2: Check if this file has explicit test mapping
     if (normalizedPath in TEST_DEPENDENCIES) {
       const tests = TEST_DEPENDENCIES[normalizedPath];
-      debug(`  → Found in TEST_DEPENDENCIES map, has ${tests.length} test(s)`);
+
+      // SPECIAL CASE: package.json - only run all tests if dependencies/scripts changed
+      // Version-only bumps don't need any tests (saves 10-15 min per release!)
+      if (tests === 'SPECIAL_PACKAGE_JSON') {
+        debug(`  → Special handling for package.json`);
+        const isVersionOnly = await isPackageJsonVersionOnlyChange(baseRef);
+        if (isVersionOnly) {
+          debug(`  → Version-only change - NO TESTS NEEDED`);
+          console.log(
+            `${SYMBOLS.INFO} package.json: version-only change detected - skipping tests`
+          );
+          continue;
+        } else {
+          debug(`  → Dependency/script changes - running ALL tests`);
+          console.log(
+            `${SYMBOLS.WARNING} package.json: dependencies or scripts changed - running all tests`
+          );
+          hasUnknownDependencies = true;
+          continue;
+        }
+      }
+
+      debug(
+        `  → Found in TEST_DEPENDENCIES map, has ${Array.isArray(tests) ? tests.length : 0} test(s)`
+      );
 
       // If empty array [], it means no tests needed (doc/config file)
-      if (tests.length === 0) {
+      if (Array.isArray(tests) && tests.length === 0) {
         debug(`  → Empty test array - no tests needed for this file`);
         continue;
       }
 
       // Add the tests for this file
-      tests.forEach((pattern) => {
-        if (pattern) {
-          debug(`     Adding test pattern: ${pattern}`);
-          testsToRun.add(pattern);
-        }
-      });
+      if (Array.isArray(tests)) {
+        tests.forEach((pattern) => {
+          if (pattern) {
+            debug(`     Adding test pattern: ${pattern}`);
+            testsToRun.add(pattern);
+          }
+        });
+      }
     } else {
       // STEP 3: File NOT in TEST_DEPENDENCIES - use runtime dependency detection
       debug(`  → NOT in TEST_DEPENDENCIES - checking if it's a source file`);
@@ -623,7 +701,7 @@ async function main() {
   changedFiles.forEach((f) => console.log(`   - ${f}`));
   console.log('');
 
-  const { testsToRun, runAll } = determineRequiredTests(changedFiles);
+  const { testsToRun, runAll } = await determineRequiredTests(changedFiles, baseRef);
 
   // If no tests needed (documentation-only changes), skip testing
   if (testsToRun.size === 0 && !runAll) {

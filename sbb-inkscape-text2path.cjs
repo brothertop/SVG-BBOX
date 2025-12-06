@@ -330,7 +330,10 @@ async function runComparison(originalPath, convertedPath, jsonMode) {
 async function convertTextToPaths(inkscapePath, inputPath, outputPath) {
   // Build Inkscape command arguments
   // Based on Inkscape CLI documentation and Python reference implementation
-  // Non-commented parameters are the defaults that are ALWAYS used
+  // Using separate arguments (not --arg=value syntax) for reliable path handling
+  //
+  // NOTE: Unlike extracting a single object (which needs --export-id and --export-id-only),
+  // text2path converts ALL text in the entire file, so no ID-related flags are used.
   const inkscapeArgs = [
     // Export as SVG format
     '--export-type=svg',
@@ -344,15 +347,12 @@ async function convertTextToPaths(inkscapePath, inputPath, outputPath) {
     // Overwrite existing output file without prompting
     '--export-overwrite',
 
-    // Use 'no-convert-text-baseline-spacing' to do not automatically fix text baselines in legacy
+    // Use 'no-convert-text-baseline-spacing' to not automatically fix text baselines in legacy
     // (pre-0.92) files on opening. Inkscape 0.92 adopts the CSS standard definition for the
     // 'line-height' property, which differs from past versions. By default, the line height values
     // in files created prior to Inkscape 0.92 will be adjusted on loading to preserve the intended
     // text layout. This command line option will skip that adjustment.
     '--no-convert-text-baseline-spacing',
-
-    // Output filename
-    `--export-filename=${outputPath}`,
 
     // Choose 'convert-dpi-method' method to rescale legacy (pre-0.92) files which render slightly
     // smaller due to the switch from 90 DPI to 96 DPI when interpreting lengths expressed in units
@@ -361,7 +361,13 @@ async function convertTextToPaths(inkscapePath, inputPath, outputPath) {
     // untouched) and "scale-document" (each length will be re-scaled individually).
     '--convert-dpi-method=none',
 
-    // Input SVG file
+    // Output filename - MUST use separate argument for reliable path handling
+    // Inkscape parses --export-filename VALUE better than --export-filename=VALUE
+    // especially for paths with spaces or special characters
+    '--export-filename',
+    outputPath,
+
+    // Input SVG file (last argument)
     inputPath
   ];
 

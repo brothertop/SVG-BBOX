@@ -360,8 +360,11 @@ function readBatchFile(batchFilePath) {
       .filter((p) => p.length > 0);
 
     // If only one part after tab split, try space-separated
+    // WHY: Handle space-separated format for input.svg output.png pairs
+    // REGEX FIX: Improved to handle paths with spaces better
     // Look for pattern: something.svg something.png (SVG + PNG files)
     if (parts.length === 1) {
+      // Match: (anything ending in .svg) + (whitespace) + (anything ending in .png)
       const fileMatch = line.match(/^(.+\.svg)\s+(.+\.png)$/i);
       if (fileMatch) {
         parts = [fileMatch[1].trim(), fileMatch[2].trim()];
@@ -390,13 +393,29 @@ function readBatchFile(batchFilePath) {
       outputFile = parts[1];
     } else {
       // Auto-generate output: <input>.png in same directory
+      // WHY: Check for collisions when auto-generating output filenames
+      // Prevents accidental overwrites in batch processing
       const baseName = path.basename(inputFile, path.extname(inputFile));
       const dirName = path.dirname(inputFile);
-      outputFile = path.join(dirName, `${baseName}.png`);
+      let candidate = path.join(dirName, `${baseName}.png`);
+
+      // Check for naming conflicts and add numeric suffix if needed
+      let counter = 1;
+      while (fs.existsSync(candidate)) {
+        candidate = path.join(dirName, `${baseName}_${counter}.png`);
+        counter++;
+      }
+      outputFile = candidate;
     }
 
     return { input: inputFile, output: outputFile };
   });
+
+  // WHY: Handle empty batch file entries after filtering
+  // Empty files should fail early with a clear message
+  if (filePairs.length === 0) {
+    throw new ValidationError(`No valid entries found in batch file: ${safeBatchPath}`);
+  }
 
   return filePairs;
 }
@@ -622,6 +641,12 @@ async function main() {
       console.log(`    Target: ${pngPath}`);
 
       try {
+        // WHY: Validate input file exists before attempting export
+        // Prevents cryptic Inkscape errors when file is missing
+        if (!fs.existsSync(svgPath)) {
+          throw new SVGBBoxError(`Input file not found: ${svgPath}`);
+        }
+
         const result = await exportPngWithInkscape(svgPath, pngPath, {
           width: args.width,
           height: args.height,

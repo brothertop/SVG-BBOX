@@ -20,11 +20,15 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { PNG } from 'pngjs';
+import { CLI_TIMEOUT_MS } from '../../config/timeouts.js';
 
 const execFileAsync = promisify(execFile);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '../..');
+
+// CLI_EXEC_TIMEOUT: Timeout for CLI tool execution in integration tests
+const CLI_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 2;
 
 /**
  * Parse PNG file and return dimensions and pixel data
@@ -143,7 +147,7 @@ describe('CRITICAL REGRESSION: ViewBox Preservation in sbb-svg2png', () => {
       ['sbb-svg2png.cjs', svgPath, pngPath, '--mode', 'visible', '--scale', '1'],
       {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       }
     );
 
@@ -199,7 +203,7 @@ describe('CRITICAL REGRESSION: ViewBox Preservation in sbb-svg2png', () => {
       ['sbb-svg2png.cjs', svgPath, pngPath, '--mode', 'full', '--scale', '1'],
       {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       }
     );
 
@@ -239,7 +243,7 @@ describe('CRITICAL REGRESSION: ViewBox Preservation in sbb-svg2png', () => {
     // Run WITHOUT --mode flag (should default to visible)
     await execFileAsync('node', ['sbb-svg2png.cjs', svgPath, pngPath, '--scale', '1'], {
       cwd: projectRoot,
-      timeout: 60000
+      timeout: CLI_EXEC_TIMEOUT
     });
 
     const png = await parsePng(pngPath);
@@ -335,7 +339,7 @@ describe('CRITICAL REGRESSION: Resolution Scaling in sbb-compare', () => {
       ['sbb-compare.cjs', svg1Path, svg2Path, '--json', '--out-diff', diffPath],
       {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       }
     );
 
@@ -373,7 +377,7 @@ describe('CRITICAL REGRESSION: Resolution Scaling in sbb-compare', () => {
       ['sbb-compare.cjs', svg1Path, svg2Path, '--json', '--scale', '2', '--out-diff', diffPath],
       {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       }
     );
 
@@ -411,7 +415,7 @@ describe('CRITICAL REGRESSION: Resolution Scaling in sbb-compare', () => {
       ['sbb-compare.cjs', svg1Path, svg2Path, '--json', '--scale', '8', '--out-diff', diffPath],
       {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       }
     );
 
@@ -449,7 +453,7 @@ describe('CRITICAL REGRESSION: Resolution Scaling in sbb-compare', () => {
       ['sbb-compare.cjs', svg1Path, svg2Path, '--json', '--out-diff', diffPath],
       {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       }
     );
 
@@ -495,7 +499,7 @@ describe('CRITICAL REGRESSION: Resolution Scaling in sbb-compare', () => {
       ],
       {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       }
     );
 

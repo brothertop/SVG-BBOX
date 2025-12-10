@@ -14,6 +14,11 @@ import { CLI_TIMEOUT_MS } from '../../config/timeouts.js';
 
 const execFilePromise = promisify(execFile);
 
+// CLI_EXEC_TIMEOUT: Timeout for CLI tool execution in security tests
+// WHY use CLI_TIMEOUT_MS * 4: Security tests may trigger errors that take longer to handle
+// Windows CI is particularly slow for browser operations
+const CLI_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 4;
+
 // Paths to CLI tools
 const CLI_TOOLS = {
   extractor: path.join(__dirname, '../../sbb-extract.cjs'),
@@ -685,7 +690,7 @@ describe('CLI Security Integration Tests', () => {
         'node',
         [CLI_TOOLS.comparer, svg1Path, svg2Path, '--out-diff', diffPath, '--json'],
         {
-          timeout: 120000 // 120 seconds - Windows CI is slower, needs more time for browser operations
+          timeout: CLI_EXEC_TIMEOUT // 120 seconds - Windows CI is slower, needs more time for browser operations
         }
       );
 

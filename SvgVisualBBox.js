@@ -97,6 +97,12 @@
   // Debug flag - set to true to enable console logging
   const DEBUG = false;
 
+  // CRITICAL FIX #2: Mutex for preventing race conditions
+  // WHY: Multiple simultaneous getBBox calls on same element can interfere
+  // IMPACT: Ensures operations complete atomically, preventing corrupted results
+  // Map: element -> promise (pending operation)
+  const elementLocks = new WeakMap();
+
   /**
    * INTERNAL: Check if an ID looks like an auto-generated ID
    * @param {string} id
@@ -178,7 +184,9 @@
         };
       }
     } catch (e) {
-      // Silently fail
+      // CRITICAL FIX #4: Intentionally silent error (debug helper only)
+      // WHY: Saving debug data should never break the main operation
+      // IMPACT: Debug failures don't propagate to user-facing code
       if (DEBUG && typeof console !== 'undefined' && console.warn) {
         console.warn('[DEBUG] Failed to save debug SVG data:', e);
       }
@@ -245,6 +253,9 @@
       const fontFamily = style.fontFamily || style.getPropertyValue('font-family');
       return fontFamily || 'default';
     } catch {
+      // CRITICAL FIX #4: Intentionally silent error (error reporting helper)
+      // WHY: Font detection failure shouldn't prevent error reporting
+      // IMPACT: Returns fallback string instead of throwing
       return 'error detecting font';
     }
   }
@@ -254,7 +265,7 @@
    * with a timeout so we don't hang forever if the network is flaky.
    *
    * @param {Document} [doc=document]  The document whose fonts to wait for.
-   * @param {number} [timeoutMs=8000]  Max time to wait (ms). If <=0, waits fully.
+   * @param {number} [timeoutMs=5000]  Max time to wait (ms). If <=0, waits fully.
    * @returns {Promise<void>}
    */
   async function waitForDocumentFonts(doc, timeoutMs) {
@@ -262,7 +273,7 @@
       doc = document;
     }
     if (typeof timeoutMs !== 'number') {
-      timeoutMs = 8000;
+      timeoutMs = 5000; // CRITICAL FIX #3: Default timeout to prevent indefinite hangs
     }
 
     const fonts = doc.fonts;
@@ -278,7 +289,22 @@
       return;
     }
 
-    await Promise.race([readyPromise, new Promise((resolve) => setTimeout(resolve, timeoutMs))]);
+    // CRITICAL FIX #3: Add timeout handler with clear error message
+    // WHY: Without timeout, font loading can hang indefinitely if network is slow/blocked
+    // IMPACT: Prevents browser tab freezes when fonts fail to load
+    await Promise.race([
+      readyPromise,
+      new Promise((resolve) =>
+        setTimeout(() => {
+          if (DEBUG && typeof console !== 'undefined' && console.warn) {
+            console.warn(
+              `[waitForDocumentFonts] Font loading timeout after ${timeoutMs}ms - proceeding anyway`
+            );
+          }
+          resolve();
+        }, timeoutMs)
+      )
+    ]);
   }
 
   /**
@@ -417,6 +443,9 @@
 
       return { x, y, width, height };
     } catch {
+      // CRITICAL FIX #4: Intentionally silent error (fallback function)
+      // WHY: getBoundingClientRect can fail for detached/invalid elements
+      // IMPACT: Returns null to signal fallback to caller, doesn't crash
       return null;
     }
   }
@@ -451,8 +480,27 @@
    * @returns {Promise<{x:number,y:number,width:number,height:number}|null>}
    */
   async function rasterizeSvgElementToBBox(el, svgRoot, roi, pixelsPerUnit) {
-    if (!roi || roi.width <= 0 || roi.height <= 0) {
-      return null;
+    // CRITICAL FIX #5: Input validation for robustness
+    // WHY: Invalid inputs can cause cryptic errors later in the pipeline
+    // IMPACT: Clear error messages help users identify problems early
+    if (!el) {
+      throw new Error('rasterizeSvgElementToBBox: element parameter is null or undefined');
+    }
+    if (!svgRoot) {
+      throw new Error('rasterizeSvgElementToBBox: svgRoot parameter is null or undefined');
+    }
+    if (!roi || typeof roi !== 'object') {
+      throw new Error(
+        'rasterizeSvgElementToBBox: roi parameter must be an object with x, y, width, height'
+      );
+    }
+    if (roi.width <= 0 || roi.height <= 0) {
+      return null; // Zero-size ROI is valid, just means no content
+    }
+    if (typeof pixelsPerUnit !== 'number' || pixelsPerUnit <= 0 || !isFinite(pixelsPerUnit)) {
+      throw new Error(
+        `rasterizeSvgElementToBBox: pixelsPerUnit must be a positive finite number, got: ${pixelsPerUnit}`
+      );
     }
 
     const vb = roi;
@@ -947,57 +995,90 @@
     const blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(blob);
 
+    // CRITICAL FIX #1: Initialize cleanup variables outside try block
+    // WHY: Ensures cleanup happens even if errors occur during rendering
+    // IMPACT: Prevents memory leaks from unreleased blob URLs and event listeners
     const img = new Image();
-    img.decoding = 'async';
-    img.crossOrigin = 'anonymous';
-    img.src = url;
+    let canvas = null;
+    let ctx = null;
 
-    await new Promise((resolve, reject) => {
-      img.onload = function () {
-        resolve();
-      };
-      img.onerror = function (e) {
-        const errorMsg =
-          e && typeof e === 'object' && 'message' in e ? String(e.message) : 'unknown error';
-        const elementInfo = getElementDescription(el);
-        const fontInfo = getFontDescription(el);
-        const autoIdWarning = getAutoIdWarning(el, svgRoot);
+    try {
+      img.decoding = 'async';
+      img.crossOrigin = 'anonymous';
+      img.src = url;
 
-        reject(
-          new Error(
-            `❌ Failed to render SVG as image: ${errorMsg}\n` +
-              '\n' +
-              'ELEMENT DETAILS:\n' +
-              `  ${elementInfo}\n` +
-              `  Font-family: ${fontInfo}\n` +
-              `  SVG Root: ${svgRoot.id ? `id="${svgRoot.id}"` : '(no id)'}\n` +
-              autoIdWarning +
-              '\n' +
-              'This can happen when:\n' +
-              '  1. The SVG contains invalid XML syntax\n' +
-              '  2. Referenced resources (images, fonts) failed to load\n' +
-              '  3. The SVG uses unsupported features\n' +
-              '  4. Browser security policies blocked the rendering\n' +
-              '\n' +
-              'How to fix:\n' +
-              '  • Validate your SVG with an XML validator\n' +
-              '  • Check that all external resources (images, fonts) are accessible\n' +
-              '  • Ensure referenced elements (gradients, patterns, etc.) exist in <defs>\n' +
-              '  • If fonts are missing, ensure they are installed or embedded in the SVG\n' +
-              '  • Try simplifying the SVG to isolate the problematic element'
-          )
-        );
-      };
-    });
+      await new Promise((resolve, reject) => {
+        // CRITICAL FIX #1: Store event handlers for cleanup
+        // WHY: Event listeners must be removed to allow garbage collection
+        const onload = function () {
+          // Remove event listeners immediately after firing
+          img.onload = null;
+          img.onerror = null;
+          resolve();
+        };
+        const onerror = function (e) {
+          // Remove event listeners immediately after firing
+          img.onload = null;
+          img.onerror = null;
 
-    const canvas = document.createElement('canvas');
-    canvas.width = pixelWidth;
-    canvas.height = pixelHeight;
+          const errorMsg =
+            e && typeof e === 'object' && 'message' in e ? String(e.message) : 'unknown error';
+          const elementInfo = getElementDescription(el);
+          const fontInfo = getFontDescription(el);
+          const autoIdWarning = getAutoIdWarning(el, svgRoot);
 
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, pixelWidth, pixelHeight);
-    ctx.drawImage(img, 0, 0, pixelWidth, pixelHeight);
-    URL.revokeObjectURL(url);
+          reject(
+            new Error(
+              `❌ Failed to render SVG as image: ${errorMsg}\n` +
+                '\n' +
+                'ELEMENT DETAILS:\n' +
+                `  ${elementInfo}\n` +
+                `  Font-family: ${fontInfo}\n` +
+                `  SVG Root: ${svgRoot.id ? `id="${svgRoot.id}"` : '(no id)'}\n` +
+                autoIdWarning +
+                '\n' +
+                'This can happen when:\n' +
+                '  1. The SVG contains invalid XML syntax\n' +
+                '  2. Referenced resources (images, fonts) failed to load\n' +
+                '  3. The SVG uses unsupported features\n' +
+                '  4. Browser security policies blocked the rendering\n' +
+                '\n' +
+                'How to fix:\n' +
+                '  • Validate your SVG with an XML validator\n' +
+                '  • Check that all external resources (images, fonts) are accessible\n' +
+                '  • Ensure referenced elements (gradients, patterns, etc.) exist in <defs>\n' +
+                '  • If fonts are missing, ensure they are installed or embedded in the SVG\n' +
+                '  • Try simplifying the SVG to isolate the problematic element'
+            )
+          );
+        };
+
+        img.onload = onload;
+        img.onerror = onerror;
+      });
+
+      canvas = document.createElement('canvas');
+      canvas.width = pixelWidth;
+      canvas.height = pixelHeight;
+
+      ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, pixelWidth, pixelHeight);
+      ctx.drawImage(img, 0, 0, pixelWidth, pixelHeight);
+    } finally {
+      // CRITICAL FIX #1: Cleanup in finally block guarantees execution
+      // WHY: Finally block runs even if errors occur, preventing memory leaks
+      // IMPACT: Blob URLs are always released, allowing browser to free memory
+
+      // Revoke blob URL to free memory (critical for repeated calls)
+      URL.revokeObjectURL(url);
+
+      // Clear image src to release blob reference
+      img.src = '';
+
+      // Remove any remaining event listeners
+      img.onload = null;
+      img.onerror = null;
+    }
 
     let imageData;
     try {
@@ -1206,7 +1287,7 @@
       typeof options.safetyMarginUser === 'number' ? options.safetyMarginUser : null;
     const useLayoutScale =
       typeof options.useLayoutScale === 'boolean' ? options.useLayoutScale : true;
-    const fontTimeoutMs = typeof options.fontTimeoutMs === 'number' ? options.fontTimeoutMs : 8000;
+    const fontTimeoutMs = typeof options.fontTimeoutMs === 'number' ? options.fontTimeoutMs : 5000;
 
     // Resolve element
     const el = /** @type {SVGElement | null} */ (
@@ -1230,235 +1311,269 @@
       );
     }
 
-    const doc = el.ownerDocument || document;
-    await waitForDocumentFonts(doc, fontTimeoutMs);
-
-    const svgRoot = el.ownerSVGElement || (el instanceof SVGSVGElement ? el : null);
-    if (!svgRoot) {
-      const elementInfo = getElementDescription(el);
-      // Can't use getAutoIdWarning here since we don't have svgRoot yet
-      const autoIdNote =
-        el && el.id && isAutoGeneratedId(el.id)
-          ? `\n⚠️  NOTE: This element has an AUTO-GENERATED ID ("${el.id}").\n` +
-            "   This ID was added by sbb-extract.cjs and doesn't exist in your original SVG.\n\n"
-          : '';
-      throw new Error(
-        '❌ Cannot compute SVG bounding box: Element is not inside an SVG tree\n' +
-          '\n' +
-          'ELEMENT DETAILS:\n' +
-          `  ${elementInfo}\n` +
-          autoIdNote +
-          'This element is not connected to an <svg> root element.\n' +
-          '\n' +
-          'How to fix:\n' +
-          '  • Ensure the element is inside an <svg> tag in the DOM\n' +
-          "  • Check that you're not querying a detached/orphaned element\n" +
-          '  • If creating elements programmatically, append them to the SVG tree first\n' +
-          "  • Verify the element hasn't been removed from the document"
-      );
-    }
-
-    // Root viewBox (user coordinate system)
-    const vbVal = svgRoot.viewBox && svgRoot.viewBox.baseVal;
-    let viewBox;
-    if (vbVal && vbVal.width && vbVal.height) {
-      viewBox = { x: vbVal.x, y: vbVal.y, width: vbVal.width, height: vbVal.height };
-    } else {
-      // fallback: geometry box of full SVG (ignores clipping)
-      const box = safeGetBBox(svgRoot);
-      if (box) {
-        viewBox = { x: box.x, y: box.y, width: box.width, height: box.height };
-      } else {
-        // Last resort: arbitrary large window
-        viewBox = { x: -2000, y: -2000, width: 4000, height: 4000 };
+    // CRITICAL FIX #2: Race condition prevention via mutex pattern
+    // WHY: Multiple simultaneous calls on same element can interfere with each other
+    // SCENARIO: User calls getBBox twice rapidly → temp IDs conflict, DOM state corrupted
+    // SOLUTION: If operation pending on this element, wait for it to complete first
+    // IMPACT: Ensures atomic operations, prevents undefined behavior from concurrent access
+    const existingLock = elementLocks.get(el);
+    if (existingLock) {
+      // Another operation is in progress on this element - wait for it
+      if (DEBUG && typeof console !== 'undefined' && console.log) {
+        console.log('[DEBUG] Waiting for existing operation on element:', el.id || el.tagName);
       }
+      await existingLock;
     }
 
-    // Collect all referenced elements (textPath, use, gradients, filters, etc.)
-    // so we can include them in ROI calculation
-    const referencedElements = [];
-    (function collectReferences(n) {
-      // Check for xlink:href or href attributes
-      const xlinkHref = n.getAttribute && n.getAttribute('xlink:href');
-      const href = n.getAttribute && n.getAttribute('href');
+    // Create new lock for this operation
+    // Initialize with no-op to satisfy TypeScript - will be reassigned synchronously by Promise executor
+    /** @type {(value?: any) => void} */
+    let resolveLock = (_value) => {};
+    const lockPromise = new Promise((resolve) => {
+      resolveLock = resolve;
+    });
+    elementLocks.set(el, lockPromise);
 
-      for (const refAttr of [xlinkHref, href]) {
-        if (refAttr && refAttr.startsWith('#')) {
-          const refId = refAttr.substring(1);
-          const refEl = svgRoot.getElementById(refId);
-          if (refEl && !referencedElements.includes(refEl)) {
-            referencedElements.push(refEl);
-          }
+    try {
+      const doc = el.ownerDocument || document;
+      await waitForDocumentFonts(doc, fontTimeoutMs);
+
+      const svgRoot = el.ownerSVGElement || (el instanceof SVGSVGElement ? el : null);
+      if (!svgRoot) {
+        const elementInfo = getElementDescription(el);
+        // Can't use getAutoIdWarning here since we don't have svgRoot yet
+        const autoIdNote =
+          el && el.id && isAutoGeneratedId(el.id)
+            ? `\n⚠️  NOTE: This element has an AUTO-GENERATED ID ("${el.id}").\n` +
+              "   This ID was added by sbb-extract.cjs and doesn't exist in your original SVG.\n\n"
+            : '';
+        throw new Error(
+          '❌ Cannot compute SVG bounding box: Element is not inside an SVG tree\n' +
+            '\n' +
+            'ELEMENT DETAILS:\n' +
+            `  ${elementInfo}\n` +
+            autoIdNote +
+            'This element is not connected to an <svg> root element.\n' +
+            '\n' +
+            'How to fix:\n' +
+            '  • Ensure the element is inside an <svg> tag in the DOM\n' +
+            "  • Check that you're not querying a detached/orphaned element\n" +
+            '  • If creating elements programmatically, append them to the SVG tree first\n' +
+            "  • Verify the element hasn't been removed from the document"
+        );
+      }
+
+      // Root viewBox (user coordinate system)
+      const vbVal = svgRoot.viewBox && svgRoot.viewBox.baseVal;
+      let viewBox;
+      if (vbVal && vbVal.width && vbVal.height) {
+        viewBox = { x: vbVal.x, y: vbVal.y, width: vbVal.width, height: vbVal.height };
+      } else {
+        // fallback: geometry box of full SVG (ignores clipping)
+        const box = safeGetBBox(svgRoot);
+        if (box) {
+          viewBox = { x: box.x, y: box.y, width: box.width, height: box.height };
+        } else {
+          // Last resort: arbitrary large window
+          viewBox = { x: -2000, y: -2000, width: 4000, height: 4000 };
         }
       }
 
-      // Check for url(#...) in style
-      const style = n.getAttribute && n.getAttribute('style');
-      if (style) {
-        const urlMatches = style.match(/url\(#([^)]+)\)/g);
-        if (urlMatches) {
-          for (const urlMatch of urlMatches) {
-            const refId = urlMatch.match(/url\(#([^)]+)\)/)[1];
+      // Collect all referenced elements (textPath, use, gradients, filters, etc.)
+      // so we can include them in ROI calculation
+      const referencedElements = [];
+      (function collectReferences(n) {
+        // Check for xlink:href or href attributes
+        const xlinkHref = n.getAttribute && n.getAttribute('xlink:href');
+        const href = n.getAttribute && n.getAttribute('href');
+
+        for (const refAttr of [xlinkHref, href]) {
+          if (refAttr && refAttr.startsWith('#')) {
+            const refId = refAttr.substring(1);
             const refEl = svgRoot.getElementById(refId);
             if (refEl && !referencedElements.includes(refEl)) {
               referencedElements.push(refEl);
             }
           }
         }
-      }
 
-      // Recurse to children
-      const children = n.children;
-      for (let i = 0; i < children.length; i++) {
-        collectReferences(/** @type {SVGElement} */ (children[i]));
-      }
-    })(el);
-
-    // Decide coarse region of interest (ROI) for PASS 1
-    // CRITICAL: getBBox() is UNRELIABLE (ignores strokes, filters, transforms, dashed lines, and returns empty for some elements)
-    // Solution: Convert element's getBoundingClientRect() from page pixels to SVG user coordinates
-    let coarseROI;
-    if (mode === 'unclipped') {
-      // Start with viewBox as default
-      let minX = viewBox.x;
-      let minY = viewBox.y;
-      let maxX = viewBox.x + viewBox.width;
-      let maxY = viewBox.y + viewBox.height;
-
-      // Parse preserveAspectRatio to get scaling and offset
-      const scaling = parsePreserveAspectRatio(svgRoot, viewBox, svgRoot.getBoundingClientRect());
-
-      // Helper to expand ROI for an element
-      const expandROIForElement = (elem) => {
-        try {
-          const elRect = elem.getBoundingClientRect();
-          const svgRect = svgRoot.getBoundingClientRect();
-
-          // Only expand if element has non-zero dimensions
-          if (elRect.width > 0 && elRect.height > 0) {
-            let elUserLeft, elUserTop, elUserRight, elUserBottom;
-
-            if (scaling.uniform) {
-              // Uniform scaling (meet or slice) - subtract offset before scaling
-              const scale = scaling.scale;
-              elUserLeft = viewBox.x + (elRect.left - svgRect.left - scaling.offsetX) * scale;
-              elUserTop = viewBox.y + (elRect.top - svgRect.top - scaling.offsetY) * scale;
-              elUserRight = viewBox.x + (elRect.right - svgRect.left - scaling.offsetX) * scale;
-              elUserBottom = viewBox.y + (elRect.bottom - svgRect.top - scaling.offsetY) * scale;
-            } else {
-              // Non-uniform scaling (preserveAspectRatio="none") - no offset
-              elUserLeft = viewBox.x + (elRect.left - svgRect.left) * scaling.scaleX;
-              elUserTop = viewBox.y + (elRect.top - svgRect.top) * scaling.scaleY;
-              elUserRight = viewBox.x + (elRect.right - svgRect.left) * scaling.scaleX;
-              elUserBottom = viewBox.y + (elRect.bottom - svgRect.top) * scaling.scaleY;
+        // Check for url(#...) in style
+        const style = n.getAttribute && n.getAttribute('style');
+        if (style) {
+          const urlMatches = style.match(/url\(#([^)]+)\)/g);
+          if (urlMatches) {
+            for (const urlMatch of urlMatches) {
+              const refId = urlMatch.match(/url\(#([^)]+)\)/)[1];
+              const refEl = svgRoot.getElementById(refId);
+              if (refEl && !referencedElements.includes(refEl)) {
+                referencedElements.push(refEl);
+              }
             }
-
-            // Expand ROI to include element with generous padding for strokes/filters
-            const padding = 200; // SVG user units (increased for safety)
-            minX = Math.min(minX, elUserLeft - padding);
-            minY = Math.min(minY, elUserTop - padding);
-            maxX = Math.max(maxX, elUserRight + padding);
-            maxY = Math.max(maxY, elUserBottom + padding);
           }
-        } catch {
-          // getBoundingClientRect failed for this element
         }
-      };
 
-      // Expand ROI for target element
-      expandROIForElement(el);
+        // Recurse to children
+        const children = n.children;
+        for (let i = 0; i < children.length; i++) {
+          collectReferences(/** @type {SVGElement} */ (children[i]));
+        }
+      })(el);
 
-      // Also expand ROI for all referenced elements (textPath refs, gradients, etc.)
-      for (const refEl of referencedElements) {
-        expandROIForElement(refEl);
+      // Decide coarse region of interest (ROI) for PASS 1
+      // CRITICAL: getBBox() is UNRELIABLE (ignores strokes, filters, transforms, dashed lines, and returns empty for some elements)
+      // Solution: Convert element's getBoundingClientRect() from page pixels to SVG user coordinates
+      let coarseROI;
+      if (mode === 'unclipped') {
+        // Start with viewBox as default
+        let minX = viewBox.x;
+        let minY = viewBox.y;
+        let maxX = viewBox.x + viewBox.width;
+        let maxY = viewBox.y + viewBox.height;
+
+        // Parse preserveAspectRatio to get scaling and offset
+        const scaling = parsePreserveAspectRatio(svgRoot, viewBox, svgRoot.getBoundingClientRect());
+
+        // Helper to expand ROI for an element
+        const expandROIForElement = (elem) => {
+          try {
+            const elRect = elem.getBoundingClientRect();
+            const svgRect = svgRoot.getBoundingClientRect();
+
+            // Only expand if element has non-zero dimensions
+            if (elRect.width > 0 && elRect.height > 0) {
+              let elUserLeft, elUserTop, elUserRight, elUserBottom;
+
+              if (scaling.uniform) {
+                // Uniform scaling (meet or slice) - subtract offset before scaling
+                const scale = scaling.scale;
+                elUserLeft = viewBox.x + (elRect.left - svgRect.left - scaling.offsetX) * scale;
+                elUserTop = viewBox.y + (elRect.top - svgRect.top - scaling.offsetY) * scale;
+                elUserRight = viewBox.x + (elRect.right - svgRect.left - scaling.offsetX) * scale;
+                elUserBottom = viewBox.y + (elRect.bottom - svgRect.top - scaling.offsetY) * scale;
+              } else {
+                // Non-uniform scaling (preserveAspectRatio="none") - no offset
+                elUserLeft = viewBox.x + (elRect.left - svgRect.left) * scaling.scaleX;
+                elUserTop = viewBox.y + (elRect.top - svgRect.top) * scaling.scaleY;
+                elUserRight = viewBox.x + (elRect.right - svgRect.left) * scaling.scaleX;
+                elUserBottom = viewBox.y + (elRect.bottom - svgRect.top) * scaling.scaleY;
+              }
+
+              // Expand ROI to include element with generous padding for strokes/filters
+              const padding = 200; // SVG user units (increased for safety)
+              minX = Math.min(minX, elUserLeft - padding);
+              minY = Math.min(minY, elUserTop - padding);
+              maxX = Math.max(maxX, elUserRight + padding);
+              maxY = Math.max(maxY, elUserBottom + padding);
+            }
+          } catch {
+            // CRITICAL FIX #4: Intentionally silent error (best-effort ROI expansion)
+            // WHY: Some elements may not have valid bounding rects (hidden, detached)
+            // IMPACT: Skip problematic elements, continue with others
+            // This is acceptable because ROI calculation is best-effort
+          }
+        };
+
+        // Expand ROI for target element
+        expandROIForElement(el);
+
+        // Also expand ROI for all referenced elements (textPath refs, gradients, etc.)
+        for (const refEl of referencedElements) {
+          expandROIForElement(refEl);
+        }
+
+        coarseROI = {
+          x: minX,
+          y: minY,
+          width: maxX - minX,
+          height: maxY - minY
+        };
+      } else {
+        // "clipped": restrict to visible viewBox/viewport
+        coarseROI = {
+          x: viewBox.x,
+          y: viewBox.y,
+          width: viewBox.width,
+          height: viewBox.height
+        };
       }
 
-      coarseROI = {
-        x: minX,
-        y: minY,
-        width: maxX - minX,
-        height: maxY - minY
-      };
-    } else {
-      // "clipped": restrict to visible viewBox/viewport
-      coarseROI = {
-        x: viewBox.x,
-        y: viewBox.y,
-        width: viewBox.width,
-        height: viewBox.height
-      };
-    }
-
-    // Derive base pixels-per-user-unit from layout (optional)
-    let basePixelsPerUnit = 1;
-    if (useLayoutScale && viewBox.width > 0 && viewBox.height > 0) {
-      const rect = svgRoot.getBoundingClientRect();
-      if (rect && rect.width > 0 && rect.height > 0) {
-        const pxPerUnitX = rect.width / viewBox.width;
-        const pxPerUnitY = rect.height / viewBox.height;
-        basePixelsPerUnit = (pxPerUnitX + pxPerUnitY) / 2;
+      // Derive base pixels-per-user-unit from layout (optional)
+      let basePixelsPerUnit = 1;
+      if (useLayoutScale && viewBox.width > 0 && viewBox.height > 0) {
+        const rect = svgRoot.getBoundingClientRect();
+        if (rect && rect.width > 0 && rect.height > 0) {
+          const pxPerUnitX = rect.width / viewBox.width;
+          const pxPerUnitY = rect.height / viewBox.height;
+          basePixelsPerUnit = (pxPerUnitX + pxPerUnitY) / 2;
+        }
       }
-    }
 
-    const coarsePPU = Math.max(1, basePixelsPerUnit * coarseFactor);
-    const finePPU = Math.max(4, basePixelsPerUnit * fineFactor);
+      const coarsePPU = Math.max(1, basePixelsPerUnit * coarseFactor);
+      const finePPU = Math.max(4, basePixelsPerUnit * fineFactor);
 
-    // PASS 1: whole coarseROI at coarsePPU
-    if (DEBUG && typeof console !== 'undefined' && console.log) {
-      console.log('[DEBUG] coarseROI:', JSON.stringify(coarseROI));
-      console.log('[DEBUG] coarsePPU:', coarsePPU);
-    }
-    const coarseBBox = await rasterizeSvgElementToBBox(el, svgRoot, coarseROI, coarsePPU);
-    if (DEBUG && typeof console !== 'undefined' && console.log) {
-      console.log('[DEBUG] coarseBBox result:', coarseBBox);
-    }
-    if (!coarseBBox) {
-      // Fully transparent / clipped; visually nothing there
+      // PASS 1: whole coarseROI at coarsePPU
       if (DEBUG && typeof console !== 'undefined' && console.log) {
-        console.log('[DEBUG] No pixels found in coarse pass - returning null');
+        console.log('[DEBUG] coarseROI:', JSON.stringify(coarseROI));
+        console.log('[DEBUG] coarsePPU:', coarsePPU);
       }
-      return null;
+      const coarseBBox = await rasterizeSvgElementToBBox(el, svgRoot, coarseROI, coarsePPU);
+      if (DEBUG && typeof console !== 'undefined' && console.log) {
+        console.log('[DEBUG] coarseBBox result:', coarseBBox);
+      }
+      if (!coarseBBox) {
+        // Fully transparent / clipped; visually nothing there
+        if (DEBUG && typeof console !== 'undefined' && console.log) {
+          console.log('[DEBUG] No pixels found in coarse pass - returning null');
+        }
+        return null;
+      }
+
+      // Aggressive safety margin in user units
+      let marginUser = safetyMarginUser;
+      if (marginUser == null || !isFinite(marginUser)) {
+        const size = Math.max(coarseBBox.width, coarseBBox.height);
+        // 25% of largest dimension + 100 units as a "big" safety net
+        marginUser = (size > 0 ? size * 0.25 : 0) + 100;
+      }
+
+      // Expand ROI for PASS 2
+      const roiX0 = coarseBBox.x - marginUser;
+      const roiY0 = coarseBBox.y - marginUser;
+      const roiX1 = coarseBBox.x + coarseBBox.width + marginUser;
+      const roiY1 = coarseBBox.y + coarseBBox.height + marginUser;
+
+      const fineROI = {
+        x: roiX0,
+        y: roiY0,
+        width: Math.max(0, roiX1 - roiX0),
+        height: Math.max(0, roiY1 - roiY0)
+      };
+
+      if (fineROI.width <= 0 || fineROI.height <= 0) {
+        return null;
+      }
+
+      // PASS 2: cropped fineROI at finePPU
+      const fineBBox = await rasterizeSvgElementToBBox(el, svgRoot, fineROI, finePPU);
+      if (!fineBBox) {
+        return null;
+      }
+
+      return {
+        x: fineBBox.x,
+        y: fineBBox.y,
+        width: fineBBox.width,
+        height: fineBBox.height,
+        element: el,
+        svgRoot: svgRoot
+      };
+    } finally {
+      // CRITICAL FIX #2: Release lock in finally block
+      // WHY: Finally block always executes (even on error/return), ensuring lock is released
+      // IMPACT: Prevents deadlock if operation throws/returns early
+      resolveLock();
+      elementLocks.delete(el);
     }
-
-    // Aggressive safety margin in user units
-    let marginUser = safetyMarginUser;
-    if (marginUser == null || !isFinite(marginUser)) {
-      const size = Math.max(coarseBBox.width, coarseBBox.height);
-      // 25% of largest dimension + 100 units as a "big" safety net
-      marginUser = (size > 0 ? size * 0.25 : 0) + 100;
-    }
-
-    // Expand ROI for PASS 2
-    const roiX0 = coarseBBox.x - marginUser;
-    const roiY0 = coarseBBox.y - marginUser;
-    const roiX1 = coarseBBox.x + coarseBBox.width + marginUser;
-    const roiY1 = coarseBBox.y + coarseBBox.height + marginUser;
-
-    const fineROI = {
-      x: roiX0,
-      y: roiY0,
-      width: Math.max(0, roiX1 - roiX0),
-      height: Math.max(0, roiY1 - roiY0)
-    };
-
-    if (fineROI.width <= 0 || fineROI.height <= 0) {
-      return null;
-    }
-
-    // PASS 2: cropped fineROI at finePPU
-    const fineBBox = await rasterizeSvgElementToBBox(el, svgRoot, fineROI, finePPU);
-    if (!fineBBox) {
-      return null;
-    }
-
-    return {
-      x: fineBBox.x,
-      y: fineBBox.y,
-      width: fineBBox.width,
-      height: fineBBox.height,
-      element: el,
-      svgRoot: svgRoot
-    };
   }
 
   /**

@@ -31,14 +31,15 @@
 # - Avoids race condition where workflow starts before release exists
 #
 # Usage:
-#   ./scripts/release.sh [--yes] [version]
+#   ./scripts/release.sh [--yes] [--verbose] [version]
 #
 # Examples:
-#   ./scripts/release.sh 1.0.11        # Release specific version
-#   ./scripts/release.sh patch         # Bump patch (1.0.10 → 1.0.11)
-#   ./scripts/release.sh minor         # Bump minor (1.0.10 → 1.1.0)
-#   ./scripts/release.sh major         # Bump major (1.0.10 → 2.0.0)
-#   ./scripts/release.sh --yes patch   # Skip confirmation (for CI)
+#   ./scripts/release.sh 1.0.11            # Release specific version
+#   ./scripts/release.sh patch             # Bump patch (1.0.10 → 1.0.11)
+#   ./scripts/release.sh minor             # Bump minor (1.0.10 → 1.1.0)
+#   ./scripts/release.sh major             # Bump major (1.0.10 → 2.0.0)
+#   ./scripts/release.sh --yes patch       # Skip confirmation (for CI)
+#   ./scripts/release.sh --verbose patch   # Enable verbose debug logging
 #
 # Prerequisites:
 #   - gh CLI installed and authenticated
@@ -51,9 +52,22 @@
 #
 
 set -e  # Exit on error
+set -o pipefail  # Catch failures in pipes (e.g., cmd | grep will fail if cmd fails)
 
 # Get package name from package.json
 PACKAGE_NAME=$(grep '"name"' package.json | head -1 | sed 's/.*"name": "\(.*\)".*/\1/')
+
+# ══════════════════════════════════════════════════════════════════
+# STATE TRACKING FOR ROLLBACK AND SIGNAL HANDLING
+# These variables track what has been done so far, enabling proper cleanup
+# ══════════════════════════════════════════════════════════════════
+TAG_CREATED=false         # Local tag was created
+TAG_PUSHED=false          # Tag was pushed to remote
+RELEASE_CREATED=false     # GitHub Release was created
+COMMITS_PUSHED=false      # Commits were pushed to remote
+VERSION_BUMPED=false      # package.json was modified
+CURRENT_TAG=""            # Store the tag name for cleanup
+VERBOSE=false             # Verbose mode for debugging
 
 # Colors for output
 RED='\033[0;31m'
@@ -61,6 +75,85 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
+
+# ══════════════════════════════════════════════════════════════════
+# SIGNAL HANDLING AND CLEANUP
+# Trap SIGINT (Ctrl+C), SIGTERM (kill), and EXIT to ensure cleanup
+# ══════════════════════════════════════════════════════════════════
+
+# Handle interrupts (Ctrl+C, kill) - clean up partial state
+handle_interrupt() {
+    local EXIT_CODE=$?
+    echo "" >&2
+    log_warning "Release interrupted by user or signal"
+
+    # Perform cleanup based on what was done
+    cleanup_on_interrupt
+
+    exit 130  # Standard exit code for SIGINT
+}
+
+# Handle script exit (normal or error) - cleanup temp files
+handle_exit() {
+    local EXIT_CODE=$?
+
+    # Only show cleanup message if not exiting cleanly
+    if [ $EXIT_CODE -ne 0 ] && [ $EXIT_CODE -ne 130 ]; then
+        echo "" >&2
+        log_warning "Script exited with code $EXIT_CODE"
+    fi
+
+    # Clean up temp files (always safe to do)
+    rm -f /tmp/release-notes.md /tmp/lint-output.log /tmp/typecheck-output.log /tmp/test-output.log 2>/dev/null || true
+}
+
+# Cleanup function called on interrupt - removes partial state
+cleanup_on_interrupt() {
+    log_info "Cleaning up partial release state..."
+
+    # Debug: Show current state
+    log_verbose "State: TAG_CREATED=$TAG_CREATED, TAG_PUSHED=$TAG_PUSHED, RELEASE_CREATED=$RELEASE_CREATED"
+    log_verbose "State: COMMITS_PUSHED=$COMMITS_PUSHED, VERSION_BUMPED=$VERSION_BUMPED"
+    log_verbose "Current tag: $CURRENT_TAG"
+
+    # If tag was created locally but not pushed, delete it
+    # WHY: Prevents stale local tags that could cause confusion in future releases
+    if [ "$TAG_CREATED" = true ] && [ "$TAG_PUSHED" = false ] && [ -n "$CURRENT_TAG" ]; then
+        log_info "  → Deleting unpushed local tag: $CURRENT_TAG"
+        log_verbose "Running: git tag -d $CURRENT_TAG"
+        git tag -d "$CURRENT_TAG" 2>/dev/null || true
+    fi
+
+    # If version was bumped but not committed, restore package files
+    # WHY: Prevents uncommitted version changes from polluting the working directory
+    if [ "$VERSION_BUMPED" = true ] && [ "$COMMITS_PUSHED" = false ]; then
+        if git diff --name-only | grep -qE "package.json|pnpm-lock.yaml"; then
+            log_info "  → Restoring package.json and pnpm-lock.yaml"
+            log_verbose "Running: git checkout package.json pnpm-lock.yaml"
+            git checkout package.json pnpm-lock.yaml 2>/dev/null || true
+        fi
+    fi
+
+    # If commits were pushed but release failed, warn about orphaned state
+    # WHY: User needs to know there are commits/tags on remote that may need cleanup
+    if [ "$COMMITS_PUSHED" = true ] || [ "$TAG_PUSHED" = true ]; then
+        log_warning "Commits or tags were pushed to remote before interruption"
+        log_warning "You may need to manually clean up:"
+        if [ "$TAG_PUSHED" = true ] && [ -n "$CURRENT_TAG" ]; then
+            log_warning "  git push origin :refs/tags/$CURRENT_TAG  # Delete remote tag"
+        fi
+        if [ "$COMMITS_PUSHED" = true ]; then
+            log_warning "  git reset --hard origin/main~1 && git push --force  # Revert commits (DANGEROUS)"
+        fi
+    fi
+
+    log_success "Cleanup complete"
+}
+
+# Install signal handlers
+# WHY: Ensures we always clean up, even if user presses Ctrl+C or script is killed
+trap handle_interrupt SIGINT SIGTERM
+trap handle_exit EXIT
 
 # Helper functions
 log_info() {
@@ -77,6 +170,14 @@ log_warning() {
 
 log_error() {
     echo -e "${RED}✗${NC} $1" >&2
+}
+
+# Verbose logging (only shown when --verbose flag is set)
+# WHY: Helps debug script issues without cluttering normal output
+log_verbose() {
+    if [ "$VERBOSE" = true ]; then
+        echo -e "${BLUE}[VERBOSE]${NC} $1" >&2
+    fi
 }
 
 # Check if command exists
@@ -381,6 +482,7 @@ bump_version() {
     npm version "$VERSION_TYPE" --no-git-tag-version >/dev/null 2>&1
 
     # Check if npm version succeeded
+    # WHY: npm can fail silently, we must verify it actually worked
     if [ $? -ne 0 ]; then
         log_error "npm version command failed"
         log_error "Run manually to see errors: npm version $VERSION_TYPE --no-git-tag-version"
@@ -389,6 +491,14 @@ bump_version() {
 
     # Read the new version from package.json (the source of truth)
     NEW_VERSION=$(get_current_version)
+
+    # VERIFICATION: Ensure package.json was actually modified
+    # WHY: Catches silent npm failures where command succeeds but files aren't updated
+    if [ -z "$NEW_VERSION" ]; then
+        log_error "npm version succeeded but package.json version is empty"
+        log_error "This indicates a silent npm failure"
+        exit 1
+    fi
 
     # SECURITY: Strip any ANSI codes that might have leaked through
     NEW_VERSION=$(strip_ansi "$NEW_VERSION")
@@ -399,6 +509,18 @@ bump_version() {
         log_error "Check package.json for errors"
         exit 1
     fi
+
+    # VERIFICATION: Ensure pnpm-lock.yaml was also updated
+    # WHY: npm version should update both files; if it didn't, lock file is stale
+    if [ -f "pnpm-lock.yaml" ]; then
+        if ! grep -q "version: $NEW_VERSION" pnpm-lock.yaml; then
+            log_warning "pnpm-lock.yaml may not be updated to match package.json"
+            log_warning "Run 'pnpm install' to sync lock file"
+        fi
+    fi
+
+    # Mark version as bumped (for cleanup tracking)
+    VERSION_BUMPED=true
 
     log_success "Version bumped to $NEW_VERSION"
     echo "$NEW_VERSION"
@@ -421,6 +543,7 @@ set_version() {
     npm version "$VERSION" --no-git-tag-version >/dev/null 2>&1
 
     # Check if npm version succeeded
+    # WHY: npm can fail silently, we must verify it actually worked
     if [ $? -ne 0 ]; then
         log_error "npm version command failed"
         log_error "Run manually to see errors: npm version $VERSION --no-git-tag-version"
@@ -430,10 +553,31 @@ set_version() {
     # SECURITY: Re-validate after npm (paranoid check)
     # Read from package.json (the source of truth) instead of capturing npm output
     ACTUAL_VERSION=$(get_current_version)
+
+    # VERIFICATION: Ensure version was actually set
+    # WHY: Catches silent npm failures where command succeeds but files aren't updated
+    if [ -z "$ACTUAL_VERSION" ]; then
+        log_error "npm version succeeded but package.json version is empty"
+        log_error "This indicates a silent npm failure"
+        exit 1
+    fi
+
     if [ "$ACTUAL_VERSION" != "$VERSION" ]; then
         log_error "Version mismatch after npm: expected $VERSION, got $ACTUAL_VERSION"
         exit 1
     fi
+
+    # VERIFICATION: Ensure pnpm-lock.yaml was also updated
+    # WHY: npm version should update both files; if it didn't, lock file is stale
+    if [ -f "pnpm-lock.yaml" ]; then
+        if ! grep -q "version: $VERSION" pnpm-lock.yaml; then
+            log_warning "pnpm-lock.yaml may not be updated to match package.json"
+            log_warning "Run 'pnpm install' to sync lock file"
+        fi
+    fi
+
+    # Mark version as bumped (for cleanup tracking)
+    VERSION_BUMPED=true
 
     log_success "Version set to $VERSION"
     echo "$VERSION"
@@ -626,7 +770,11 @@ create_git_tag() {
 
     log_info "Creating git tag v$VERSION..."
 
+    # Store tag name for cleanup (before creating, in case we fail)
+    CURRENT_TAG="v$VERSION"
+
     # Delete tag if it exists locally
+    # WHY: Prevents "tag already exists" errors if script is re-run
     if git tag -l "v$VERSION" | grep -q "v$VERSION"; then
         log_warning "Tag v$VERSION already exists locally, deleting..."
         git tag -d "v$VERSION"
@@ -634,7 +782,13 @@ create_git_tag() {
 
     # Create annotated tag
     # SECURITY: Quote the tag name to prevent shell injection (paranoid)
-    git tag -a "v${VERSION}" -m "Release v${VERSION}"
+    if ! git tag -a "v${VERSION}" -m "Release v${VERSION}"; then
+        log_error "Failed to create git tag v$VERSION"
+        return 1
+    fi
+
+    # Mark tag as created (for cleanup tracking)
+    TAG_CREATED=true
 
     log_success "Git tag created"
 }
@@ -651,8 +805,21 @@ push_commits_to_github() {
     # Use retry logic for git push (network operation)
     if ! retry_with_backoff "git push origin main"; then
         log_error "Failed to push commits after retries"
+
+        # ROLLBACK: Delete local tag since we couldn't push commits
+        # WHY: If commits can't be pushed, the tag is useless and will cause confusion
+        if [ "$TAG_CREATED" = true ] && [ -n "$CURRENT_TAG" ]; then
+            log_warning "Deleting local tag $CURRENT_TAG (commits couldn't be pushed)"
+            git tag -d "$CURRENT_TAG" 2>/dev/null || true
+            TAG_CREATED=false
+        fi
+
         return 1
     fi
+
+    # Mark commits as pushed (for cleanup tracking)
+    COMMITS_PUSHED=true
+
     log_success "Commits pushed"
 
     log_info "Waiting for CI workflow to complete (this may take 3-10 minutes)..."
@@ -677,25 +844,55 @@ create_github_release() {
     if gh release view "v$VERSION" >/dev/null 2>&1; then
         log_warning "GitHub Release v$VERSION already exists"
         log_info "Skipping release creation (idempotent)"
+        RELEASE_CREATED=true
+        TAG_PUSHED=true
         return 0
     fi
 
     # Check if tag exists remotely
     if git ls-remote --tags origin | grep -q "refs/tags/v$VERSION"; then
         log_warning "Tag v$VERSION already exists on remote"
+        TAG_PUSHED=true
         log_info "Creating release for existing tag..."
-        gh release create "v$VERSION" \
+
+        # Try to create release for existing tag
+        if ! gh release create "v$VERSION" \
             --title "v$VERSION" \
-            --notes-file /tmp/release-notes.md
+            --notes-file /tmp/release-notes.md; then
+            log_error "Failed to create GitHub Release for existing tag"
+            log_warning "Tag v$VERSION exists on remote but release creation failed"
+            log_warning "Manual cleanup may be needed: gh release create v$VERSION"
+            return 1
+        fi
+
+        RELEASE_CREATED=true
         log_success "GitHub Release created for existing tag"
         return 0
     fi
 
     # Create release using gh CLI
     # The tag already exists locally, gh will push it when creating the release
-    gh release create "v$VERSION" \
+    if ! gh release create "v$VERSION" \
         --title "v$VERSION" \
-        --notes-file /tmp/release-notes.md
+        --notes-file /tmp/release-notes.md; then
+        log_error "Failed to create GitHub Release"
+
+        # ROLLBACK WARNING: Tag may have been pushed even though release creation failed
+        # WHY: gh release create pushes the tag first, then creates the release
+        # If release creation fails after tag push, we have an orphaned tag
+        if git ls-remote --tags origin | grep -q "refs/tags/v$VERSION"; then
+            TAG_PUSHED=true
+            log_warning "Tag v$VERSION was pushed to remote, but release creation failed"
+            log_warning "You have an orphaned tag on remote. To clean up:"
+            log_warning "  git push origin :refs/tags/v$VERSION"
+        fi
+
+        return 1
+    fi
+
+    # Mark tag as pushed and release as created (gh release create does both atomically)
+    TAG_PUSHED=true
+    RELEASE_CREATED=true
 
     log_success "GitHub Release created: https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/releases/tag/v$VERSION"
     log_success "Tag pushed and workflow triggered"
@@ -999,6 +1196,7 @@ verify_post_publish_installation() {
 }
 
 # Rollback on failure
+# Uses state tracking variables to determine what needs to be cleaned up
 rollback_release() {
     local VERSION=$1
     local STEP=$2
@@ -1006,20 +1204,57 @@ rollback_release() {
     log_error "Release failed at step: $STEP"
     log_warning "Attempting rollback..."
 
+    # ROLLBACK STRATEGY based on state tracking:
+    # 1. If tag pushed or release created → CANNOT auto-rollback (too dangerous)
+    # 2. If commits pushed but tag not pushed → CANNOT auto-rollback (might break CI)
+    # 3. If only local changes → CAN auto-rollback safely
+
+    # Check if we've pushed anything to remote
+    if [ "$TAG_PUSHED" = true ] || [ "$RELEASE_CREATED" = true ] || [ "$COMMITS_PUSHED" = true ]; then
+        log_error "CANNOT auto-rollback: Changes were pushed to remote"
+        log_warning "Manual cleanup required:"
+
+        if [ "$RELEASE_CREATED" = true ] && [ -n "$VERSION" ]; then
+            log_warning "  1. Delete GitHub Release:"
+            log_warning "     gh release delete v$VERSION --yes"
+        fi
+
+        if [ "$TAG_PUSHED" = true ] && [ -n "$VERSION" ]; then
+            log_warning "  2. Delete remote tag:"
+            log_warning "     git push origin :refs/tags/v$VERSION"
+        fi
+
+        if [ "$COMMITS_PUSHED" = true ]; then
+            log_warning "  3. Revert pushed commits (DANGEROUS - coordinate with team):"
+            log_warning "     git reset --hard origin/main~1 && git push --force"
+        fi
+
+        log_warning "  4. Restore local state:"
+        log_warning "     git fetch origin && git reset --hard origin/main"
+
+        exit 1
+    fi
+
+    # Safe to auto-rollback: nothing was pushed to remote
+    log_info "Safe to auto-rollback (no remote changes)"
+
     # Delete local tag if it exists
-    if git tag -l "v$VERSION" | grep -q "v$VERSION"; then
-        log_info "  → Deleting local tag v$VERSION..."
-        git tag -d "v$VERSION" || true
+    # WHY: Tag is useless if release failed, and will block future attempts
+    if [ "$TAG_CREATED" = true ] && [ -n "$CURRENT_TAG" ]; then
+        log_info "  → Deleting local tag $CURRENT_TAG..."
+        git tag -d "$CURRENT_TAG" 2>/dev/null || true
     fi
 
-    # Reset to origin/main if commits were made
-    if git log origin/main..HEAD --oneline | grep -q "chore(release): Bump version"; then
+    # Reset to origin/main if commits were made locally
+    # WHY: Removes version bump commit that never made it to remote
+    if git log origin/main..HEAD --oneline 2>/dev/null | grep -q "chore(release): Bump version"; then
         log_info "  → Resetting to origin/main..."
-        git reset --hard origin/main || true
+        git reset --hard origin/main 2>/dev/null || true
     fi
 
-    # Restore package.json and pnpm-lock.yaml if modified
-    if git diff --name-only | grep -qE "package.json|pnpm-lock.yaml"; then
+    # Restore package.json and pnpm-lock.yaml if modified but not committed
+    # WHY: Removes uncommitted version changes
+    if git diff --name-only 2>/dev/null | grep -qE "package.json|pnpm-lock.yaml"; then
         log_info "  → Restoring package.json and pnpm-lock.yaml..."
         git checkout package.json pnpm-lock.yaml 2>/dev/null || true
     fi
@@ -1046,6 +1281,11 @@ main() {
                 SKIP_CONFIRMATION=true
                 shift
                 ;;
+            --verbose|-v)
+                VERBOSE=true
+                log_verbose "Verbose mode enabled"
+                shift
+                ;;
             *)
                 VERSION_ARG=$1
                 shift
@@ -1054,13 +1294,14 @@ main() {
     done
 
     if [ -z "$VERSION_ARG" ]; then
-        log_error "Usage: $0 [--yes] [version|patch|minor|major]"
+        log_error "Usage: $0 [--yes] [--verbose] [version|patch|minor|major]"
         log_info "Examples:"
-        log_info "  $0 1.0.11        # Specific version"
-        log_info "  $0 patch         # Bump patch (1.0.10 → 1.0.11)"
-        log_info "  $0 minor         # Bump minor (1.0.10 → 1.1.0)"
-        log_info "  $0 major         # Bump major (1.0.10 → 2.0.0)"
-        log_info "  $0 --yes patch   # Skip confirmation prompt"
+        log_info "  $0 1.0.11            # Specific version"
+        log_info "  $0 patch             # Bump patch (1.0.10 → 1.0.11)"
+        log_info "  $0 minor             # Bump minor (1.0.10 → 1.1.0)"
+        log_info "  $0 major             # Bump major (1.0.10 → 2.0.0)"
+        log_info "  $0 --yes patch       # Skip confirmation prompt"
+        log_info "  $0 --verbose patch   # Enable debug logging"
         exit 1
     fi
 
@@ -1223,8 +1464,7 @@ main() {
     log_info "Install: npm install ${PACKAGE_NAME}@$NEW_VERSION"
     echo "" >&2
 
-    # Cleanup
-    rm -f /tmp/release-notes.md /tmp/lint-output.log /tmp/typecheck-output.log /tmp/test-output.log
+    # Note: Cleanup is handled by the EXIT trap (handle_exit function)
 }
 
 # Run main function

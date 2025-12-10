@@ -16,11 +16,15 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { JSDOM } from 'jsdom';
+import { CLI_TIMEOUT_MS } from '../../config/timeouts.js';
 
 const execFileAsync = promisify(execFile);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '../..');
+
+// CLI_EXEC_TIMEOUT: Timeout for CLI tool execution in integration tests
+const CLI_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 2;
 
 /**
  * Helper to parse SVG and extract viewBox, width, height attributes
@@ -66,7 +70,7 @@ describe('sbb-fix-viewbox CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-fix-viewbox.cjs', inputPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       // Should create _fixed.svg by default
@@ -87,7 +91,7 @@ describe('sbb-fix-viewbox CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-fix-viewbox.cjs', inputPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const attrs = await parseSvgAttributes(outputPath);
@@ -113,7 +117,7 @@ describe('sbb-fix-viewbox CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-fix-viewbox.cjs', inputPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const attrs = await parseSvgAttributes(outputPath);
@@ -134,7 +138,7 @@ describe('sbb-fix-viewbox CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-fix-viewbox.cjs', inputPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const attrs = await parseSvgAttributes(outputPath);
@@ -155,7 +159,7 @@ describe('sbb-fix-viewbox CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-fix-viewbox.cjs', inputPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const attrs = await parseSvgAttributes(outputPath);
@@ -178,7 +182,7 @@ describe('sbb-fix-viewbox CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-fix-viewbox.cjs', inputPath, '--force'], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const attrs = await parseSvgAttributes(outputPath);
@@ -200,7 +204,7 @@ describe('sbb-fix-viewbox CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-fix-viewbox.cjs', inputPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const attrs = await parseSvgAttributes(outputPath);
@@ -223,7 +227,7 @@ describe('sbb-fix-viewbox CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-fix-viewbox.cjs', inputPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       // Original should be untouched
@@ -247,7 +251,7 @@ describe('sbb-fix-viewbox CLI Integration Tests', () => {
       // Wait for warning delay (2 seconds)
       await execFileAsync('node', ['sbb-fix-viewbox.cjs', inputPath, '--overwrite'], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       // Original file should now have viewBox
@@ -271,7 +275,7 @@ describe('sbb-fix-viewbox CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-fix-viewbox.cjs', inputPath, customPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       // Custom path should exist with viewBox
@@ -298,7 +302,7 @@ describe('sbb-fix-viewbox CLI Integration Tests', () => {
       // Without --force: Should preserve viewBox (content is clipped)
       await execFileAsync('node', ['sbb-fix-viewbox.cjs', inputPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const attrsNoForce = await parseSvgAttributes(outputPath);
@@ -310,7 +314,7 @@ describe('sbb-fix-viewbox CLI Integration Tests', () => {
       // WITH --force: Should regenerate to include full content
       await execFileAsync('node', ['sbb-fix-viewbox.cjs', inputPath, '--force'], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const attrsForce = await parseSvgAttributes(outputPath);
@@ -327,7 +331,7 @@ describe('sbb-fix-viewbox CLI Integration Tests', () => {
       await expect(
         execFileAsync('node', ['sbb-fix-viewbox.cjs', inputPath], {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         })
       ).rejects.toThrow();
     });
@@ -345,7 +349,7 @@ describe('sbb-fix-viewbox CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-fix-viewbox.cjs', inputPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const attrs = await parseSvgAttributes(outputPath);
@@ -362,7 +366,7 @@ describe('sbb-fix-viewbox CLI Integration Tests', () => {
       await expect(
         execFileAsync('node', ['sbb-fix-viewbox.cjs', nonExistentPath], {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         })
       ).rejects.toThrow();
     });
@@ -374,7 +378,7 @@ describe('sbb-fix-viewbox CLI Integration Tests', () => {
       await expect(
         execFileAsync('node', ['sbb-fix-viewbox.cjs', invalidPath], {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         })
       ).rejects.toThrow();
     });
@@ -394,7 +398,7 @@ describe('sbb-fix-viewbox CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-fix-viewbox.cjs', inputPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const attrs = await parseSvgAttributes(outputPath);
@@ -419,7 +423,7 @@ describe('sbb-fix-viewbox CLI Integration Tests', () => {
       // Default (no --force): Preserve viewBox, hide watermark
       await execFileAsync('node', ['sbb-fix-viewbox.cjs', inputPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const attrsDefault = await parseSvgAttributes(outputPath);
@@ -431,7 +435,7 @@ describe('sbb-fix-viewbox CLI Integration Tests', () => {
       // WITH --force: Expose hidden watermark
       await execFileAsync('node', ['sbb-fix-viewbox.cjs', inputPath, '--force'], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const attrsForce = await parseSvgAttributes(outputPath);

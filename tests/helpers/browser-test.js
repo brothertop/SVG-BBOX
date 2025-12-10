@@ -9,6 +9,7 @@ import puppeteer from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { FONT_TIMEOUT_MS, CLI_TIMEOUT_MS } from '../../config/timeouts.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -98,11 +99,13 @@ export function loadFixture(fixturePath) {
  * Create a new page with SVG and SvgVisualBBox library loaded
  * @param {string} svgContent - SVG markup or fixture path
  * @param {object} [options]
- * @param {number} [options.fontTimeoutMs=2000] - Timeout for font loading
+ * @param {number} [options.fontTimeoutMs] - Timeout for font loading (defaults to FONT_TIMEOUT_MS from config)
  * @returns {Promise<import('puppeteer').Page>}
  */
 export async function createPageWithSvg(svgContent, options = {}) {
-  const { fontTimeoutMs = 2000 } = options;
+  // WHY use FONT_TIMEOUT_MS from config: Centralized timeout management
+  // Allows CI environment overrides without changing test code
+  const { fontTimeoutMs = FONT_TIMEOUT_MS } = options;
 
   const browser = await getBrowser();
   const page = await browser.newPage();
@@ -347,7 +350,9 @@ export async function runCLI(scriptPath, args = []) {
   try {
     const { stdout, stderr } = await execFileAsync('node', [fullScriptPath, ...args], {
       cwd: PROJECT_ROOT,
-      timeout: 120000 // 2 minutes
+      // WHY use CLI_TIMEOUT_MS: Centralized timeout management for CLI operations
+      // Allows CI environment overrides (slower CI needs longer timeouts)
+      timeout: CLI_TIMEOUT_MS * 2 // 2x for CLI wrapper overhead + browser launch
     });
     return { stdout, stderr, exitCode: 0 };
   } catch (error) {

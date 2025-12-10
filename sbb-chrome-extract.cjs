@@ -378,8 +378,12 @@ function readBatchFile(batchFilePath) {
       .filter((p) => p.length > 0);
 
     // If only one part after tab split, try space-separated
+    // WHY: Handle space-separated format, but be careful with paths containing spaces
+    // REGEX FIX: Match .svg file, then non-whitespace object ID, then .svg file
+    // This works for paths with spaces if they're quoted or separated clearly
     if (parts.length === 1) {
       // Look for pattern: input.svg object_id output.svg (three parts)
+      // Match: (anything ending in .svg) + (whitespace) + (non-whitespace ID) + (whitespace) + (anything ending in .svg)
       const svgMatch = line.match(/^(.+\.svg)\s+(\S+)\s+(.+\.svg)$/i);
       if (svgMatch) {
         parts = [svgMatch[1].trim(), svgMatch[2].trim(), svgMatch[3].trim()];
@@ -409,6 +413,12 @@ function readBatchFile(batchFilePath) {
 
     return { input: inputFile, objectId, output: outputFile };
   });
+
+  // WHY: Handle empty batch file entries after filtering
+  // Empty files should fail early with a clear message
+  if (entries.length === 0) {
+    throw new SVGBBoxError(`No valid entries found in batch file: ${batchFilePath}`);
+  }
 
   return entries;
 }
@@ -569,6 +579,12 @@ async function main() {
       const { input: inputFile, objectId, output: outputFile } = entries[i];
 
       try {
+        // WHY: Validate input file exists before attempting extraction
+        // Prevents cryptic Puppeteer errors when file is missing
+        if (!fs.existsSync(inputFile)) {
+          throw new SVGBBoxError(`Input file not found: ${inputFile}`);
+        }
+
         printInfo(`[${i + 1}/${entries.length}] Extracting "${objectId}" from ${inputFile}...`);
 
         const extractOptions = {

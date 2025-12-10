@@ -22,11 +22,17 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { PNG } from 'pngjs';
+import { CLI_TIMEOUT_MS } from '../../config/timeouts.js';
 
 const execFileAsync = promisify(execFile);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '../..');
+
+// CLI_EXEC_TIMEOUT: Timeout for CLI tool execution in integration tests
+// WHY use CLI_TIMEOUT_MS * 2: CLI tools internally launch browsers, need overhead buffer
+// Allows CI environment to override via config (CI is slower than local)
+const CLI_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 2;
 
 /**
  * Helper to read and parse PNG file
@@ -97,7 +103,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-svg2png.cjs', svgPath, pngPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       // Verify PNG exists
@@ -124,7 +130,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-svg2png.cjs', svgPath, pngPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const png = await parsePng(pngPath);
@@ -149,7 +155,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-svg2png.cjs', svgPath, pngPath, '--scale', '1'], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const png = await parsePng(pngPath);
@@ -172,7 +178,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-svg2png.cjs', svgPath, pngPath, '--scale', '2'], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const png = await parsePng(pngPath);
@@ -195,7 +201,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-svg2png.cjs', svgPath, pngPath, '--scale', '4'], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const png = await parsePng(pngPath);
@@ -218,7 +224,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-svg2png.cjs', svgPath, pngPath, '--scale', '8'], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const png = await parsePng(pngPath);
@@ -246,7 +252,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
         ['sbb-svg2png.cjs', svgPath, pngPath, '--background', 'transparent'],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -269,7 +275,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-svg2png.cjs', svgPath, pngPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const png = await parsePng(pngPath);
@@ -297,7 +303,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
         ['sbb-svg2png.cjs', svgPath, pngPath, '--background', '#ff0000'],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -328,7 +334,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
         ['sbb-svg2png.cjs', svgPath, pngPath, '--background', 'blue', '--margin', '10'],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -359,7 +365,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
         ['sbb-svg2png.cjs', svgPath, pngPath, '--width', '800', '--height', '600'],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -382,7 +388,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-svg2png.cjs', svgPath, pngPath, '--width', '1000'], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const png = await parsePng(pngPath);
@@ -410,7 +416,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-svg2png.cjs', svgPath, pngPath, '--mode', 'visible'], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const png = await parsePng(pngPath);
@@ -434,7 +440,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-svg2png.cjs', svgPath, pngPath, '--mode', 'full'], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const png = await parsePng(pngPath);
@@ -461,7 +467,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
         ['sbb-svg2png.cjs', svgPath, pngPath, '--mode', 'element', '--element-id', 'target'],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -487,7 +493,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-svg2png.cjs', svgPath, pngPath, '--margin', '10'], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const png = await parsePng(pngPath);
@@ -515,7 +521,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
         ['sbb-svg2png.cjs', svgPath, pngPath, '--mode', 'visible', '--margin', '50'],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -542,7 +548,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-svg2png.cjs', svgPath, pngPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const png = await parsePng(pngPath);
@@ -565,7 +571,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-svg2png.cjs', svgPath, pngPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const png = await parsePng(pngPath);
@@ -594,7 +600,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-svg2png.cjs', svgPath, pngPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       // Should render without errors
@@ -616,7 +622,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-svg2png.cjs', svgPath, pngPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const png = await parsePng(pngPath);
@@ -644,7 +650,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-svg2png.cjs', svgPath, pngPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const stats = await fs.stat(pngPath);
@@ -663,7 +669,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
       await expect(
         execFileAsync('node', ['sbb-svg2png.cjs', nonExistentPath, pngPath], {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         })
       ).rejects.toThrow();
     });
@@ -680,7 +686,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
       await expect(
         execFileAsync('node', ['sbb-svg2png.cjs', invalidPath, pngPath], {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         })
       ).rejects.toThrow();
     });
@@ -700,7 +706,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
       await expect(
         execFileAsync('node', ['sbb-svg2png.cjs', svgPath, pngPath, '--mode', 'element'], {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         })
       ).rejects.toThrow();
     });
@@ -723,7 +729,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
           ['sbb-svg2png.cjs', svgPath, pngPath, '--mode', 'element', '--element-id', 'nonexistent'],
           {
             cwd: projectRoot,
-            timeout: 60000
+            timeout: CLI_EXEC_TIMEOUT
           }
         )
       ).rejects.toThrow();
@@ -749,7 +755,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
         ['sbb-svg2png.cjs', svgPath, pngPath, '--background', 'transparent', '--scale', '4'],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -785,7 +791,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
         ['sbb-svg2png.cjs', svgPath, pngPath, '--mode', 'element', '--element-id', 'icon2'],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -814,7 +820,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
         ['sbb-svg2png.cjs', svgPath, pngPath, '--width', '400', '--height', '300'],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -844,7 +850,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
         ['sbb-svg2png.cjs', svgPath, pngPath, '--background', '#ffffff', '--scale', '2'],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -869,7 +875,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-svg2png.cjs', svgPath, pngPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const png = await parsePng(pngPath);
@@ -890,7 +896,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-svg2png.cjs', svgPath, pngPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const png = await parsePng(pngPath);
@@ -911,7 +917,7 @@ describe('sbb-svg2png CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-svg2png.cjs', svgPath, pngPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const png = await parsePng(pngPath);

@@ -19,11 +19,17 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { JSDOM } from 'jsdom';
+import { CLI_TIMEOUT_MS } from '../../config/timeouts.js';
 
 const execFileAsync = promisify(execFile);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '../..');
+
+// CLI_EXEC_TIMEOUT: Timeout for CLI tool execution in integration tests
+// WHY use CLI_TIMEOUT_MS * 2: CLI tools internally launch browsers, need overhead buffer
+// Allows CI environment to override via config (CI is slower than local)
+const CLI_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 2;
 
 /**
  * Helper to parse SVG and extract attributes
@@ -93,7 +99,7 @@ describe('sbb-extract CLI Integration Tests', () => {
         ['sbb-extract.cjs', svgPath, '--list', '--out-html', htmlPath],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -118,7 +124,7 @@ describe('sbb-extract CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-extract.cjs', svgPath, '--list', '--out-html', htmlPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       // HTML file should exist
@@ -145,7 +151,7 @@ describe('sbb-extract CLI Integration Tests', () => {
         ['sbb-extract.cjs', svgPath, '--list', '--assign-ids', '--out-fixed', fixedPath],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -169,7 +175,7 @@ describe('sbb-extract CLI Integration Tests', () => {
         ['sbb-extract.cjs', svgPath, '--list', '--json'],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -199,7 +205,7 @@ describe('sbb-extract CLI Integration Tests', () => {
 
       const { stdout } = await execFileAsync('node', ['sbb-extract.cjs', svgPath, '--list'], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       // Should detect sprite sheet pattern
@@ -230,7 +236,7 @@ describe('sbb-extract CLI Integration Tests', () => {
         ['sbb-extract.cjs', svgPath, '--rename', mappingPath, outputPath],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -265,7 +271,7 @@ describe('sbb-extract CLI Integration Tests', () => {
         ['sbb-extract.cjs', svgPath, '--rename', mappingPath, outputPath],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -301,7 +307,7 @@ describe('sbb-extract CLI Integration Tests', () => {
         ['sbb-extract.cjs', svgPath, '--rename', mappingPath, outputPath],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -331,7 +337,7 @@ describe('sbb-extract CLI Integration Tests', () => {
       await expect(
         execFileAsync('node', ['sbb-extract.cjs', svgPath, '--rename', mappingPath, outputPath], {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         })
       ).rejects.toThrow(/Invalid ID format/);
     });
@@ -353,7 +359,7 @@ describe('sbb-extract CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-extract.cjs', svgPath, '--extract', 'target', outputPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       // Should contain target but not other element
@@ -381,7 +387,7 @@ describe('sbb-extract CLI Integration Tests', () => {
         ['sbb-extract.cjs', svgPath, '--extract', 'box', outputPath, '--margin', '10'],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -409,7 +415,7 @@ describe('sbb-extract CLI Integration Tests', () => {
         ['sbb-extract.cjs', svgPath, '--extract', 'target', outputPath, '--include-context'],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -439,7 +445,7 @@ describe('sbb-extract CLI Integration Tests', () => {
           ['sbb-extract.cjs', svgPath, '--extract', 'doesNotExist', outputPath],
           {
             cwd: projectRoot,
-            timeout: 60000
+            timeout: CLI_EXEC_TIMEOUT
           }
         )
       ).rejects.toThrow();
@@ -463,7 +469,7 @@ describe('sbb-extract CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-extract.cjs', svgPath, '--extract', 'inner', outputPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const { content } = await parseSvgAttributes(outputPath);
@@ -489,7 +495,7 @@ describe('sbb-extract CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-extract.cjs', svgPath, '--export-all', outDir], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       // Should create output directory
@@ -523,7 +529,7 @@ describe('sbb-extract CLI Integration Tests', () => {
         ['sbb-extract.cjs', svgPath, '--export-all', outDir, '--margin', '5'],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -558,7 +564,7 @@ describe('sbb-extract CLI Integration Tests', () => {
         ['sbb-extract.cjs', svgPath, '--export-all', outDir, '--export-groups'],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -584,7 +590,7 @@ describe('sbb-extract CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-extract.cjs', svgPath, '--export-all', outDir], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const files = await fs.readdir(outDir);
@@ -613,7 +619,7 @@ describe('sbb-extract CLI Integration Tests', () => {
         ['sbb-extract.cjs', svgPath, '--export-all', outDir, '--json'],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -638,7 +644,7 @@ describe('sbb-extract CLI Integration Tests', () => {
 
       const { stdout } = await execFileAsync('node', ['sbb-extract.cjs', svgPath, '--list'], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       // Should not crash, may report no objects
@@ -655,7 +661,7 @@ describe('sbb-extract CLI Integration Tests', () => {
       await expect(
         execFileAsync('node', ['sbb-extract.cjs', invalidPath, '--list'], {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         })
       ).rejects.toThrow();
     });
@@ -669,7 +675,7 @@ describe('sbb-extract CLI Integration Tests', () => {
       await expect(
         execFileAsync('node', ['sbb-extract.cjs', nonExistentPath, '--list'], {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         })
       ).rejects.toThrow();
     });
@@ -694,7 +700,7 @@ describe('sbb-extract CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-extract.cjs', svgPath, '--extract', 'deep', outputPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       // Should successfully extract with all ancestor transforms
@@ -717,7 +723,7 @@ describe('sbb-extract CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-extract.cjs', svgPath, '--export-all', outDir], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       const files = await fs.readdir(outDir);
@@ -746,7 +752,7 @@ describe('sbb-extract CLI Integration Tests', () => {
         ['sbb-extract.cjs', svgPath, '--extract', 'blurred', outputPath],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -777,7 +783,7 @@ describe('sbb-extract CLI Integration Tests', () => {
         ['sbb-extract.cjs', svgPath, '--extract', 'instance1', outputPath],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -805,7 +811,7 @@ describe('sbb-extract CLI Integration Tests', () => {
 
       await execFileAsync('node', ['sbb-extract.cjs', svgPath, '--list', '--out-html', htmlPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       // Check HTML contains all element types
@@ -845,7 +851,7 @@ describe('sbb-extract CLI Integration Tests', () => {
         ['sbb-extract.cjs', svgPath, '--extract', 'logo', outputPath, '--margin', '5'],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -885,7 +891,7 @@ describe('sbb-extract CLI Integration Tests', () => {
         ['sbb-extract.cjs', svgPath, '--export-all', outDir, '--margin', '2', '--export-groups'],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -924,7 +930,7 @@ describe('sbb-extract CLI Integration Tests', () => {
         ['sbb-extract.cjs', svgPath, '--list', '--assign-ids', '--out-fixed', fixedPath],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -950,7 +956,7 @@ describe('sbb-extract CLI Integration Tests', () => {
         ['sbb-extract.cjs', fixedPath, '--rename', mappingPath, renamedPath],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 

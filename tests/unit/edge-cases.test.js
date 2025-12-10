@@ -18,6 +18,16 @@ import {
   assertValidBBox
 } from '../helpers/browser-test.js';
 
+// FONT_TOLERANCE_PX: Cross-platform font rendering tolerance
+// WHY 6px: Font rendering varies across platforms/browsers due to:
+// - Different font hinting algorithms (FreeType vs DirectWrite vs CoreText)
+// - Subpixel positioning differences
+// - Anti-aliasing method variations
+// - Font file version differences (especially system fonts)
+// - Rounding differences in font metrics calculation
+// Original 4px tolerance was insufficient for CI environments
+const _FONT_TOLERANCE_PX = 6;
+
 describe('Edge Cases - getSvgElementVisualBBoxTwoPassAggressive', () => {
   afterAll(async () => {
     await closeBrowser();
@@ -25,13 +35,17 @@ describe('Edge Cases - getSvgElementVisualBBoxTwoPassAggressive', () => {
 
   describe('Malformed SVG', () => {
     it('should handle SVG without xmlns attribute', async () => {
+      /**
+       * Verifies library handles SVG without xmlns attribute gracefully.
+       * Tests that missing xmlns doesn't prevent bbox calculation.
+       */
       const page = await createPageWithSvg('edge-cases/malformed/missing-xmlns.svg');
       const bbox = await getBBoxById(page, 'test-rect');
 
       expect(bbox).toBeTruthy();
       assertValidBBox(bbox);
 
-      // Should still compute bbox correctly
+      // Should still compute bbox correctly (non-text elements have precise coordinates)
       expect(bbox.x).toBeCloseTo(50, 0);
       expect(bbox.y).toBeCloseTo(50, 0);
       expect(bbox.width).toBeCloseTo(100, 0);
@@ -41,6 +55,10 @@ describe('Edge Cases - getSvgElementVisualBBoxTwoPassAggressive', () => {
     });
 
     it('should handle mixed-case SVG tags', async () => {
+      /**
+       * Verifies graceful handling of mixed-case SVG tags (e.g., <Rect> instead of <rect>).
+       * XML-strict mode may reject these, but library should handle gracefully.
+       */
       const page = await createPageWithSvg('edge-cases/malformed/mixed-case-tags.svg');
 
       // Mixed case tags might not parse correctly in XML-strict mode
@@ -60,53 +78,73 @@ describe('Edge Cases - getSvgElementVisualBBoxTwoPassAggressive', () => {
     });
 
     it('should handle nested SVG elements', async () => {
+      /**
+       * Verifies bbox calculation for elements inside nested <svg> elements.
+       * Tests that nested coordinate systems are handled correctly.
+       */
       const page = await createPageWithSvg('edge-cases/malformed/nested-svg.svg');
-      const bbox = await getBBoxById(page, 'nested-rect');
+      try {
+        const bbox = await getBBoxById(page, 'nested-rect');
 
-      expect(bbox).toBeTruthy();
-      assertValidBBox(bbox);
+        expect(bbox).toBeTruthy();
+        assertValidBBox(bbox);
 
-      // Nested SVG has its own coordinate system
-      // Inner viewBox is 0-100, but outer positioning affects final coords
-      expect(bbox.width).toBeGreaterThan(0);
-      expect(bbox.height).toBeGreaterThan(0);
-
-      await page.close();
+        // Nested SVG has its own coordinate system
+        // Inner viewBox is 0-100, but outer positioning affects final coords
+        expect(bbox.width).toBeGreaterThan(0);
+        expect(bbox.height).toBeGreaterThan(0);
+      } finally {
+        // WHY try/finally: Ensure page cleanup even if test fails
+        await page.close();
+      }
     });
   });
 
   describe('Font Issues', () => {
     it('should handle missing web fonts with fallback', async () => {
+      /**
+       * Verifies library handles missing web fonts gracefully with fallback rendering.
+       * Tests that 404 font loads don't crash bbox calculation.
+       */
       const page = await createPageWithSvg('edge-cases/fonts/missing-web-font.svg');
+      try {
+        // Font will 404, but should fallback to Arial
+        // WHY 3000ms timeout: Give browser time to attempt load and use fallback
+        const bbox = await getBBoxById(page, 'missing-font-text', {
+          fontTimeoutMs: 3000
+        });
 
-      // Font will 404, but should fallback to Arial
-      // Give it time to attempt load and fallback
-      const bbox = await getBBoxById(page, 'missing-font-text', {
-        fontTimeoutMs: 3000
-      });
+        expect(bbox).toBeTruthy();
+        assertValidBBox(bbox);
 
-      expect(bbox).toBeTruthy();
-      assertValidBBox(bbox);
-
-      // Text should still have dimensions with fallback font
-      expect(bbox.width).toBeGreaterThan(200);
-      expect(bbox.height).toBeGreaterThan(20);
-
-      await page.close();
-    }, 10000); // Longer timeout for font loading attempt
+        // Text should still have dimensions with fallback font
+        expect(bbox.width).toBeGreaterThan(200);
+        expect(bbox.height).toBeGreaterThan(20);
+      } finally {
+        // WHY try/finally: Ensure page cleanup even if test fails
+        await page.close();
+      }
+    }, 10000); // WHY 10s: Font loading attempt + fallback + timeout buffer for CI
 
     it('should handle font-family with special characters', async () => {
+      /**
+       * Verifies font-family parsing handles special characters (quotes, spaces, commas).
+       * Tests that unusual font names don't break bbox calculation.
+       */
       const page = await createPageWithSvg('edge-cases/fonts/special-chars-font-name.svg');
-      const bbox = await getBBoxById(page, 'special-font-text');
+      try {
+        const bbox = await getBBoxById(page, 'special-font-text');
 
-      expect(bbox).toBeTruthy();
-      assertValidBBox(bbox);
+        expect(bbox).toBeTruthy();
+        assertValidBBox(bbox);
 
-      // Font name parsing should handle quotes and spaces
-      expect(bbox.width).toBeGreaterThan(100);
-      expect(bbox.height).toBeGreaterThan(20);
-
-      await page.close();
+        // Font name parsing should handle quotes and spaces
+        expect(bbox.width).toBeGreaterThan(100);
+        expect(bbox.height).toBeGreaterThan(20);
+      } finally {
+        // WHY try/finally: Ensure page cleanup even if test fails
+        await page.close();
+      }
     });
   });
 

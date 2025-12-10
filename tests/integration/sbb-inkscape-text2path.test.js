@@ -11,10 +11,19 @@ import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { CLI_TIMEOUT_MS } from '../../config/timeouts.js';
 
 const execFilePromise = promisify(execFile);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// INKSCAPE_EXEC_TIMEOUT: Timeout for Inkscape-based operations
+// WHY use CLI_TIMEOUT_MS * 4: Inkscape operations are much slower than browser-based ones
+// - Inkscape launch: 2-5 seconds
+// - Text-to-path conversion: 1-3 seconds per SVG
+// - Comparison operations: 5-15 seconds
+// CI environments need extra buffer
+const INKSCAPE_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 4;
 
 const TEXT2PATH_PATH = path.join(__dirname, '../../sbb-inkscape-text2path.cjs');
 const FIXTURES_DIR = path.join(__dirname, '../fixtures');
@@ -23,7 +32,8 @@ const TEMP_DIR = path.join(__dirname, '../.tmp-inkscape-text2path-tests');
 // Check if Inkscape is available
 async function checkInkscapeAvailable() {
   try {
-    await execFilePromise('inkscape', ['--version'], { timeout: 5000 });
+    // WHY CLI_TIMEOUT_MS / 6: Quick version check, but allow time for Inkscape startup
+    await execFilePromise('inkscape', ['--version'], { timeout: CLI_TIMEOUT_MS / 6 });
     return true;
   } catch {
     return false;
@@ -45,7 +55,7 @@ async function runText2Path(inputSvg, args = []) {
       ...args
     ],
     {
-      timeout: 120000 // 2 minutes timeout (comparison can take time)
+      timeout: INKSCAPE_EXEC_TIMEOUT // 2 minutes timeout (comparison can take time)
     }
   );
 
@@ -140,7 +150,7 @@ describe('sbb-inkscape-text2path Integration Tests', () => {
 
       // First conversion should succeed
       await execFilePromise('node', [TEXT2PATH_PATH, inputPath, outputPath, '--skip-comparison'], {
-        timeout: 120000
+        timeout: INKSCAPE_EXEC_TIMEOUT
       });
 
       expect(fs.existsSync(outputPath)).toBe(true);
@@ -148,7 +158,7 @@ describe('sbb-inkscape-text2path Integration Tests', () => {
       // Second conversion without --overwrite should fail
       await expect(
         execFilePromise('node', [TEXT2PATH_PATH, inputPath, outputPath, '--skip-comparison'], {
-          timeout: 120000
+          timeout: INKSCAPE_EXEC_TIMEOUT
         })
       ).rejects.toThrow();
     });
@@ -164,7 +174,7 @@ describe('sbb-inkscape-text2path Integration Tests', () => {
 
       // First conversion
       await execFilePromise('node', [TEXT2PATH_PATH, inputPath, outputPath, '--skip-comparison'], {
-        timeout: 120000
+        timeout: INKSCAPE_EXEC_TIMEOUT
       });
 
       expect(fs.existsSync(outputPath)).toBe(true);

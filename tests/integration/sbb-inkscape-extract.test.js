@@ -11,10 +11,14 @@ import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { CLI_TIMEOUT_MS } from '../../config/timeouts.js';
 
 const execFilePromise = promisify(execFile);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// CLI_EXEC_TIMEOUT: Timeout for CLI tool execution in integration tests
+const CLI_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 2;
 
 const EXTRACT_PATH = path.join(__dirname, '../../sbb-inkscape-extract.cjs');
 const FIXTURES_DIR = path.join(__dirname, '../fixtures');
@@ -23,7 +27,7 @@ const TEMP_DIR = path.join(__dirname, '../.tmp-inkscape-extract-tests');
 // Check if Inkscape is available
 async function checkInkscapeAvailable() {
   try {
-    await execFilePromise('inkscape', ['--version'], { timeout: 5000 });
+    await execFilePromise('inkscape', ['--version'], { timeout: CLI_TIMEOUT_MS / 6 });
     return true;
   } catch {
     return false;
@@ -163,7 +167,7 @@ ${inputSvg} text1 batch_text1.svg`;
 
       // Run batch extraction from TEMP_DIR so relative paths work
       const { stdout } = await execFilePromise('node', [EXTRACT_PATH, '--batch', batchFile], {
-        timeout: 60000,
+        timeout: CLI_EXEC_TIMEOUT,
         cwd: TEMP_DIR
       });
 
@@ -200,7 +204,7 @@ ${inputSvg}\trect1\tbatch_comment_rect.svg
 
       // Run batch extraction from TEMP_DIR so relative paths work
       await execFilePromise('node', [EXTRACT_PATH, '--batch', batchFile], {
-        timeout: 60000,
+        timeout: CLI_EXEC_TIMEOUT,
         cwd: TEMP_DIR
       });
 
@@ -246,7 +250,7 @@ ${inputSvg}\tcircle1\tbatch_margin_circle.svg`;
 
       // Run batch extraction with margin from TEMP_DIR
       await execFilePromise('node', [EXTRACT_PATH, '--batch', batchFile, '--margin', '5'], {
-        timeout: 60000,
+        timeout: CLI_EXEC_TIMEOUT,
         cwd: TEMP_DIR
       });
 

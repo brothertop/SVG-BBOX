@@ -562,6 +562,12 @@ async function processDirectory(dirPath, filterRegex = null, ignoreViewBox = fal
     progress.update(`${i + 1}/${filtered.length} - ${file}`);
 
     try {
+      // WHY: Validate input file exists before attempting bbox computation
+      // Directory listing might be stale or file could have been deleted
+      if (!fs.existsSync(filePath)) {
+        throw new ValidationError(`Input file not found: ${filePath}`);
+      }
+
       const result = await computeBBox(filePath, [], ignoreViewBox);
       results.push(result);
     } catch (err) {
@@ -640,6 +646,12 @@ function parseListFile(listPath) {
     entries.push(entry);
   }
 
+  // WHY: Handle empty list files after filtering
+  // Empty files should fail early with a clear message
+  if (entries.length === 0) {
+    throw new ValidationError(`No valid entries found in list file: ${listPath}`);
+  }
+
   return entries;
 }
 
@@ -660,6 +672,12 @@ async function processList(listPath) {
     progress.update(`${i + 1}/${entries.length} - ${path.basename(entry.path)}`);
 
     try {
+      // WHY: Validate input file exists before attempting bbox computation
+      // List file might reference non-existent or moved files
+      if (!fs.existsSync(entry.path)) {
+        throw new ValidationError(`Input file not found: ${entry.path}`);
+      }
+
       const result = await computeBBox(entry.path, entry.ids, entry.ignoreViewBox);
       results.push(result);
     } catch (err) {

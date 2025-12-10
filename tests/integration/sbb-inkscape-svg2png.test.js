@@ -11,6 +11,7 @@ import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { CLI_TIMEOUT_MS } from '../../config/timeouts.js';
 
 const execFilePromise = promisify(execFile);
 const __filename = fileURLToPath(import.meta.url);
@@ -20,10 +21,13 @@ const SVG2PNG_PATH = path.join(__dirname, '../../sbb-inkscape-svg2png.cjs');
 const FIXTURES_DIR = path.join(__dirname, '../fixtures');
 const TEMP_DIR = path.join(__dirname, '../.tmp-inkscape-svg2png-tests');
 
+// INKSCAPE_EXEC_TIMEOUT: Timeout for Inkscape-based operations
+const INKSCAPE_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 4;
+
 // Check if Inkscape is available
 async function checkInkscapeAvailable() {
   try {
-    await execFilePromise('inkscape', ['--version'], { timeout: 5000 });
+    await execFilePromise('inkscape', ['--version'], { timeout: CLI_TIMEOUT_MS / 6 });
     return true;
   } catch {
     return false;
@@ -39,7 +43,7 @@ async function runSvg2Png(inputSvg, args = []) {
     'node',
     [SVG2PNG_PATH, inputPath, '--output', outputPath, ...args],
     {
-      timeout: 30000 // 30 seconds timeout
+      timeout: INKSCAPE_EXEC_TIMEOUT // Use the configured Inkscape timeout
     }
   );
 

@@ -14,11 +14,15 @@ import { promisify } from 'util';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { CLI_TIMEOUT_MS } from '../../config/timeouts.js';
 
 const execFileAsync = promisify(execFile);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '../..');
+
+// CLI_EXEC_TIMEOUT: Timeout for CLI tool execution in integration tests
+const CLI_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 2;
 
 describe('sbb-getbbox CLI Integration Tests', () => {
   let tempDir;
@@ -46,7 +50,7 @@ describe('sbb-getbbox CLI Integration Tests', () => {
 
       const { stdout } = await execFileAsync('node', ['sbb-getbbox.cjs', svgPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       expect(stdout).toContain('simple.svg');
@@ -66,7 +70,7 @@ describe('sbb-getbbox CLI Integration Tests', () => {
 
       const { stdout } = await execFileAsync('node', ['sbb-getbbox.cjs', svgPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       expect(stdout).toContain('no-viewbox.svg');
@@ -91,7 +95,7 @@ describe('sbb-getbbox CLI Integration Tests', () => {
       // This is different from browser rendering which DOES clip to viewBox
       const { stdout: output } = await execFileAsync('node', ['sbb-getbbox.cjs', svgPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       // Should show full drawing bbox (0,0,200,200)
@@ -104,7 +108,7 @@ describe('sbb-getbbox CLI Integration Tests', () => {
         ['sbb-getbbox.cjs', svgPath, '--ignore-vbox'],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -123,7 +127,7 @@ describe('sbb-getbbox CLI Integration Tests', () => {
       // WITHOUT --ignore-vbox: Content is completely clipped, bbox should be empty or minimal
       const { stdout: _clippedOutput } = await execFileAsync('node', ['sbb-getbbox.cjs', svgPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       // WITH --ignore-vbox: Should show full content bbox (200,200,50,50)
@@ -132,7 +136,7 @@ describe('sbb-getbbox CLI Integration Tests', () => {
         ['sbb-getbbox.cjs', svgPath, '--ignore-vbox'],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -154,7 +158,7 @@ describe('sbb-getbbox CLI Integration Tests', () => {
         ['sbb-getbbox.cjs', svgPath, '--ignore-vbox'],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 
@@ -175,7 +179,7 @@ describe('sbb-getbbox CLI Integration Tests', () => {
 
       const { stdout } = await execFileAsync('node', ['sbb-getbbox.cjs', svgPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       // Empty SVG should report minimal or zero bbox
@@ -195,7 +199,7 @@ describe('sbb-getbbox CLI Integration Tests', () => {
 
       const { stdout } = await execFileAsync('node', ['sbb-getbbox.cjs', svgPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       expect(stdout).toContain('nested.svg');
@@ -215,7 +219,7 @@ describe('sbb-getbbox CLI Integration Tests', () => {
 
       const { stdout } = await execFileAsync('node', ['sbb-getbbox.cjs', svgPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       expect(stdout).toContain('text.svg');
@@ -235,7 +239,7 @@ describe('sbb-getbbox CLI Integration Tests', () => {
 
       const { stdout } = await execFileAsync('node', ['sbb-getbbox.cjs', svgPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       expect(stdout).toContain('extreme-aspect.svg');
@@ -254,7 +258,7 @@ describe('sbb-getbbox CLI Integration Tests', () => {
       await expect(
         execFileAsync('node', ['sbb-getbbox.cjs', nonExistentPath], {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         })
       ).rejects.toThrow();
     });
@@ -266,7 +270,7 @@ describe('sbb-getbbox CLI Integration Tests', () => {
       await expect(
         execFileAsync('node', ['sbb-getbbox.cjs', invalidPath], {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         })
       ).rejects.toThrow();
     });
@@ -284,7 +288,7 @@ describe('sbb-getbbox CLI Integration Tests', () => {
 
       const { stdout } = await execFileAsync('node', ['sbb-getbbox.cjs', svgPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       expect(stdout).toContain('multiple.svg');
@@ -305,7 +309,7 @@ describe('sbb-getbbox CLI Integration Tests', () => {
 
       const { stdout } = await execFileAsync('node', ['sbb-getbbox.cjs', svgPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       expect(stdout).toContain('overlapping.svg');
@@ -331,7 +335,7 @@ describe('sbb-getbbox CLI Integration Tests', () => {
       // Default: Should only see the visible rectangle
       const { stdout: visible } = await execFileAsync('node', ['sbb-getbbox.cjs', svgPath], {
         cwd: projectRoot,
-        timeout: 60000
+        timeout: CLI_EXEC_TIMEOUT
       });
 
       expect(visible).toMatch(/x:\s*10/);
@@ -345,7 +349,7 @@ describe('sbb-getbbox CLI Integration Tests', () => {
         ['sbb-getbbox.cjs', svgPath, '--ignore-vbox'],
         {
           cwd: projectRoot,
-          timeout: 60000
+          timeout: CLI_EXEC_TIMEOUT
         }
       );
 

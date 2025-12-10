@@ -39,6 +39,10 @@ import { spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { CLI_TIMEOUT_MS } from '../../config/timeouts.js';
+
+// CLI_EXEC_TIMEOUT: Timeout for CLI tool execution in integration tests
+const CLI_EXEC_TIMEOUT = CLI_TIMEOUT_MS * 2;
 
 // Make this test optional by checking for ENABLE_VIEWBOX_ACCURACY_TEST env var
 const testIfEnabled = process.env.ENABLE_VIEWBOX_ACCURACY_TEST ? it : it.skip;
@@ -88,7 +92,7 @@ describe('ViewBox Regeneration Accuracy (Critical Bug Discovery)', () => {
         const result = spawnSync('node', ['sbb-compare.cjs', originalPath, duplicatePath], {
           cwd: process.cwd(),
           encoding: 'utf8',
-          timeout: 120000
+          timeout: CLI_EXEC_TIMEOUT
         });
 
         expect(result.status).toBe(0);
@@ -110,7 +114,7 @@ describe('ViewBox Regeneration Accuracy (Critical Bug Discovery)', () => {
           {
             cwd: process.cwd(),
             encoding: 'utf8',
-            timeout: 120000
+            timeout: CLI_EXEC_TIMEOUT
           }
         );
 
@@ -127,7 +131,7 @@ describe('ViewBox Regeneration Accuracy (Critical Bug Discovery)', () => {
           const result = spawnSync('node', ['sbb-compare.cjs', originalPath, regeneratedPath], {
             cwd: process.cwd(),
             encoding: 'utf8',
-            timeout: 120000
+            timeout: CLI_EXEC_TIMEOUT
           });
 
           expect(result.status).toBe(0);

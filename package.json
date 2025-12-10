@@ -111,6 +111,11 @@
     "pngjs": "^7.0.0",
     "puppeteer": "^24.31.0"
   },
+  "pnpm": {
+    "overrides": {
+      "webidl-conversions": "7.0.0"
+    }
+  },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
     "@playwright/test": "^1.57.0",

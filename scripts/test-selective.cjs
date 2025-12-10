@@ -450,6 +450,27 @@ async function getChangedFiles(baseRef) {
   // Fallback: Pure git-based detection
   debug('Using git-based detection (fallback)');
 
+  // Detect CI environment - CI checkouts are always clean (no working directory changes)
+  // so we must compare commit ranges instead of working directory
+  const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
+
+  if (isCI) {
+    // CI MODE: Compare commits (baseRef...HEAD) - working directory is always clean
+    // Using three-dot notation shows changes between baseRef and HEAD
+    debug(`CI detected, comparing commits: ${baseRef}...HEAD`);
+    const { stdout } = await execFileAsync('git', ['diff', '--name-only', `${baseRef}...HEAD`], {
+      timeout: GIT_DIFF_TIMEOUT_MS
+    });
+    const files = stdout
+      .trim()
+      .split('\n')
+      .filter((f) => f.length > 0);
+
+    debug(`Found ${files.length} changed files in CI (${baseRef}...HEAD)`);
+    return files;
+  }
+
+  // LOCAL MODE: Compare working directory against baseRef
   // FAIL-FAST: Let git errors propagate - don't hide configuration problems
   const { stdout } = await execFileAsync('git', ['diff', '--name-only', baseRef], {
     timeout: GIT_DIFF_TIMEOUT_MS

@@ -14,6 +14,7 @@ jobs:
   publish:
     name: Publish to npm
     runs-on: ubuntu-latest
+    timeout-minutes: 15 # npm publish typically takes 2-5 min, 15 min is safe buffer
 
     steps:
       - name: Checkout code
@@ -27,8 +28,27 @@ jobs:
       - name: Install dependencies (for prepublishOnly script)
         run: npm install --production=false
 
-      - name: Verify npm version (should be >= 11.5.1)
-        run: npm --version
+      - name: Verify Node.js 24 and npm >= 11.5.1 (required for OIDC)
+        run: |
+          NODE_VERSION=$(node --version | sed 's/v//')
+          NPM_VERSION=$(npm --version)
+          echo "Node.js: $NODE_VERSION"
+          echo "npm: $NPM_VERSION"
+
+          # Verify Node.js 24.x (required for npm 11.5.1+)
+          if [[ ! "$NODE_VERSION" =~ ^24\. ]]; then
+            echo "::error::Expected Node.js 24.x, got $NODE_VERSION"
+            exit 1
+          fi
+
+          # Verify npm >= 11.5.1 (required for OIDC trusted publishing)
+          NPM_MAJOR=$(echo $NPM_VERSION | cut -d. -f1)
+          NPM_MINOR=$(echo $NPM_VERSION | cut -d. -f2)
+          if [ "$NPM_MAJOR" -lt 11 ] || ([ "$NPM_MAJOR" -eq 11 ] && [ "$NPM_MINOR" -lt 5 ]); then
+            echo "::error::npm version must be >= 11.5.1 for OIDC (got $NPM_VERSION)"
+            exit 1
+          fi
+          echo "::notice::Node.js and npm versions verified for OIDC publishing"
 
       - name: Publish to npm (using OIDC trusted publishing)
         run: npm publish --access public

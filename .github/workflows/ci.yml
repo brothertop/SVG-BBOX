@@ -7,6 +7,11 @@ on:
     branches: [main, develop]
   workflow_dispatch:
 
+# Cancel in-progress runs for the same branch (saves CI time on rapid commits)
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 # Centralized configuration - Single source of truth for versions and settings
 # Simplified env vars - use semantic names (LTS vs LATEST)
 env:
@@ -86,7 +91,8 @@ jobs:
     name: Test (Node ${{ matrix.node-version }} on ${{ matrix.os }})
     needs: [lint, typecheck] # Wait for fast checks to pass before running tests
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30 # Prevent hangs - tests should complete in 10-15 min
+    # Windows is 2-3x slower than Linux, so use longer timeout
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 60 || 30 }}
 
     strategy:
       fail-fast: true # Stop on first failure (saves CI time)
@@ -126,12 +132,23 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # Cache browser binaries (saves ~60 sec per job after first run)
-      - name: Cache browser binaries
+      # Windows uses different paths than Unix (~/.cache doesn't exist on Windows)
+      - name: Cache browser binaries (Unix)
+        if: runner.os != 'Windows'
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/ms-playwright
             ~/.cache/puppeteer
+          key: browsers-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Cache browser binaries (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\ms-playwright
+            ~\AppData\Local\puppeteer
           key: browsers-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Install browser dependencies
@@ -191,13 +208,14 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # Cache Playwright browsers (saves ~60 sec per job after first run)
+      # Key must match test job's Linux cache for cache reuse
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/ms-playwright
             ~/.cache/puppeteer
-          key: browsers-ubuntu-${{ hashFiles('pnpm-lock.yaml') }}
+          key: browsers-Linux-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
@@ -247,14 +265,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Reuse browser binary cache from test job
+      # Reuse browser binary cache from test job (key must match test job's Linux cache)
       - name: Cache browser binaries
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/ms-playwright
             ~/.cache/puppeteer
-          key: browsers-ubuntu-${{ hashFiles('pnpm-lock.yaml') }}
+          key: browsers-Linux-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Install browser dependencies
         run: pnpm run install-browsers

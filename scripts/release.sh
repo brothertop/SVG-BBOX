@@ -316,6 +316,7 @@ check_main_branch() {
 
 # PHASE 1.5: Validate version synchronization across files
 # Check that package.json version matches version.cjs and minified preamble
+# Auto-rebuilds minified file if version mismatch is detected
 validate_version_sync() {
     log_info "Validating version synchronization..."
 
@@ -347,9 +348,34 @@ validate_version_sync() {
         if [ -z "$MINIFIED_VERSION" ]; then
             log_warning "Could not extract version from SvgVisualBBox.min.js preamble"
         elif [ "$PKG_VERSION" != "$MINIFIED_VERSION" ]; then
-            log_error "Version mismatch: package.json=$PKG_VERSION, SvgVisualBBox.min.js=$MINIFIED_VERSION"
-            log_error "Run 'npm run build' to regenerate minified file, then commit"
-            return 1
+            # SAFEGUARD: Auto-rebuild minified file if version mismatch
+            # WHY: Version mismatch between package.json and minified header
+            # was a recurring issue causing release failures
+            log_warning "Version mismatch: package.json=$PKG_VERSION, SvgVisualBBox.min.js=$MINIFIED_VERSION"
+            log_info "  → Auto-rebuilding minified library..."
+
+            if pnpm run build >/dev/null 2>&1; then
+                # Re-check version after rebuild
+                MINIFIED_VERSION=$(head -1 SvgVisualBBox.min.js | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' | sed 's/v//')
+                if [ "$PKG_VERSION" = "$MINIFIED_VERSION" ]; then
+                    log_success "  Minified library rebuilt successfully (v$PKG_VERSION)"
+                    # Commit the rebuilt file if it changed
+                    if ! git diff --quiet SvgVisualBBox.min.js 2>/dev/null; then
+                        log_info "  → Committing rebuilt minified library..."
+                        git add SvgVisualBBox.min.js
+                        git commit -m "build: Regenerate minified library for v$PKG_VERSION" || true
+                        log_success "  Minified library committed"
+                    fi
+                else
+                    log_error "Build completed but version still mismatched"
+                    log_error "Expected: $PKG_VERSION, Got: $MINIFIED_VERSION"
+                    return 1
+                fi
+            else
+                log_error "Failed to rebuild minified library"
+                log_error "Run 'npm run build' manually and check for errors"
+                return 1
+            fi
         fi
     else
         log_warning "SvgVisualBBox.min.js not found - skipping minified preamble check"

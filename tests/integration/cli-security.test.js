@@ -428,33 +428,40 @@ describe('CLI Security Integration Tests', () => {
       assert.ok(!jsonStr.includes('C:\\Windows'), 'Should not include Windows system paths');
     });
 
-    it('sbb-compare JSON output should be safely parseable', async () => {
-      /**Test that sbb-compare JSON output is valid and safe*/
-      const svg1Path = path.join(testDir, 'svg1.svg');
-      const svg2Path = path.join(testDir, 'svg2.svg');
-      const diffPath = path.join(testDir, 'diff.png');
-      testFiles.push(svg1Path, svg2Path, diffPath);
+    it(
+      'sbb-compare JSON output should be safely parseable',
+      async () => {
+        /**Test that sbb-compare JSON output is valid and safe*/
+        const svg1Path = path.join(testDir, 'svg1.svg');
+        const svg2Path = path.join(testDir, 'svg2.svg');
+        const diffPath = path.join(testDir, 'diff.png');
+        testFiles.push(svg1Path, svg2Path, diffPath);
 
-      fs.writeFileSync(svg1Path, VALID_TEST_SVG);
-      fs.writeFileSync(svg2Path, VALID_TEST_SVG);
+        fs.writeFileSync(svg1Path, VALID_TEST_SVG);
+        fs.writeFileSync(svg2Path, VALID_TEST_SVG);
 
-      const { stdout } = await execFilePromise(
-        'node',
-        [CLI_TOOLS.comparer, svg1Path, svg2Path, '--out-diff', diffPath, '--json'],
-        {
-          timeout: CLI_TIMEOUT_MS
-        }
-      );
+        // WHY CLI_EXEC_TIMEOUT: sbb-compare does pixel-by-pixel comparison which takes
+        // ~19 seconds per comparison. When running full test suite, resource contention
+        // can push this over the 30s CLI_TIMEOUT_MS limit.
+        const { stdout } = await execFilePromise(
+          'node',
+          [CLI_TOOLS.comparer, svg1Path, svg2Path, '--out-diff', diffPath, '--json'],
+          {
+            timeout: CLI_EXEC_TIMEOUT
+          }
+        );
 
-      // Should parse without error
-      const result = JSON.parse(stdout);
-      assert.ok(result);
-      assert.ok(typeof result === 'object');
+        // Should parse without error
+        const result = JSON.parse(stdout);
+        assert.ok(result);
+        assert.ok(typeof result === 'object');
 
-      // Should not have prototype pollution keys
-      assert.ok(!Object.prototype.hasOwnProperty.call(result, '__proto__'));
-      assert.ok(!Object.prototype.hasOwnProperty.call(result, 'constructor'));
-    });
+        // Should not have prototype pollution keys
+        assert.ok(!Object.prototype.hasOwnProperty.call(result, '__proto__'));
+        assert.ok(!Object.prototype.hasOwnProperty.call(result, 'constructor'));
+      },
+      CLI_EXEC_TIMEOUT + 5000 // Vitest timeout - slightly longer than execFile timeout
+    );
   });
 
   // ============================================================================

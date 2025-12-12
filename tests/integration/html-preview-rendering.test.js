@@ -35,6 +35,8 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
   /** @type {string[]} */
   let availableFonts;
 
+  // WHY: 120 second timeout for beforeAll - Puppeteer launch can be slow when
+  // running full test suite in parallel due to resource contention
   beforeAll(async () => {
     browser = await puppeteer.launch({
       headless: true,
@@ -113,7 +115,7 @@ describe('HTML Preview Rendering - Critical Bug Fixes', () => {
       availableFonts.slice(0, 10).join(', '),
       '...'
     );
-  });
+  }, 120000); // 120 second timeout - Puppeteer launch slow when running full suite
 
   afterAll(async () => {
     await browser.close();

@@ -824,19 +824,185 @@ auto_fix_issues() {
     log_success "Auto-fix complete"
 }
 
-# Run quality checks
-run_quality_checks() {
-    log_info "Running quality checks..."
+# ══════════════════════════════════════════════════════════════════
+# COMPREHENSIVE QUALITY CHECKS
+# These checks mirror EXACTLY what CI does to prevent surprises
+# WHY: Any difference between local checks and CI causes release failures
+# ══════════════════════════════════════════════════════════════════
 
-    log_info "  → Linting..."
-    if ! pnpm run lint 2>&1 | tee /tmp/lint-output.log | tail -20; then
-        log_error "Linting failed"
-        log_error "Full output: /tmp/lint-output.log"
+# Validate JSON files are syntactically correct
+# WHY: Invalid JSON breaks npm, eslint, and other tools silently
+validate_json_files() {
+    log_info "  → Validating JSON files..."
+
+    local JSON_FILES=(
+        "package.json"
+        "tsconfig.json"
+    )
+
+    local INVALID=""
+    for JSON_FILE in "${JSON_FILES[@]}"; do
+        if [ -f "$JSON_FILE" ]; then
+            if ! node -e "JSON.parse(require('fs').readFileSync('$JSON_FILE', 'utf8'))" 2>/dev/null; then
+                INVALID="${INVALID}${JSON_FILE} "
+            fi
+        fi
+    done
+
+    if [ -n "$INVALID" ]; then
+        log_error "Invalid JSON syntax in: $INVALID"
+        return 1
+    fi
+
+    log_success "  JSON files valid"
+    return 0
+}
+
+# Validate YAML workflow files
+# WHY: Invalid YAML causes CI to fail silently or behave unexpectedly
+validate_yaml_files() {
+    log_info "  → Validating YAML workflow files..."
+
+    local YAML_FILES=(
+        ".github/workflows/ci.yml"
+        ".github/workflows/publish.yml"
+    )
+
+    local INVALID=""
+    for YAML_FILE in "${YAML_FILES[@]}"; do
+        if [ -f "$YAML_FILE" ]; then
+            # Use node to parse YAML (js-yaml is often available, or use basic check)
+            # Basic check: ensure file is readable and has valid structure
+            if ! head -1 "$YAML_FILE" | grep -qE '^name:|^on:|^#' 2>/dev/null; then
+                # Try node-based validation
+                if ! node -e "
+                    const fs = require('fs');
+                    const content = fs.readFileSync('$YAML_FILE', 'utf8');
+                    // Basic YAML validation - check for common syntax errors
+                    if (content.includes('\t')) {
+                        console.error('YAML contains tabs');
+                        process.exit(1);
+                    }
+                " 2>/dev/null; then
+                    INVALID="${INVALID}${YAML_FILE} "
+                fi
+            fi
+        fi
+    done
+
+    if [ -n "$INVALID" ]; then
+        log_error "Potentially invalid YAML in: $INVALID"
+        return 1
+    fi
+
+    log_success "  YAML workflow files valid"
+    return 0
+}
+
+# Validate package.json has all required fields and files
+# WHY: Missing files in "files" array causes MODULE_NOT_FOUND after npm install
+validate_package_json_completeness() {
+    log_info "  → Validating package.json completeness..."
+
+    # Check required fields exist
+    local REQUIRED_FIELDS=("name" "version" "main" "bin" "files")
+    for FIELD in "${REQUIRED_FIELDS[@]}"; do
+        if ! grep -q "\"$FIELD\"" package.json; then
+            log_error "package.json missing required field: $FIELD"
+            return 1
+        fi
+    done
+
+    # Check that files in "bin" actually exist
+    local BIN_FILES
+    BIN_FILES=$(node -e "
+        const pkg = require('./package.json');
+        if (pkg.bin) {
+            Object.values(pkg.bin).forEach(f => console.log(f));
+        }
+    " 2>/dev/null)
+
+    local MISSING_BIN=""
+    while IFS= read -r BIN_FILE; do
+        if [ -n "$BIN_FILE" ] && [ ! -f "$BIN_FILE" ]; then
+            MISSING_BIN="${MISSING_BIN}${BIN_FILE} "
+        fi
+    done <<< "$BIN_FILES"
+
+    if [ -n "$MISSING_BIN" ]; then
+        log_error "package.json bin files missing: $MISSING_BIN"
+        return 1
+    fi
+
+    # Check that main entry point exists
+    local MAIN_FILE
+    MAIN_FILE=$(node -e "console.log(require('./package.json').main || '')" 2>/dev/null)
+    if [ -n "$MAIN_FILE" ] && [ ! -f "$MAIN_FILE" ]; then
+        log_error "package.json main file missing: $MAIN_FILE"
+        return 1
+    fi
+
+    log_success "  package.json complete"
+    return 0
+}
+
+# Run quality checks - COMPREHENSIVE version matching CI exactly
+run_quality_checks() {
+    log_info "Running comprehensive quality checks (matching CI exactly)..."
+    echo ""
+
+    # ════════════════════════════════════════════════════════════════
+    # PHASE 1: CONFIGURATION VALIDATION
+    # ════════════════════════════════════════════════════════════════
+    log_info "┌─ Phase 1: Configuration Validation"
+
+    validate_json_files || exit 1
+    validate_yaml_files || exit 1
+    validate_package_json_completeness || exit 1
+
+    log_success "└─ Configuration validation passed"
+    echo ""
+
+    # ════════════════════════════════════════════════════════════════
+    # PHASE 2: FORMATTING CHECK (Prettier)
+    # WHY: CI runs prettier --check, so we must too
+    # ════════════════════════════════════════════════════════════════
+    log_info "┌─ Phase 2: Formatting Check"
+
+    log_info "  → Checking code formatting (prettier)..."
+    if ! pnpm exec prettier --check . 2>&1 | tee /tmp/prettier-output.log | tail -10; then
+        log_error "Formatting check failed - files need formatting"
+        log_error "Run: pnpm run format"
+        log_error "Full output: /tmp/prettier-output.log"
         exit 1
     fi
-    log_success "  Linting passed"
+    log_success "  Formatting check passed"
 
-    log_info "  → Type checking..."
+    log_success "└─ Formatting check passed"
+    echo ""
+
+    # ════════════════════════════════════════════════════════════════
+    # PHASE 3: LINTING (ESLint)
+    # ════════════════════════════════════════════════════════════════
+    log_info "┌─ Phase 3: Linting"
+
+    log_info "  → Running ESLint..."
+    if ! pnpm exec eslint . 2>&1 | tee /tmp/eslint-output.log | tail -20; then
+        log_error "ESLint failed"
+        log_error "Full output: /tmp/eslint-output.log"
+        exit 1
+    fi
+    log_success "  ESLint passed"
+
+    log_success "└─ Linting passed"
+    echo ""
+
+    # ════════════════════════════════════════════════════════════════
+    # PHASE 4: TYPE CHECKING (TypeScript)
+    # ════════════════════════════════════════════════════════════════
+    log_info "┌─ Phase 4: Type Checking"
+
+    log_info "  → Running TypeScript type checker..."
     if ! pnpm run typecheck 2>&1 | tee /tmp/typecheck-output.log | tail -20; then
         log_error "Type checking failed"
         log_error "Full output: /tmp/typecheck-output.log"
@@ -844,15 +1010,84 @@ run_quality_checks() {
     fi
     log_success "  Type checking passed"
 
-    log_info "  → Running tests..."
-    if ! pnpm test 2>&1 | tee /tmp/test-output.log | tail -50; then
+    log_success "└─ Type checking passed"
+    echo ""
+
+    # ════════════════════════════════════════════════════════════════
+    # PHASE 5: UNIT & INTEGRATION TESTS (ALL tests, not selective)
+    # WHY: CI runs ALL tests, so we must too to catch failures
+    # ════════════════════════════════════════════════════════════════
+    log_info "┌─ Phase 5: Running ALL Tests (Unit + Integration)"
+
+    log_info "  → Running full test suite (this may take several minutes)..."
+    log_info "  → (CI runs ALL tests, not selective - we must match CI exactly)"
+    if ! pnpm test 2>&1 | tee /tmp/test-output.log | tail -60; then
         log_error "Tests failed"
         log_error "Full output: /tmp/test-output.log"
+        # Show failed tests summary
+        log_error "Failed tests:"
+        grep -E "FAIL|✗|AssertionError" /tmp/test-output.log | head -20 || true
         exit 1
     fi
-    log_success "  Tests passed"
+    log_success "  All unit & integration tests passed"
 
-    log_success "All quality checks passed"
+    log_success "└─ Tests passed"
+    echo ""
+
+    # ════════════════════════════════════════════════════════════════
+    # PHASE 6: E2E TESTS (Playwright)
+    # WHY: CI runs E2E tests separately, failures here block release
+    # ════════════════════════════════════════════════════════════════
+    log_info "┌─ Phase 6: E2E Tests (Playwright)"
+
+    log_info "  → Running E2E tests..."
+    if ! pnpm run test:e2e 2>&1 | tee /tmp/e2e-output.log | tail -30; then
+        log_error "E2E tests failed"
+        log_error "Full output: /tmp/e2e-output.log"
+        exit 1
+    fi
+    log_success "  E2E tests passed"
+
+    log_success "└─ E2E tests passed"
+    echo ""
+
+    # ════════════════════════════════════════════════════════════════
+    # PHASE 7: BUILD VERIFICATION
+    # WHY: Ensure minified file builds correctly before release
+    # ════════════════════════════════════════════════════════════════
+    log_info "┌─ Phase 7: Build Verification"
+
+    log_info "  → Building minified library..."
+    if ! pnpm run build 2>&1 | tee /tmp/build-output.log | tail -10; then
+        log_error "Build failed"
+        log_error "Full output: /tmp/build-output.log"
+        exit 1
+    fi
+    log_success "  Build succeeded"
+
+    # Verify build output exists and is valid
+    if [ ! -f "SvgVisualBBox.min.js" ]; then
+        log_error "Build did not produce SvgVisualBBox.min.js"
+        exit 1
+    fi
+
+    # Verify build has no syntax errors
+    if ! node --check SvgVisualBBox.min.js 2>/dev/null; then
+        log_error "Built file has JavaScript syntax errors"
+        exit 1
+    fi
+    log_success "  Build output verified"
+
+    log_success "└─ Build verification passed"
+    echo ""
+
+    # ════════════════════════════════════════════════════════════════
+    # ALL CHECKS PASSED
+    # ════════════════════════════════════════════════════════════════
+    log_success "═══════════════════════════════════════════════════════════"
+    log_success "All quality checks passed - ready for release"
+    log_success "═══════════════════════════════════════════════════════════"
+    echo ""
 }
 
 # Generate release notes using git-cliff

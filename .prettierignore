@@ -19,3 +19,6 @@ CHANGELOG.md
 .tmp*/
 *.tmp
 *.log
+
+# Local Claude configuration (user-specific)
+.claude/

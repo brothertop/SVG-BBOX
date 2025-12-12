@@ -314,6 +314,132 @@ check_main_branch() {
     log_success "On main branch"
 }
 
+# CRITICAL: Check that local main is synced with remote
+# WHY: If local is behind origin/main, push will fail or create conflicts
+# If local is ahead, there are unpushed commits that might interfere
+check_branch_synced() {
+    log_info "Checking branch synchronization with remote..."
+
+    # Fetch latest from remote (required to compare)
+    # WHY: Without fetch, local refs might be stale
+    if ! git fetch origin main --quiet 2>/dev/null; then
+        log_error "Failed to fetch from origin"
+        log_error "Check network connection and repository access"
+        exit 1
+    fi
+
+    local LOCAL_SHA REMOTE_SHA
+    LOCAL_SHA=$(git rev-parse HEAD)
+    REMOTE_SHA=$(git rev-parse origin/main)
+
+    if [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then
+        # Check if we're ahead or behind
+        local AHEAD BEHIND
+        AHEAD=$(git rev-list --count origin/main..HEAD)
+        BEHIND=$(git rev-list --count HEAD..origin/main)
+
+        if [ "$BEHIND" -gt 0 ]; then
+            log_error "Local branch is $BEHIND commit(s) BEHIND origin/main"
+            log_error "Run: git pull origin main"
+            exit 1
+        fi
+
+        if [ "$AHEAD" -gt 0 ]; then
+            log_error "Local branch is $AHEAD commit(s) AHEAD of origin/main"
+            log_error "These unpushed commits will be included in the release"
+            log_error "Push them first: git push origin main"
+            log_error "Or reset to origin: git reset --hard origin/main"
+            exit 1
+        fi
+    fi
+
+    log_success "Local branch is in sync with origin/main"
+}
+
+# Check that required GitHub workflow files exist
+# WHY: Release depends on ci.yml and publish.yml workflows
+# If they're missing or broken, release will fail at CI stage
+check_workflow_files_exist() {
+    log_info "Checking GitHub workflow files..."
+
+    local REQUIRED_WORKFLOWS=(
+        ".github/workflows/ci.yml"
+        ".github/workflows/publish.yml"
+    )
+
+    local MISSING=""
+    for WORKFLOW in "${REQUIRED_WORKFLOWS[@]}"; do
+        if [ ! -f "$WORKFLOW" ]; then
+            MISSING="${MISSING}${WORKFLOW} "
+        fi
+    done
+
+    if [ -n "$MISSING" ]; then
+        log_error "Missing required workflow files: $MISSING"
+        log_error "Release cannot proceed without CI/CD workflows"
+        exit 1
+    fi
+
+    # Basic YAML syntax check (catch obvious errors)
+    # WHY: Broken workflow YAML will cause CI to fail silently
+    for WORKFLOW in "${REQUIRED_WORKFLOWS[@]}"; do
+        # Use node to validate YAML since it's always available
+        if ! node -e "require('fs').readFileSync('$WORKFLOW', 'utf8')" 2>/dev/null; then
+            log_error "Cannot read workflow file: $WORKFLOW"
+            exit 1
+        fi
+    done
+
+    log_success "GitHub workflow files present"
+}
+
+# Check network connectivity to GitHub and npm
+# WHY: Release requires both services; fail fast if unreachable
+check_network_connectivity() {
+    log_info "Checking network connectivity..."
+
+    # Check GitHub API
+    if ! gh api user --silent 2>/dev/null; then
+        log_error "Cannot reach GitHub API"
+        log_error "Check network connection and gh auth status"
+        exit 1
+    fi
+
+    # Check npm registry
+    if ! npm ping --registry https://registry.npmjs.org 2>/dev/null; then
+        log_warning "npm registry ping failed (may be normal)"
+        # Not fatal - npm ping can fail even when registry is accessible
+    fi
+
+    log_success "Network connectivity OK"
+}
+
+# Check Node.js version matches CI requirements
+# WHY: Different Node versions can cause test discrepancies
+check_node_version() {
+    log_info "Checking Node.js version..."
+
+    local NODE_VERSION
+    NODE_VERSION=$(node --version | sed 's/v//')
+    local NODE_MAJOR
+    NODE_MAJOR=$(echo "$NODE_VERSION" | cut -d. -f1)
+
+    # CI uses Node 24 for npm trusted publishing (requires npm 11.5.1+)
+    # Local can use 18+ but should warn if different from CI
+    if [ "$NODE_MAJOR" -lt 18 ]; then
+        log_error "Node.js version $NODE_VERSION is too old"
+        log_error "Minimum required: Node.js 18"
+        exit 1
+    fi
+
+    if [ "$NODE_MAJOR" -lt 24 ]; then
+        log_warning "Local Node.js $NODE_VERSION differs from CI (Node 24)"
+        log_warning "Tests may behave differently"
+    else
+        log_success "Node.js version OK: $NODE_VERSION"
+    fi
+}
+
 # PHASE 1.5: Validate version synchronization across files
 # Check that package.json version matches version.cjs and minified preamble
 # Auto-rebuilds minified file if version mismatch is detected
@@ -1369,34 +1495,59 @@ main() {
     # ══════════════════════════════════════════════════════════════════
     # PHASE 1.8: PRE-FLIGHT CHECKLIST
     # Consolidates all pre-release validations for clear visibility
+    # WHY: Catch CI/CD issues BEFORE pushing to avoid wasted releases
     # ══════════════════════════════════════════════════════════════════
     show_preflight_header
 
     local PREFLIGHT_CHECKS=0
-    local PREFLIGHT_TOTAL=5
+    local PREFLIGHT_TOTAL=9
 
     # Pre-flight Check 1: Prerequisites (commands and auth)
-    log_info "[1/5] Checking required tools and authentication..."
+    log_info "[1/9] Checking required tools and authentication..."
     validate_prerequisites
     PREFLIGHT_CHECKS=$((PREFLIGHT_CHECKS + 1))
 
     # Pre-flight Check 2: Clean working directory
-    log_info "[2/5] Checking working directory..."
+    log_info "[2/9] Checking working directory..."
     check_clean_working_dir
     PREFLIGHT_CHECKS=$((PREFLIGHT_CHECKS + 1))
 
     # Pre-flight Check 3: On main branch
-    log_info "[3/5] Checking current branch..."
+    log_info "[3/9] Checking current branch..."
     check_main_branch
     PREFLIGHT_CHECKS=$((PREFLIGHT_CHECKS + 1))
 
-    # Pre-flight Check 4: Version synchronization (PHASE 1.5)
-    log_info "[4/5] Validating version synchronization..."
+    # Pre-flight Check 4: Branch synced with remote
+    # WHY: Prevents push failures and ensures we're releasing the correct state
+    log_info "[4/9] Checking branch synchronization..."
+    check_branch_synced
+    PREFLIGHT_CHECKS=$((PREFLIGHT_CHECKS + 1))
+
+    # Pre-flight Check 5: GitHub workflow files exist
+    # WHY: Release depends on ci.yml and publish.yml - fail fast if missing
+    log_info "[5/9] Checking GitHub workflow files..."
+    check_workflow_files_exist
+    PREFLIGHT_CHECKS=$((PREFLIGHT_CHECKS + 1))
+
+    # Pre-flight Check 6: Network connectivity
+    # WHY: Both GitHub API and npm registry must be reachable for release
+    log_info "[6/9] Checking network connectivity..."
+    check_network_connectivity
+    PREFLIGHT_CHECKS=$((PREFLIGHT_CHECKS + 1))
+
+    # Pre-flight Check 7: Node.js version compatibility
+    # WHY: npm trusted publishing requires npm 11.5.1+ (Node.js 24+)
+    log_info "[7/9] Checking Node.js version..."
+    check_node_version
+    PREFLIGHT_CHECKS=$((PREFLIGHT_CHECKS + 1))
+
+    # Pre-flight Check 8: Version synchronization (PHASE 1.5)
+    log_info "[8/9] Validating version synchronization..."
     validate_version_sync || exit 1
     PREFLIGHT_CHECKS=$((PREFLIGHT_CHECKS + 1))
 
-    # Pre-flight Check 5: UMD wrapper syntax (PHASE 1.6)
-    log_info "[5/5] Validating UMD wrapper syntax..."
+    # Pre-flight Check 9: UMD wrapper syntax (PHASE 1.6)
+    log_info "[9/9] Validating UMD wrapper syntax..."
     validate_umd_wrapper || exit 1
     PREFLIGHT_CHECKS=$((PREFLIGHT_CHECKS + 1))
 

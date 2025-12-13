@@ -1338,7 +1338,10 @@ wait_for_ci_workflow() {
         WORKFLOW_JSON=$(gh run list --workflow=ci.yml --branch=main --limit 5 --json status,conclusion,headSha,databaseId 2>/dev/null || echo "[]")
 
         # Find the workflow run matching our commit SHA
-        MATCHING_RUN=$(echo "$WORKFLOW_JSON" | jq -r --arg sha "$COMMIT_SHA" '.[] | select(.headSha == $sha) | {status, conclusion, databaseId}' 2>/dev/null | head -1)
+        # WHY use first(): jq '.[] | select()' can return multiple objects on separate lines
+        # which breaks subsequent jq parsing. 'first()' returns only the first match as valid JSON.
+        # FIX for "jq: parse error: Unfinished JSON term at EOF" bug
+        MATCHING_RUN=$(echo "$WORKFLOW_JSON" | jq -r --arg sha "$COMMIT_SHA" 'first(.[] | select(.headSha == $sha))' 2>/dev/null)
 
         if [ -z "$MATCHING_RUN" ] || [ "$MATCHING_RUN" = "null" ]; then
             echo -n "."
@@ -1347,7 +1350,7 @@ wait_for_ci_workflow() {
             continue
         fi
 
-        WORKFLOW_STATUS=$(echo "$MATCHING_RUN" | jq -r '.status')
+        WORKFLOW_STATUS=$(echo "$MATCHING_RUN" | jq -r '.status' 2>/dev/null)
 
         if [ "$WORKFLOW_STATUS" = "completed" ]; then
             WORKFLOW_CONCLUSION=$(echo "$MATCHING_RUN" | jq -r '.conclusion')
@@ -1405,14 +1408,16 @@ wait_for_workflow() {
         WORKFLOW_JSON=$(gh run list --workflow=publish.yml --limit 5 --json status,conclusion,headSha,databaseId 2>/dev/null || echo "[]")
 
         # PHASE 1.2: Find the workflow run matching our tag commit SHA
+        # WHY use first(): jq '.[] | select()' returns multiple objects on separate lines
+        # which breaks subsequent jq parsing. 'first()' returns valid JSON.
         local MATCHING_RUN=""
         if [ -n "$TAG_SHA" ]; then
-            MATCHING_RUN=$(echo "$WORKFLOW_JSON" | jq -r --arg sha "$TAG_SHA" '.[] | select(.headSha == $sha) | {status, conclusion, databaseId}' 2>/dev/null | head -1)
+            MATCHING_RUN=$(echo "$WORKFLOW_JSON" | jq -r --arg sha "$TAG_SHA" 'first(.[] | select(.headSha == $sha))' 2>/dev/null)
         fi
 
         # Fallback to latest workflow if no SHA match (for backwards compatibility)
         if [ -z "$MATCHING_RUN" ] || [ "$MATCHING_RUN" = "null" ]; then
-            MATCHING_RUN=$(echo "$WORKFLOW_JSON" | jq -r '.[0] | {status, conclusion, databaseId}' 2>/dev/null)
+            MATCHING_RUN=$(echo "$WORKFLOW_JSON" | jq -r '.[0]' 2>/dev/null)
         fi
 
         if [ -z "$MATCHING_RUN" ] || [ "$MATCHING_RUN" = "null" ]; then
@@ -1422,7 +1427,7 @@ wait_for_workflow() {
             continue
         fi
 
-        WORKFLOW_STATUS=$(echo "$MATCHING_RUN" | jq -r '.status')
+        WORKFLOW_STATUS=$(echo "$MATCHING_RUN" | jq -r '.status' 2>/dev/null)
 
         if [ "$WORKFLOW_STATUS" = "completed" ]; then
             WORKFLOW_CONCLUSION=$(echo "$MATCHING_RUN" | jq -r '.conclusion')

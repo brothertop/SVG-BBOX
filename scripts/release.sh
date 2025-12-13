@@ -1031,22 +1031,44 @@ run_quality_checks() {
     echo ""
 
     # ════════════════════════════════════════════════════════════════
-    # PHASE 5: UNIT & INTEGRATION TESTS (ALL tests, not selective)
-    # WHY: CI runs ALL tests, so we must too to catch failures
+    # PHASE 5: UNIT & INTEGRATION TESTS (Selective based on changes)
+    # WHY: Only test files that changed since last release (or their dependents)
+    # RULE: No source unchanged since previous tag should be tested again,
+    #       unless it imports a changed library
     # ════════════════════════════════════════════════════════════════
-    log_info "┌─ Phase 5: Running ALL Tests (Unit + Integration)"
+    log_info "┌─ Phase 5: Running Tests (Selective based on changes)"
 
-    log_info "  → Running full test suite (this may take several minutes)..."
-    log_info "  → (CI runs ALL tests, not selective - we must match CI exactly)"
-    if ! pnpm test 2>&1 | tee /tmp/test-output.log | tail -60; then
-        log_error "Tests failed"
-        log_error "Full output: /tmp/test-output.log"
-        # Show failed tests summary
-        log_error "Failed tests:"
-        grep -E "FAIL|✗|AssertionError" /tmp/test-output.log | head -20 || true
-        exit 1
+    # Get previous tag to compare changes against
+    local PREVIOUS_TAG
+    PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+    if [ -n "$PREVIOUS_TAG" ]; then
+        log_info "  → Running selective tests (changes since $PREVIOUS_TAG)..."
+        log_info "  → Only testing files that changed or depend on changed files"
+
+        # Use selective test script with previous tag as base reference
+        if ! node scripts/test-selective.cjs "$PREVIOUS_TAG" 2>&1 | tee /tmp/test-output.log | tail -60; then
+            log_error "Tests failed"
+            log_error "Full output: /tmp/test-output.log"
+            # Show failed tests summary
+            log_error "Failed tests:"
+            grep -E "FAIL|✗|AssertionError" /tmp/test-output.log | head -20 || true
+            exit 1
+        fi
+        log_success "  Selective tests passed"
+    else
+        log_warning "  No previous tag found - running full test suite"
+        log_info "  → Running full test suite (first release)..."
+        if ! pnpm test 2>&1 | tee /tmp/test-output.log | tail -60; then
+            log_error "Tests failed"
+            log_error "Full output: /tmp/test-output.log"
+            # Show failed tests summary
+            log_error "Failed tests:"
+            grep -E "FAIL|✗|AssertionError" /tmp/test-output.log | head -20 || true
+            exit 1
+        fi
+        log_success "  All tests passed"
     fi
-    log_success "  All unit & integration tests passed"
 
     log_success "└─ Tests passed"
     echo ""
@@ -1338,7 +1360,7 @@ create_github_release() {
 # PHASE 1.1: Filter by commit SHA to avoid race conditions with other commits
 wait_for_ci_workflow() {
     local COMMIT_SHA=$1  # The commit SHA we just pushed
-    local MAX_WAIT=600   # 10 minutes
+    local MAX_WAIT=900   # 15 minutes (CI can take 10-13 minutes)
     local ELAPSED=0
     local WORKFLOW_JSON MATCHING_RUN WORKFLOW_STATUS WORKFLOW_CONCLUSION RUN_ID
 
@@ -1406,7 +1428,7 @@ wait_for_ci_workflow() {
 # PHASE 1.2: Increased timeout to 10 minutes + filter by tag commit SHA
 wait_for_workflow() {
     local VERSION=$1
-    local MAX_WAIT=600  # PHASE 1.2: 10 minutes (up from 5 minutes)
+    local MAX_WAIT=900  # PHASE 1.2: 15 minutes (publish can take 10+ minutes)
     local ELAPSED=0
     local WORKFLOW_JSON MATCHING_RUN WORKFLOW_STATUS WORKFLOW_CONCLUSION RUN_ID
 

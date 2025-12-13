@@ -1329,14 +1329,16 @@ create_github_release() {
     fi
 
     # Create release using gh CLI
-    # The tag already exists locally, gh will push it when creating the release
+    # Use --target HEAD to create the tag on remote (local tag is just a reference)
+    # This pushes the tag and creates the release atomically
     if ! gh release create "v$VERSION" \
+        --target HEAD \
         --title "v$VERSION" \
         --notes-file /tmp/release-notes.md; then
         log_error "Failed to create GitHub Release"
 
         # ROLLBACK WARNING: Tag may have been pushed even though release creation failed
-        # WHY: gh release create pushes the tag first, then creates the release
+        # WHY: gh release create with --target creates tag first, then creates the release
         # If release creation fails after tag push, we have an orphaned tag
         if git ls-remote --tags origin | grep -q "refs/tags/v$VERSION"; then
             TAG_PUSHED=true

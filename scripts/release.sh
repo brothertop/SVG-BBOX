@@ -2192,6 +2192,16 @@ rollback_release() {
 
 # Main release function
 main() {
+    # Auto-generate config if none exists (before banner to capture any output)
+    if [ -z "$CONFIG_FILE" ]; then
+        local AUTO_CONFIG="config/release_conf.yml"
+        # Silently generate config and reload
+        generate_config "$AUTO_CONFIG" >/dev/null 2>&1
+        CONFIG_FILE="$AUTO_CONFIG"
+        # Reload configuration from newly generated file
+        load_config
+    fi
+
     echo "" >&2
     echo "═══════════════════════════════════════════════════════════" >&2
     echo "  ${PACKAGE_NAME} Release Script" >&2

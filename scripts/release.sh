@@ -308,6 +308,7 @@ check_clean_working_dir() {
 check_main_branch() {
     log_info "Checking current branch..."
 
+    local CURRENT_BRANCH
     CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
     if [ "$CURRENT_BRANCH" != "main" ]; then
         log_error "Must be on main branch (currently on $CURRENT_BRANCH)"
@@ -338,8 +339,8 @@ check_branch_synced() {
     if [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then
         # Check if we're ahead or behind
         local AHEAD BEHIND
-        AHEAD=$(git rev-list --count origin/main..HEAD)
-        BEHIND=$(git rev-list --count HEAD..origin/main)
+        AHEAD=$(git rev-list --count origin/main..HEAD 2>/dev/null || echo "0")
+        BEHIND=$(git rev-list --count HEAD..origin/main 2>/dev/null || echo "0")
 
         if [ "$BEHIND" -gt 0 ]; then
             log_error "Local branch is $BEHIND commit(s) BEHIND origin/main"
@@ -818,8 +819,21 @@ auto_fix_issues() {
     if ! git diff-index --quiet HEAD --; then
         log_info "  → Committing auto-fixes..."
         git add -A
-        git commit -m "chore: Auto-fix issues before release (lint, vitest config)" || true
-        log_success "  Auto-fixes committed"
+        # WHY check git commit exit code: || true silently swallows errors, which could
+        # lead to uncommitted changes being included in the release. We want to know if
+        # the commit failed (e.g., pre-commit hook rejection).
+        if git commit -m "chore: Auto-fix issues before release (lint, vitest config)"; then
+            log_success "  Auto-fixes committed"
+        else
+            log_warning "  Auto-fix commit failed (pre-commit hook may have modified files)"
+            log_info "  → Retrying commit after hook modifications..."
+            git add -A
+            if ! git commit -m "chore: Auto-fix issues before release (lint, vitest config)"; then
+                log_error "  Auto-fix commit failed on retry"
+                return 1
+            fi
+            log_success "  Auto-fixes committed (after retry)"
+        fi
     else
         log_success "  No auto-fixes needed"
     fi
@@ -1097,6 +1111,7 @@ run_quality_checks() {
 generate_release_notes() {
     local VERSION=$1
     local PREVIOUS_TAG=$2
+    local CHANGELOG_SECTION
 
     log_info "Generating release notes using git-cliff..."
 
@@ -1157,7 +1172,7 @@ yarn add ${PACKAGE_NAME}@${VERSION}
 
 ---
 
-**Full Changelog**: https://github.com/\$(gh repo view --json nameWithOwner -q .nameWithOwner)/compare/${PREVIOUS_TAG}...v${VERSION}
+**Full Changelog**: https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/compare/${PREVIOUS_TAG}...v${VERSION}
 EOF
 
     log_success "Release notes generated using git-cliff"
@@ -1325,6 +1340,7 @@ wait_for_ci_workflow() {
     local COMMIT_SHA=$1  # The commit SHA we just pushed
     local MAX_WAIT=600   # 10 minutes
     local ELAPSED=0
+    local WORKFLOW_JSON MATCHING_RUN WORKFLOW_STATUS WORKFLOW_CONCLUSION RUN_ID
 
     sleep 5  # Give GitHub a moment to register the push
 
@@ -1392,6 +1408,7 @@ wait_for_workflow() {
     local VERSION=$1
     local MAX_WAIT=600  # PHASE 1.2: 10 minutes (up from 5 minutes)
     local ELAPSED=0
+    local WORKFLOW_JSON MATCHING_RUN WORKFLOW_STATUS WORKFLOW_CONCLUSION RUN_ID
 
     log_info "Waiting for GitHub Actions 'Publish to npm' workflow..."
     log_info "  Version: v$VERSION (timeout: 10 minutes)"
@@ -1412,7 +1429,7 @@ wait_for_workflow() {
         # PHASE 1.2: Find the workflow run matching our tag commit SHA
         # WHY use first(): jq '.[] | select()' returns multiple objects on separate lines
         # which breaks subsequent jq parsing. 'first()' returns valid JSON.
-        local MATCHING_RUN=""
+        MATCHING_RUN=""
         if [ -n "$TAG_SHA" ]; then
             MATCHING_RUN=$(echo "$WORKFLOW_JSON" | jq -r --arg sha "$TAG_SHA" 'first(.[] | select(.headSha == $sha))' 2>/dev/null)
         fi
@@ -1526,19 +1543,15 @@ verify_post_publish_installation() {
     TEMP_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t 'svg-bbox-verify')
     log_info "  Test directory: $TEMP_DIR"
 
-    # Trap to ensure cleanup on exit
-    # WHY expand TEMP_DIR immediately: We want the current value of TEMP_DIR to be
-    # captured at trap definition time, not at signal time. Double quotes cause
-    # immediate expansion which is correct behavior here.
-    # shellcheck disable=SC2064
-    trap "rm -rf '$TEMP_DIR'" EXIT
+    # NOTE: We do NOT use a trap here because it would overwrite the global EXIT trap
+    # (handle_exit). Instead, all exit paths in this function manually clean up TEMP_DIR.
+    # This preserves the global trap for proper cleanup of other release state.
 
     # Initialize npm project
     log_info "  → Initializing npm project..."
     if ! (cd "$TEMP_DIR" && npm init -y >/dev/null 2>&1); then
         log_warning "npm init failed in temp directory"
         rm -rf "$TEMP_DIR"
-        trap - EXIT
         return 0  # Non-fatal: package is already on npm, just can't verify
     fi
 
@@ -1547,7 +1560,6 @@ verify_post_publish_installation() {
     if ! (cd "$TEMP_DIR" && npm install "${PACKAGE_NAME}@$VERSION" --no-save 2>&1 | tail -5); then
         log_warning "npm install failed - package may not be fully propagated yet"
         rm -rf "$TEMP_DIR"
-        trap - EXIT
         return 0  # Non-fatal: registry may still be propagating
     fi
 
@@ -1557,7 +1569,6 @@ verify_post_publish_installation() {
     if [ ! -d "$INSTALLED_PATH" ]; then
         log_error "Package not found at $INSTALLED_PATH after install"
         rm -rf "$TEMP_DIR"
-        trap - EXIT
         return 1
     fi
 
@@ -1568,7 +1579,6 @@ verify_post_publish_installation() {
         log_error "require('svg-bbox') failed: $REQUIRE_TEST"
         log_error "This indicates a packaging bug - missing files or broken dependencies"
         rm -rf "$TEMP_DIR"
-        trap - EXIT
         return 1
     fi
     log_success "  require('svg-bbox') works"
@@ -1617,15 +1627,13 @@ verify_post_publish_installation() {
         log_error "Some CLI tools failed verification: $FAILED_TOOLS"
         log_error "This indicates missing files in package.json 'files' array"
         rm -rf "$TEMP_DIR"
-        trap - EXIT
         return 1
     fi
 
     log_success "  All ${#CLI_TOOLS[@]} CLI tools verified"
 
-    # Cleanup
+    # Cleanup temp directory
     rm -rf "$TEMP_DIR"
-    trap - EXIT
 
     log_success "Post-publish installation verification passed"
     return 0
@@ -1800,7 +1808,7 @@ main() {
     validate_umd_wrapper || exit 1
     PREFLIGHT_CHECKS=$((PREFLIGHT_CHECKS + 1))
 
-    show_preflight_summary $PREFLIGHT_CHECKS $PREFLIGHT_TOTAL
+    show_preflight_summary "$PREFLIGHT_CHECKS" "$PREFLIGHT_TOTAL"
 
     # ══════════════════════════════════════════════════════════════════
     # VERSION DETERMINATION
@@ -1829,8 +1837,11 @@ main() {
     # ══════════════════════════════════════════════════════════════════
 
     # Check if version already published on npm (idempotency)
+    # WHY use @version syntax: npm view pkg version returns LATEST version, not specific version
+    # We need to check if OUR specific version exists, not compare against latest
     log_info "Checking npm registry for existing version..."
-    EXISTING_NPM_VERSION=$(npm view "${PACKAGE_NAME}" version 2>/dev/null || echo "")
+    local EXISTING_NPM_VERSION
+    EXISTING_NPM_VERSION=$(npm view "${PACKAGE_NAME}@${NEW_VERSION}" version 2>/dev/null || echo "")
     if [ "$EXISTING_NPM_VERSION" = "$NEW_VERSION" ]; then
         log_warning "Version $NEW_VERSION is already published on npm"
         log_info "Skipping release (idempotent)"

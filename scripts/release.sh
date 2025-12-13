@@ -228,7 +228,10 @@ retry_with_backoff() {
     local RETRY_COUNT=0
     local BACKOFF=2
 
-    local CMD="$@"
+    # WHY use $* instead of $@: When assigning to a string variable, $* concatenates
+    # all arguments with the first character of IFS (space by default), while $@
+    # would create an array which can't be assigned to a string variable.
+    local CMD="$*"
 
     while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
         if eval "$CMD"; then
@@ -1122,10 +1125,6 @@ generate_release_notes() {
     # Strip the "## [unreleased]" header since we use "What's Changed"
     CHANGELOG_SECTION=$(echo "$CHANGELOG_SECTION" | sed '/^## \[unreleased\]/d')
 
-    # Count changes by category for summary
-    FEATURES_COUNT=$(echo "$CHANGELOG_SECTION" | grep -c "^- \*\*.*\*\*:" | grep -c "New Features" || echo 0)
-    FIXES_COUNT=$(echo "$CHANGELOG_SECTION" | grep -c "^- \*\*.*\*\*:" | grep -c "Bug Fixes" || echo 0)
-
     # Build release notes with git-cliff output and enhanced formatting
     cat > /tmp/release-notes.md <<EOF
 ## What's Changed
@@ -1353,8 +1352,8 @@ wait_for_ci_workflow() {
         WORKFLOW_STATUS=$(echo "$MATCHING_RUN" | jq -r '.status' 2>/dev/null)
 
         if [ "$WORKFLOW_STATUS" = "completed" ]; then
-            WORKFLOW_CONCLUSION=$(echo "$MATCHING_RUN" | jq -r '.conclusion')
-            RUN_ID=$(echo "$MATCHING_RUN" | jq -r '.databaseId')
+            WORKFLOW_CONCLUSION=$(echo "$MATCHING_RUN" | jq -r '.conclusion' 2>/dev/null)
+            RUN_ID=$(echo "$MATCHING_RUN" | jq -r '.databaseId' 2>/dev/null)
 
             if [ "$WORKFLOW_CONCLUSION" = "success" ]; then
                 log_success "CI workflow completed successfully for ${COMMIT_SHA:0:7}"
@@ -1430,8 +1429,8 @@ wait_for_workflow() {
         WORKFLOW_STATUS=$(echo "$MATCHING_RUN" | jq -r '.status' 2>/dev/null)
 
         if [ "$WORKFLOW_STATUS" = "completed" ]; then
-            WORKFLOW_CONCLUSION=$(echo "$MATCHING_RUN" | jq -r '.conclusion')
-            RUN_ID=$(echo "$MATCHING_RUN" | jq -r '.databaseId')
+            WORKFLOW_CONCLUSION=$(echo "$MATCHING_RUN" | jq -r '.conclusion' 2>/dev/null)
+            RUN_ID=$(echo "$MATCHING_RUN" | jq -r '.databaseId' 2>/dev/null)
 
             if [ "$WORKFLOW_CONCLUSION" = "success" ]; then
                 log_success "Publish workflow completed successfully"
@@ -1522,6 +1521,10 @@ verify_post_publish_installation() {
     log_info "  Test directory: $TEMP_DIR"
 
     # Trap to ensure cleanup on exit
+    # WHY expand TEMP_DIR immediately: We want the current value of TEMP_DIR to be
+    # captured at trap definition time, not at signal time. Double quotes cause
+    # immediate expansion which is correct behavior here.
+    # shellcheck disable=SC2064
     trap "rm -rf '$TEMP_DIR'" EXIT
 
     # Initialize npm project

